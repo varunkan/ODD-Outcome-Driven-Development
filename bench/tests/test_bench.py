@@ -228,7 +228,8 @@ class RunTest(unittest.TestCase):
             self.assertEqual((s['branch'], s['email'], s['global_config']), ('work', 'bench@example.com', ''))
             self.assertEqual(s['around'], [], 'a session can name another session or hidden tests')
             # its temporary directory is its own, beside the session, never the shared one holding other sessions
-            self.assertEqual(s['tmpdir'], os.path.join(os.path.dirname(os.path.dirname(s['cwd'])), 'tmp'))
+            self.assertEqual(os.path.realpath(s['tmpdir']),  # macOS reaches its temp dir through a link
+                             os.path.realpath(os.path.join(os.path.dirname(os.path.dirname(s['cwd'])), 'tmp')))
             for name in ('BENCH_CACHE', 'OLDPWD', 'CLAUDECODE', 'CLAUDE_EFFORT'):
                 self.assertNotIn(name, s['env'])
             self.assertNotEqual(s['pwd'], '/launch')  # the shell that starts the fake agent sets its own PWD
