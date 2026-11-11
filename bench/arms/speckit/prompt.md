@@ -5,7 +5,7 @@ This repository has Spec Kit installed. Deliver the request below with its Spec-
 3. /speckit-plan reusing the existing architecture, dependencies, and test conventions
 4. /speckit-tasks
 5. /speckit-implement
-6. /speckit-converge, then /speckit-implement and /speckit-converge again until it reports Converged
+6. /speckit-converge; if it adds tasks, repeat /speckit-implement and /speckit-converge until it reports Converged
 
 {ticket}
 
