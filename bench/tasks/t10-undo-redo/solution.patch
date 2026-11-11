@@ -1,0 +1,402 @@
+diff --git a/README.md b/README.md
+index a14c101..5d73d18 100644
+--- a/README.md
++++ b/README.md
+@@ -7,8 +7,8 @@ text. Python 3, standard library only.
+ 
+ `editor.buffer`: the text.
+ 
+-- `TextBuffer(text="")`. Positions count characters from 0, and a range `start, end` runs from `start` up to, but
+-  not including, `end`.
++- `TextBuffer(text="", history_limit=100)`. Positions count characters from 0, and a range `start, end` runs from
++  `start` up to, but not including, `end`.
+ - `insert(position, text)` and `append(text)` add text.
+ - `delete(start, end)` removes a range, `replace(start, end, text)` puts other text in its place and `clear()`
+   removes everything. Each returns the text it took out.
+@@ -16,6 +16,15 @@ text. Python 3, standard library only.
+   `line_count` and `line_span(position)` read parts of it.
+ - A position or range outside the text raises `IndexError` and changes nothing. Text that is not a string raises
+   `TypeError`.
++- `undo()` takes back the newest change and `redo()` makes the change that was undone last happen again. Both return
++  `True`, or `False` when there was nothing to do. `can_undo` and `can_redo` say which it would be.
++- Each call that changes the text is one step, a `replace` too. A call that leaves the text as it was, or that
++  raises, is not a step. A new step throws away what could be redone.
++- The buffer remembers the newest `history_limit` steps and forgets the oldest beyond that. `history_limit=0`
++  remembers nothing. Anything but a whole number of at least 0 raises `ValueError`.
++
++`editor.history`: what the buffer remembers. `History(limit)` keeps `Step(position, removed, inserted)` records, done
++ones and undone ones. `TextBuffer.history` is the buffer's own.
+ 
+ `editor.session`: editing at a cursor.
+ 
+@@ -26,6 +35,8 @@ text. Python 3, standard library only.
+ - `type(text)` inserts at the cursor and leaves the cursor after the new text.
+ - `backspace(count=1)` removes characters before the cursor, `delete_forward(count=1)` after it. Both return what
+   they removed.
++- `undo()` and `redo()` do the same as the buffer's and put the cursor back: after an undo where it was before the
++  step, after a redo where it was after the step. Moving the cursor is not a step.
+ 
+ ## Example
+ 
+@@ -40,6 +51,8 @@ editor.type("he")
+ editor.text                     # "Dear Ann,\nthanks for the flowers."
+ editor.home()                   # 10: the start of the second line
+ editor.buffer.line_count        # 2
++editor.undo()                   # True: "he" is gone again and the cursor is back at 22
++editor.redo()                   # True: "the" again, cursor 24
+ ```
+ 
+ ## Tests
+diff --git a/editor/__init__.py b/editor/__init__.py
+index cb0af99..66ebaf5 100644
+--- a/editor/__init__.py
++++ b/editor/__init__.py
+@@ -1,5 +1,6 @@
+-"""A small text editing core: a text buffer and an editing session with a cursor."""
++"""A small text editing core: a text buffer with undo and redo, and an editing session with a cursor."""
+ from .buffer import TextBuffer
++from .history import History, Step
+ from .session import Editor
+ 
+-__all__ = ['Editor', 'TextBuffer']
++__all__ = ['Editor', 'History', 'Step', 'TextBuffer']
+diff --git a/editor/buffer.py b/editor/buffer.py
+index 8e051c5..2eb3202 100644
+--- a/editor/buffer.py
++++ b/editor/buffer.py
+@@ -1,12 +1,17 @@
+-"""A text buffer: one piece of text that is changed by inserting, deleting and replacing ranges."""
++"""A text buffer: one piece of text that is changed by inserting, deleting and replacing ranges.
++
++Every change is kept as a step in a bounded history, so that it can be undone and redone.
++"""
++from .history import History, Step
+ 
+ 
+ class TextBuffer:
+     """Holds text. Positions count characters from 0. A range `start, end` runs from `start` up to, but not
+-    including, `end`."""
++    including, `end`. The newest `history_limit` changes can be undone."""
+ 
+-    def __init__(self, text=''):
++    def __init__(self, text='', history_limit=100):
+         self._text = self._checked(text)
++        self.history = History(history_limit)
+ 
+     @staticmethod
+     def _checked(text):
+@@ -33,11 +38,22 @@ class TextBuffer:
+ 
+     # Changing the text
+ 
++    def _change(self, start, end, text):
++        """Put `text` in place of the range, as one step, and return the text that was there.
++
++        The arguments have been checked by the caller. A change that leaves the text as it was is not a step.
++        """
++        removed = self._text[start:end]
++        if removed != text:
++            self._text = self._text[:start] + text + self._text[end:]
++            self.history.record(Step(start, removed, text))
++        return removed
++
+     def insert(self, position, text):
+         """Insert `text` so that it starts at `position`."""
+         self._checked(text)
+         self._check_range(position, position)
+-        self._text = self._text[:position] + text + self._text[position:]
++        self._change(position, position, text)
+ 
+     def append(self, text):
+         """Add `text` at the end."""
+@@ -46,21 +62,58 @@ class TextBuffer:
+     def delete(self, start, end):
+         """Remove the range and return the text that was in it."""
+         self._check_range(start, end)
+-        removed = self._text[start:end]
+-        self._text = self._text[:start] + self._text[end:]
+-        return removed
++        return self._change(start, end, '')
+ 
+     def replace(self, start, end, text):
+-        """Put `text` in place of the range and return the text that was there."""
++        """Put `text` in place of the range and return the text that was there. This is one step."""
+         self._checked(text)
+-        removed = self.delete(start, end)
+-        self.insert(start, text)
+-        return removed
++        self._check_range(start, end)
++        return self._change(start, end, text)
+ 
+     def clear(self):
+         """Remove everything and return what was there."""
+         return self.delete(0, len(self._text))
+ 
++    # Undo and redo
++
++    @property
++    def history_limit(self):
++        """How many steps are remembered."""
++        return self.history.limit
++
++    @property
++    def can_undo(self):
++        return self.history.can_undo
++
++    @property
++    def can_redo(self):
++        return self.history.can_redo
++
++    def undo_step(self):
++        """Take back the newest step and return it, or return `None` when there is nothing to take back."""
++        step = self.history.undo()
++        if step is not None:
++            self._swap(step.position, step.inserted, step.removed)
++        return step
++
++    def redo_step(self):
++        """Make the step that was undone last happen again and return it, or return `None` when there is none."""
++        step = self.history.redo()
++        if step is not None:
++            self._swap(step.position, step.removed, step.inserted)
++        return step
++
++    def undo(self):
++        """Take back the newest step. False when there is nothing to take back."""
++        return self.undo_step() is not None
++
++    def redo(self):
++        """Make the step that was undone last happen again. False when there is nothing to redo."""
++        return self.redo_step() is not None
++
++    def _swap(self, position, old, new):
++        self._text = self._text[:position] + new + self._text[position + len(old):]
++
+     # Reading the text
+ 
+     def slice(self, start, end):
+diff --git a/editor/history.py b/editor/history.py
+new file mode 100644
+index 0000000..bb67323
+--- /dev/null
++++ b/editor/history.py
+@@ -0,0 +1,66 @@
++"""A bounded undo and redo history for a text buffer."""
++
++
++class Step:
++    """One change to a text: at `position`, `removed` was taken out and `inserted` was put in its place.
++
++    `cursor_before` and `cursor_after` are for whoever made the step, to keep where its cursor was. They stay `None`
++    when nobody does.
++    """
++
++    __slots__ = ('position', 'removed', 'inserted', 'cursor_before', 'cursor_after')
++
++    def __init__(self, position, removed, inserted):
++        self.position = position
++        self.removed = removed
++        self.inserted = inserted
++        self.cursor_before = None
++        self.cursor_after = None
++
++
++class History:
++    """Remembers the newest `limit` steps. A step is either done, and can be undone, or undone, and can be redone."""
++
++    def __init__(self, limit=100):
++        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
++            raise ValueError('the history limit must be a whole number of at least 0')
++        self.limit = limit
++        self._done = []         # oldest first
++        self._undone = []       # the step undone last is at the end
++
++    @property
++    def can_undo(self):
++        return bool(self._done)
++
++    @property
++    def can_redo(self):
++        return bool(self._undone)
++
++    @property
++    def newest(self):
++        """The step that `undo` would take back, or `None`."""
++        return self._done[-1] if self._done else None
++
++    def record(self, step):
++        """Add a new step. Nothing can be redone after it, and the oldest step goes when there are too many."""
++        self._undone.clear()
++        self._done.append(step)
++        extra = len(self._done) - self.limit
++        if extra > 0:
++            del self._done[:extra]
++
++    def undo(self):
++        """Move the newest done step to the undone ones and return it, or `None` when there is none."""
++        if not self._done:
++            return None
++        step = self._done.pop()
++        self._undone.append(step)
++        return step
++
++    def redo(self):
++        """Move the step that was undone last back to the done ones and return it, or `None` when there is none."""
++        if not self._undone:
++            return None
++        step = self._undone.pop()
++        self._done.append(step)
++        return step
+diff --git a/editor/session.py b/editor/session.py
+index bbde85a..f20afaa 100644
+--- a/editor/session.py
++++ b/editor/session.py
+@@ -34,19 +34,57 @@ class Editor:
+ 
+     # Editing at the cursor
+ 
++    def _edit(self, change):
++        """Run `change`, which edits the buffer and moves the cursor, and keep both cursors with the step it made."""
++        before, newest = self.cursor, self.buffer.history.newest
++        result = change()
++        step = self.buffer.history.newest
++        if step is not None and step is not newest:
++            step.cursor_before, step.cursor_after = before, self.cursor
++        return result
++
+     def type(self, text):
+         """Insert `text` at the cursor and leave the cursor after it."""
+-        self.buffer.insert(self.cursor, text)
+-        self.cursor += len(text)
++        def change():
++            self.buffer.insert(self.cursor, text)
++            self.cursor += len(text)
++        self._edit(change)
+ 
+     def backspace(self, count=1):
+         """Remove up to `count` characters before the cursor and return them. The cursor moves back with them."""
+-        start = max(0, self.cursor - count)
+-        removed = self.buffer.delete(start, self.cursor)
+-        self.cursor = start
+-        return removed
++        def change():
++            start = max(0, self.cursor - count)
++            removed = self.buffer.delete(start, self.cursor)
++            self.cursor = start
++            return removed
++        return self._edit(change)
+ 
+     def delete_forward(self, count=1):
+         """Remove up to `count` characters after the cursor and return them. The cursor stays where it is."""
+-        end = min(len(self.buffer), self.cursor + count)
+-        return self.buffer.delete(self.cursor, end)
++        def change():
++            end = min(len(self.buffer), self.cursor + count)
++            return self.buffer.delete(self.cursor, end)
++        return self._edit(change)
++
++    # Undo and redo
++
++    def undo(self):
++        """Take back the newest step and put the cursor where it was before that step. False when there is none."""
++        step = self.buffer.undo_step()
++        if step is None:
++            return False
++        self._return_to(step.cursor_before)
++        return True
++
++    def redo(self):
++        """Redo the step that was undone last and put the cursor where it was after that step. False when there is
++        none."""
++        step = self.buffer.redo_step()
++        if step is None:
++            return False
++        self._return_to(step.cursor_after)
++        return True
++
++    def _return_to(self, cursor):
++        """Go to a cursor kept with a step. A step made on the buffer directly has none: stay, but inside the text."""
++        self.move_to(self.cursor if cursor is None else cursor)
+diff --git a/tests/test_buffer.py b/tests/test_buffer.py
+index acca36b..dc2acb5 100644
+--- a/tests/test_buffer.py
++++ b/tests/test_buffer.py
+@@ -30,6 +30,40 @@ class TextBufferTests(unittest.TestCase):
+                 edit()
+         self.assertEqual(buffer.text, 'hello')
+ 
++    def test_changes_are_undone_and_redone(self):
++        buffer = TextBuffer('hello')
++        buffer.append(' world')
++        buffer.replace(0, 5, 'HELLO')
++        buffer.insert(0, '')
++        self.assertTrue(buffer.undo())
++        self.assertEqual(buffer.text, 'hello world')
++        self.assertTrue(buffer.can_undo and buffer.can_redo)
++        self.assertTrue(buffer.undo())
++        self.assertEqual(buffer.text, 'hello')
++        self.assertFalse(buffer.undo())
++        self.assertTrue(buffer.redo())
++        buffer.delete(0, 1)
++        self.assertFalse(buffer.redo())
++        self.assertEqual(buffer.text, 'ello world')
++        with self.assertRaises(IndexError):
++            buffer.delete(0, 99)
++        self.assertTrue(buffer.undo())
++        self.assertEqual(buffer.text, 'hello world')
++
++    def test_history_is_limited(self):
++        buffer = TextBuffer(history_limit=2)
++        for letter in 'abc':
++            buffer.append(letter)
++        self.assertEqual([buffer.undo(), buffer.undo(), buffer.undo()], [True, True, False])
++        self.assertEqual(buffer.text, 'a')
++        self.assertEqual(buffer.history_limit, 2)
++        off = TextBuffer('x', history_limit=0)
++        off.append('y')
++        self.assertFalse(off.can_undo)
++        for bad in (-1, 2.5, '10', None, True):
++            with self.assertRaises(ValueError):
++                TextBuffer(history_limit=bad)
++
+     def test_lines_and_search(self):
+         buffer = TextBuffer('one\ntwo\n\nfour')
+         self.assertEqual(buffer.lines(), ['one', 'two', '', 'four'])
+diff --git a/tests/test_session.py b/tests/test_session.py
+index e389e81..7fc73a6 100644
+--- a/tests/test_session.py
++++ b/tests/test_session.py
+@@ -21,6 +21,33 @@ class EditorTests(unittest.TestCase):
+         self.assertEqual(editor.delete_forward(100), '.')
+         self.assertEqual((editor.text, editor.cursor), ('', 0))
+ 
++    def test_undo_and_redo_put_the_cursor_back(self):
++        editor = Editor()
++        editor.type('hello world')
++        editor.move_to(5)
++        editor.backspace(3)
++        editor.move_to(1)
++        editor.delete_forward(1)
++        editor.move_to(0)
++        self.assertEqual((editor.text, editor.cursor), ('h world', 0))
++        self.assertTrue(editor.undo())
++        self.assertEqual((editor.text, editor.cursor), ('he world', 1))
++        self.assertTrue(editor.undo())
++        self.assertEqual((editor.text, editor.cursor), ('hello world', 5))
++        self.assertTrue(editor.redo())
++        self.assertEqual((editor.text, editor.cursor), ('he world', 2))
++        self.assertTrue(editor.undo())
++        self.assertTrue(editor.undo())
++        self.assertEqual((editor.text, editor.cursor), ('', 0))
++        self.assertFalse(editor.undo())
++
++    def test_undoing_a_step_made_on_the_buffer_keeps_the_cursor_inside_the_text(self):
++        editor = Editor(TextBuffer('hello'))
++        editor.buffer.append(' world')
++        editor.move_to(11)
++        self.assertTrue(editor.undo())
++        self.assertEqual((editor.text, editor.cursor), ('hello', 5))
++
+     def test_the_cursor_stays_inside_the_text(self):
+         editor = Editor(TextBuffer('one\ntwo'))
+         self.assertEqual(editor.cursor, 7)

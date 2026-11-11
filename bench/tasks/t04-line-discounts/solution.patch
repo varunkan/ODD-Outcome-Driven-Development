@@ -1,0 +1,34 @@
+diff --git a/checkout/totals.py b/checkout/totals.py
+index bdcab72..8da094b 100644
+--- a/checkout/totals.py
++++ b/checkout/totals.py
+@@ -7,8 +7,13 @@ def line_gross_cents(line):
+ 
+ 
+ def line_total_cents(line):
+-    """What the customer pays for one line, after its discount."""
+-    return int(line_gross_cents(line) * (1 - line.discount_percent / 100))
++    """What the customer pays for one line, after its discount.
++
++    Whole cents, rounded half up, worked out in integers: the amount in hundredths
++    of a cent is exact, and adding 50 before the floor division rounds a half upwards.
++    """
++    hundredths = line_gross_cents(line) * (100 - line.discount_percent)
++    return (hundredths + 50) // 100
+ 
+ 
+ def order_subtotal_cents(order):
+@@ -17,11 +22,8 @@ def order_subtotal_cents(order):
+ 
+ 
+ def order_total_cents(order):
+-    """What the customer pays for the whole order."""
+-    total = 0.0
+-    for line in order.lines:
+-        total += line_gross_cents(line) * (1 - line.discount_percent / 100)
+-    return int(total)
++    """What the customer pays for the whole order: the sum of the rounded line amounts."""
++    return sum(line_total_cents(line) for line in order.lines)
+ 
+ 
+ def order_discount_cents(order):

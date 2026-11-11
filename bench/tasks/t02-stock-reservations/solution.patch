@@ -1,0 +1,311 @@
+diff --git a/README.md b/README.md
+index 4cc48a3..577c6d0 100644
+--- a/README.md
++++ b/README.md
+@@ -12,15 +12,19 @@ library only.
+ - `receive(sku, quantity, note="")` books goods in; `ship(sku, quantity, note="")` books goods out and raises
+   `InsufficientStock` when there is not enough.
+ - `adjust(sku, counted, note="")` sets the stock to a counted figure and returns the difference.
+-- `on_hand(sku)`, `item(sku)`, `skus()`, `history(sku=None)`.
++- `reserve(sku, quantity, ref)` holds units for an order; `release(ref)` drops everything the order holds and
++  returns the units freed. `available(sku)` is the stock on hand that no order holds, and `ship` never takes more
++  than that.
++- `on_hand(sku)`, `reserved(sku)`, `item(sku)`, `skus()`, `history(sku=None)`, `reservations()`.
+ - Quantities are positive whole numbers; anything else raises `ValueError`. An unknown SKU raises `UnknownSku`.
+ 
+ `inventory.errors`: `InventoryError`, with `UnknownSku` and `InsufficientStock` derived from it.
+ 
+ `inventory.report`
+ 
+-- `stock_rows(ledger)`: one dict per item in SKU order, with `sku`, `name`, `on_hand` and `reorder_level`.
+-- `low_stock(ledger)`: the SKUs at or below their reorder level.
++- `stock_rows(ledger)`: one dict per item in SKU order, with `sku`, `name`, `on_hand`, `reserved`, `available` and
++  `reorder_level`.
++- `low_stock(ledger)`: the SKUs whose available stock is at or below their reorder level.
+ - `render_table(ledger)`: the rows as a text table; items to reorder end with `LOW`.
+ 
+ `inventory.storage`
+@@ -40,13 +44,14 @@ ledger.add_item("NUT-M8", "Nut M8", reorder_level=20)
+ ledger.receive("BOLT-M8", 100)
+ ledger.receive("NUT-M8", 30)
+ ledger.ship("NUT-M8", 12, note="order 17")
++ledger.reserve("BOLT-M8", 30, "SO-1042")
+ print(render_table(ledger))
+ ```
+ 
+ ```
+-SKU      Name     On hand  Reorder at
+-BOLT-M8  Bolt M8      100          20
+-NUT-M8   Nut M8        18          20  LOW
++SKU      Name     On hand  Reserved  Available  Reorder at
++BOLT-M8  Bolt M8      100        30         70          20
++NUT-M8   Nut M8        18         0         18          20  LOW
+ ```
+ 
+ ## File format
+@@ -55,18 +60,22 @@ A saved ledger is one JSON object:
+ 
+ ```json
+ {
+-  "version": 1,
++  "version": 2,
+   "items": [
+     {"sku": "NUT-M8", "name": "Nut M8", "reorder_level": 20, "on_hand": 18}
+   ],
+   "history": [
+     {"kind": "receive", "sku": "NUT-M8", "quantity": 30, "note": ""},
+     {"kind": "ship", "sku": "NUT-M8", "quantity": 12, "note": "order 17"}
++  ],
++  "reservations": [
++    {"ref": "SO-1042", "sku": "NUT-M8", "quantity": 5}
+   ]
+ }
+ ```
+ 
+-`read` refuses a file whose `version` it does not know.
++Version 1 files, written before reservations existed, have no `reservations` list and still open, with nothing
++reserved. `read` refuses a file whose `version` it does not know.
+ 
+ ## Tests
+ 
+diff --git a/inventory/ledger.py b/inventory/ledger.py
+index 2cce627..e268be4 100644
+--- a/inventory/ledger.py
++++ b/inventory/ledger.py
+@@ -1,4 +1,5 @@
+-"""The stock ledger: how many units of each item are on hand, and the movements that got them there."""
++"""The stock ledger: how many units of each item are on hand, the movements that got them there, and the
++units held back for orders."""
+ from collections import namedtuple
+ 
+ from .errors import InsufficientStock, UnknownSku
+@@ -15,24 +16,30 @@ def whole_positive(quantity):
+ 
+ 
+ class Ledger:
+-    """Items, their stock on hand and the history of movements."""
++    """Items, their stock on hand, the history of movements and the units held for orders."""
+ 
+     def __init__(self):
+         self._items = {}
+         self._on_hand = {}
+         self._history = []
++        self._held = {}     # order reference -> {sku: units held for that order}
+ 
+     @classmethod
+-    def restore(cls, items, on_hand, history=()):
++    def restore(cls, items, on_hand, history=(), reservations=()):
+         """Rebuild a ledger from saved state, without replaying the movements.
+ 
+-        ``items`` are Item tuples, ``on_hand`` maps SKU to units, ``history`` is a sequence of Movement tuples.
++        ``items`` are Item tuples, ``on_hand`` maps SKU to units, ``history`` is a sequence of Movement tuples and
++        ``reservations`` a sequence of (ref, sku, quantity).
+         """
+         ledger = cls()
+         for item in items:
+             ledger._items[item.sku] = item
+             ledger._on_hand[item.sku] = on_hand.get(item.sku, 0)
+         ledger._history = list(history)
++        for ref, sku, quantity in reservations:
++            ledger.item(sku)
++            held = ledger._held.setdefault(ref, {})
++            held[sku] = held.get(sku, 0) + whole_positive(quantity)
+         return ledger
+ 
+     def add_item(self, sku, name, reorder_level=0):
+@@ -61,6 +68,33 @@ class Ledger:
+         self.item(sku)
+         return self._on_hand[sku]
+ 
++    def reserved(self, sku):
++        """Units held for orders, all orders together."""
++        self.item(sku)
++        return sum(held.get(sku, 0) for held in self._held.values())
++
++    def available(self, sku):
++        """Units on hand that no order holds."""
++        return self.on_hand(sku) - self.reserved(sku)
++
++    def reserve(self, sku, quantity, ref):
++        """Hold ``quantity`` units of ``sku`` for the order ``ref``. Adds to what the order already holds."""
++        self.item(sku)
++        whole_positive(quantity)
++        available = self.available(sku)
++        if quantity > available:
++            raise InsufficientStock(sku, quantity, available)
++        held = self._held.setdefault(ref, {})
++        held[sku] = held.get(sku, 0) + quantity
++
++    def release(self, ref):
++        """Drop everything held for the order ``ref``. Returns the number of units freed, 0 when it held none."""
++        return sum(self._held.pop(ref, {}).values())
++
++    def reservations(self):
++        """Every hold as (ref, sku, quantity), sorted."""
++        return sorted((ref, sku, quantity) for ref, held in self._held.items() for sku, quantity in held.items())
++
+     def receive(self, sku, quantity, note=''):
+         """Book goods in."""
+         self.item(sku)
+@@ -69,11 +103,12 @@ class Ledger:
+         self._record('receive', sku, quantity, note)
+ 
+     def ship(self, sku, quantity, note=''):
+-        """Book goods out. Refused when there is not enough stock."""
++        """Book goods out. Refused when it would take more than is available: reserved stock stays put."""
+         self.item(sku)
+         whole_positive(quantity)
+-        if quantity > self._on_hand[sku]:
+-            raise InsufficientStock(sku, quantity, self._on_hand[sku])
++        available = self.available(sku)
++        if quantity > available:
++            raise InsufficientStock(sku, quantity, available)
+         self._on_hand[sku] -= quantity
+         self._record('ship', sku, quantity, note)
+ 
+diff --git a/inventory/report.py b/inventory/report.py
+index a89880b..c3f7368 100644
+--- a/inventory/report.py
++++ b/inventory/report.py
+@@ -5,12 +5,14 @@ COLUMNS = (
+     ('SKU', 'sku', '<'),
+     ('Name', 'name', '<'),
+     ('On hand', 'on_hand', '>'),
++    ('Reserved', 'reserved', '>'),
++    ('Available', 'available', '>'),
+     ('Reorder at', 'reorder_level', '>'),
+ )
+ 
+ 
+ def stock_rows(ledger):
+-    """One dict per item, in SKU order, with the keys sku, name, on_hand and reorder_level."""
++    """One dict per item, in SKU order, with the keys sku, name, on_hand, reserved, available and reorder_level."""
+     rows = []
+     for sku in ledger.skus():
+         item = ledger.item(sku)
+@@ -18,18 +20,20 @@ def stock_rows(ledger):
+             'sku': sku,
+             'name': item.name,
+             'on_hand': ledger.on_hand(sku),
++            'reserved': ledger.reserved(sku),
++            'available': ledger.available(sku),
+             'reorder_level': item.reorder_level,
+         })
+     return rows
+ 
+ 
+ def needs_reorder(row):
+-    """True when the row's stock is at or below its reorder level."""
+-    return row['on_hand'] <= row['reorder_level']
++    """True when the row's available stock is at or below its reorder level."""
++    return row['available'] <= row['reorder_level']
+ 
+ 
+ def low_stock(ledger):
+-    """SKUs whose stock is at or below the reorder level, in SKU order."""
++    """SKUs whose available stock is at or below the reorder level, in SKU order."""
+     return [row['sku'] for row in stock_rows(ledger) if needs_reorder(row)]
+ 
+ 
+diff --git a/inventory/storage.py b/inventory/storage.py
+index 7081315..b8a963d 100644
+--- a/inventory/storage.py
++++ b/inventory/storage.py
+@@ -3,7 +3,8 @@ import json
+ 
+ from .ledger import Item, Ledger, Movement
+ 
+-FORMAT_VERSION = 1
++FORMAT_VERSION = 2
++READABLE_VERSIONS = (1, 2)      # version 1 files have no reservations
+ 
+ 
+ def dump(ledger):
+@@ -23,19 +24,24 @@ def dump(ledger):
+             {'kind': movement.kind, 'sku': movement.sku, 'quantity': movement.quantity, 'note': movement.note}
+             for movement in ledger.history()
+         ],
++        'reservations': [
++            {'ref': ref, 'sku': sku, 'quantity': quantity}
++            for ref, sku, quantity in ledger.reservations()
++        ],
+     }
+ 
+ 
+ def load(data):
+-    """A Ledger rebuilt from data produced by dump()."""
++    """A Ledger rebuilt from data produced by dump(), by this version or an earlier one."""
+     version = data.get('version')
+-    if version != FORMAT_VERSION:
++    if version not in READABLE_VERSIONS:
+         raise ValueError('unsupported file version: %r' % (version,))
+     items = [Item(row['sku'], row['name'], row.get('reorder_level', 0)) for row in data['items']]
+     on_hand = {row['sku']: row['on_hand'] for row in data['items']}
+     history = [Movement(row['kind'], row['sku'], row['quantity'], row.get('note', ''))
+                for row in data.get('history', [])]
+-    return Ledger.restore(items, on_hand, history)
++    reservations = [(row['ref'], row['sku'], row['quantity']) for row in data.get('reservations', [])]
++    return Ledger.restore(items, on_hand, history, reservations)
+ 
+ 
+ def save(ledger, path):
+diff --git a/tests/test_ledger.py b/tests/test_ledger.py
+index 294a3eb..efea80f 100644
+--- a/tests/test_ledger.py
++++ b/tests/test_ledger.py
+@@ -28,6 +28,19 @@ class LedgerTests(unittest.TestCase):
+         self.ledger.ship('BOLT-M8', 5)
+         self.assertEqual(self.ledger.on_hand('BOLT-M8'), 0)
+ 
++    def test_reserved_stock_cannot_be_shipped_until_released(self):
++        self.ledger.receive('BOLT-M8', 100)
++        self.ledger.reserve('BOLT-M8', 30, 'SO-1042')
++        self.assertEqual((self.ledger.on_hand('BOLT-M8'), self.ledger.available('BOLT-M8')), (100, 70))
++        with self.assertRaises(InsufficientStock):
++            self.ledger.ship('BOLT-M8', 80)
++        with self.assertRaises(InsufficientStock):
++            self.ledger.reserve('BOLT-M8', 71, 'SO-1043')
++        self.assertEqual(self.ledger.release('SO-1042'), 30)
++        self.assertEqual(self.ledger.release('SO-1042'), 0)
++        self.ledger.ship('BOLT-M8', 80)
++        self.assertEqual(self.ledger.available('BOLT-M8'), 20)
++
+     def test_bad_input_is_refused(self):
+         with self.assertRaises(UnknownSku):
+             self.ledger.receive('WASHER', 1)
+diff --git a/tests/test_report.py b/tests/test_report.py
+index 8af721b..9b35ce4 100644
+--- a/tests/test_report.py
++++ b/tests/test_report.py
+@@ -23,6 +23,10 @@ class ReportTests(unittest.TestCase):
+ 
+     def test_items_at_or_below_reorder_level_are_low(self):
+         self.assertEqual(low_stock(self.ledger), ['NUT-M8'])
++        self.ledger.reserve('BOLT-M8', 80, 'SO-1042')
++        self.assertEqual(low_stock(self.ledger), ['BOLT-M8', 'NUT-M8'])
++        self.assertEqual([row['available'] for row in stock_rows(self.ledger)], [20, 18])
++        self.ledger.release('SO-1042')
+         self.ledger.ship('BOLT-M8', 80)
+         self.assertEqual(low_stock(self.ledger), ['BOLT-M8', 'NUT-M8'])
+         table = render_table(self.ledger).splitlines()
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 746f8bc..6723a8c 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -26,6 +26,16 @@ class StorageTests(unittest.TestCase):
+         self.assertEqual(copy.item('BOLT-M8'), self.ledger.item('BOLT-M8'))
+         self.assertEqual(copy.history(), self.ledger.history())
+ 
++    def test_reservations_are_saved_and_old_files_still_load(self):
++        self.ledger.reserve('BOLT-M8', 25, 'SO-1042')
++        data = storage.dump(self.ledger)
++        copy = storage.load(data)
++        self.assertEqual(copy.available('BOLT-M8'), 35)
++        self.assertEqual(copy.release('SO-1042'), 25)
++        del data['reservations']
++        data['version'] = 1
++        self.assertEqual(storage.load(data).available('BOLT-M8'), 60)
++
+     def test_a_file_with_an_unknown_version_is_refused(self):
+         data = storage.dump(self.ledger)
+         data['version'] = 99

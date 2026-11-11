@@ -1,0 +1,80 @@
+diff --git a/README.md b/README.md
+index 852a9d0..577a9f6 100644
+--- a/README.md
++++ b/README.md
+@@ -9,7 +9,8 @@ Helpers for booking one room over one day. Python 3, standard library only.
+ - `Interval(start, end)` covers `start` up to, but not including, `end`. 09:00 to 10:00 is `Interval(540, 600)` and
+   is sixty minutes long.
+ - `parse_time("09:30")` gives `570`; `format_time(570)` gives `"09:30"`.
+-- `overlaps(a, b)`: do two intervals have time in common?
++- `overlaps(a, b)`: do two intervals have time in common? Intervals that only touch (one ends where the other
++  starts) do not overlap.
+ - `merge(intervals)`: join intervals that overlap, or that follow each other without a gap, into blocks.
+ - `gaps(intervals, window)`: the free intervals left inside a window.
+ - `total_minutes(intervals)`: minutes covered, with shared time counted once.
+@@ -18,7 +19,8 @@ Helpers for booking one room over one day. Python 3, standard library only.
+ 
+ - `Schedule(opens="08:00", closes="18:00")`
+ - `book(title, start, end)` adds a booking. It raises `BookingConflict` when the room is taken at that time and
+-  `ValueError` when the times fall outside opening hours.
++  `ValueError` when the times fall outside opening hours. Back-to-back bookings are fine: one may start at the
++  minute another ends.
+ - `cancel(title)`, `bookings()`, `conflicts(start, end)`
+ - `busy_blocks()`: booked time as `("HH:MM", "HH:MM")` pairs, joined into blocks.
+ - `free_slots(minimum=1)`: unbooked time inside opening hours.
+diff --git a/scheduler/intervals.py b/scheduler/intervals.py
+index 2c8b88c..70c32f1 100644
+--- a/scheduler/intervals.py
++++ b/scheduler/intervals.py
+@@ -49,15 +49,15 @@ def format_time(minutes):
+ 
+ 
+ def overlaps(a, b):
+-    """True when the two intervals have time in common."""
+-    return a.start <= b.end and b.start <= a.end
++    """True when the two intervals share at least one minute. Intervals that only touch do not overlap."""
++    return a.start < b.end and b.start < a.end
+ 
+ 
+ def merge(intervals):
+     """Join intervals that overlap, or follow each other without a gap, into blocks sorted by start."""
+     blocks = []
+     for item in sorted(intervals):
+-        if blocks and overlaps(blocks[-1], item):
++        if blocks and item.start <= blocks[-1].end:
+             last = blocks[-1]
+             blocks[-1] = Interval(last.start, max(last.end, item.end))
+         else:
+diff --git a/tests/test_bookings.py b/tests/test_bookings.py
+index a585349..b4c89ad 100644
+--- a/tests/test_bookings.py
++++ b/tests/test_bookings.py
+@@ -27,6 +27,14 @@ class ScheduleTests(unittest.TestCase):
+         with self.assertRaises(ValueError):
+             self.room.book('Night shift', '17:00', '19:00')
+ 
++    def test_back_to_back_bookings_are_accepted_and_shown_as_one_block(self):
++        self.room.book('Prep', '08:00', '09:00')
++        self.room.book('Design review', '10:00', '11:00')
++        self.assertEqual(self.room.conflicts('11:00', '13:00'), [])
++        self.assertEqual(self.room.busy_blocks(), [('08:00', '11:00'), ('13:00', '14:00')])
++        with self.assertRaises(BookingConflict):
++            self.room.book('Late start', '10:59', '12:00')
++
+     def test_free_time(self):
+         self.assertEqual(self.room.free_slots(), [('08:00', '09:00'), ('10:00', '13:00'), ('14:00', '18:00')])
+         self.assertEqual(self.room.free_slots(minimum=120), [('10:00', '13:00'), ('14:00', '18:00')])
+diff --git a/tests/test_intervals.py b/tests/test_intervals.py
+index 015f15a..29a8456 100644
+--- a/tests/test_intervals.py
++++ b/tests/test_intervals.py
+@@ -22,6 +22,9 @@ class IntervalTests(unittest.TestCase):
+         self.assertTrue(overlaps(Interval(570, 630), morning))
+         self.assertFalse(overlaps(morning, Interval(660, 720)))
+         self.assertFalse(overlaps(Interval(660, 720), morning))
++        self.assertFalse(overlaps(morning, Interval(600, 660)))
++        self.assertFalse(overlaps(Interval(600, 660), morning))
++        self.assertTrue(overlaps(morning, Interval(599, 660)))
+ 
+     def test_merge_joins_overlapping_and_back_to_back_intervals(self):
+         spans = [Interval(600, 660), Interval(540, 600), Interval(710, 730), Interval(700, 720)]

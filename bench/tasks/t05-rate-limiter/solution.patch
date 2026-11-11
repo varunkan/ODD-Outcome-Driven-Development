@@ -1,0 +1,185 @@
+diff --git a/README.md b/README.md
+index cfabf3a..6f6d89e 100644
+--- a/README.md
++++ b/README.md
+@@ -1,7 +1,7 @@
+ # apigate
+ 
+ A small gateway that sits in front of a request handler. It checks the API key a request was sent with, knows which
+-plan that key is on, and passes the request on. Python 3, standard library only.
++plan that key is on, holds the key to that plan, and passes the request on. Python 3, standard library only.
+ 
+ ## What is in it
+ 
+@@ -21,15 +21,25 @@ plan that key is on, and passes the request on. Python 3, standard library only.
+   never added. A revoked key is still found; its `active` is `False`.
+ - `revoke(key)`, `restore(key)`, `change_plan(key, plan)`, `keys_of(owner)`.
+ 
++`apigate.limiter`: how many requests a key may make.
++
++- `SlidingWindowLimiter(limit, window, clock=None)`: at most `limit` requests per key in any `window` seconds. A
++  request counted at time `t` stops counting at exactly `t + window`. `clock` is a function without arguments that
++  returns the current time in seconds; `time.monotonic` when left out.
++- `allow(key)` counts a request and returns `True`, or returns `False` when the key is at its limit. A refused
++  request is not counted.
++- `remaining(key)`, `retry_after(key)` (seconds until the next request is allowed, `0.0` when one is allowed now) and
++  `reset(key)`.
++
+ `apigate.gateway`: the front door.
+ 
+ - `Request(key, path, method="GET")` and `Response(status, body, headers=None)`. Header names and values are strings.
+-- `Gateway(keys, handler)`: `handle(request)` answers `401` for an unknown key and `403` for a revoked one.
+-  Otherwise it calls `handler(request)` and returns the result as the body of a `200`.
++- `Gateway(keys, handler, clock=None)`: `handle(request)` answers `401` for an unknown key and `403` for a revoked
++  one. A key that is over its plan gets `429` with a `Retry-After` header (whole seconds, rounded up), and the
++  handler is not called. Otherwise it calls `handler(request)` and returns the result as the body of a `200` with
++  the headers `X-RateLimit-Limit` and `X-RateLimit-Remaining`. A plan without a limit is never limited.
+ - `stats()`: how many responses went out so far, by status, such as `{200: 12, 401: 3}`.
+ 
+-The limits on the plans are shown to customers, but the gateway does not enforce them.
+-
+ ## Example
+ 
+ ```python
+diff --git a/apigate/__init__.py b/apigate/__init__.py
+index e41691e..fd48cb4 100644
+--- a/apigate/__init__.py
++++ b/apigate/__init__.py
+@@ -1,7 +1,8 @@
+ """A small gateway that puts API keys and plans in front of a request handler."""
+ from apigate.gateway import Gateway, Request, Response
+ from apigate.keys import ApiKey, KeyStore, UnknownKey
++from apigate.limiter import SlidingWindowLimiter
+ from apigate.plans import PLANS, Plan, parse_rate, plan_named
+ 
+-__all__ = ['ApiKey', 'Gateway', 'KeyStore', 'PLANS', 'Plan', 'Request', 'Response', 'UnknownKey', 'parse_rate',
+-           'plan_named']
++__all__ = ['ApiKey', 'Gateway', 'KeyStore', 'PLANS', 'Plan', 'Request', 'Response', 'SlidingWindowLimiter',
++           'UnknownKey', 'parse_rate', 'plan_named']
+diff --git a/apigate/gateway.py b/apigate/gateway.py
+index 3dd3443..86a77eb 100644
+--- a/apigate/gateway.py
++++ b/apigate/gateway.py
+@@ -1,5 +1,8 @@
+-"""The front door: check the caller's key, then pass the request on to the handler."""
++"""The front door: check the caller's key, hold it to its plan, then pass the request on to the handler."""
++import math
++
+ from apigate.keys import UnknownKey
++from apigate.limiter import SlidingWindowLimiter
+ 
+ 
+ class Request:
+@@ -31,11 +34,16 @@ class Response:
+ 
+ 
+ class Gateway:
+-    """Answers requests for the keys in `keys`; `handler(request)` produces the body of a successful answer."""
++    """Answers requests for the keys in `keys`; `handler(request)` produces the body of a successful answer.
++
++    Each key is held to its plan with a sliding window. `clock` is passed on to the limiters.
++    """
+ 
+-    def __init__(self, keys, handler):
++    def __init__(self, keys, handler, clock=None):
+         self._keys = keys
+         self._handler = handler
++        self._clock = clock
++        self._limiters = {}
+         self._stats = {}
+ 
+     def handle(self, request):
+@@ -43,6 +51,15 @@ class Gateway:
+         self._stats[response.status] = self._stats.get(response.status, 0) + 1
+         return response
+ 
++    def _limiter_for(self, plan):
++        """One limiter per rate; it keeps a separate count for every API key. None for a plan without a limit."""
++        if plan.limit is None:
++            return None
++        rate = (plan.limit, plan.window)
++        if rate not in self._limiters:
++            self._limiters[rate] = SlidingWindowLimiter(plan.limit, plan.window, clock=self._clock)
++        return self._limiters[rate]
++
+     def _answer(self, request):
+         try:
+             entry = self._keys.lookup(request.key)
+@@ -50,7 +67,15 @@ class Gateway:
+             return Response(401, 'unknown api key')
+         if not entry.active:
+             return Response(403, 'api key revoked')
+-        return Response(200, self._handler(request))
++        limiter = self._limiter_for(entry.plan)
++        if limiter is None:
++            return Response(200, self._handler(request))
++        if not limiter.allow(entry.key):
++            wait = max(1, math.ceil(limiter.retry_after(entry.key)))
++            return Response(429, 'rate limit exceeded', {'Retry-After': str(wait)})
++        headers = {'X-RateLimit-Limit': str(limiter.limit),
++                   'X-RateLimit-Remaining': str(limiter.remaining(entry.key))}
++        return Response(200, self._handler(request), headers)
+ 
+     def stats(self):
+         """How many responses went out so far, by status: {200: 12, 401: 3}."""
+diff --git a/apigate/limiter.py b/apigate/limiter.py
+new file mode 100644
+index 0000000..c06cd0c
+--- /dev/null
++++ b/apigate/limiter.py
+@@ -0,0 +1,55 @@
++"""A sliding-window rate limiter: at most `limit` requests per key in any `window` seconds."""
++import time
++from collections import deque
++
++
++class SlidingWindowLimiter:
++    """Counts requests per key. A request counted at time t stops counting at exactly t + window.
++
++    `clock` is a function without arguments that returns the current time in seconds; `time.monotonic` when left out.
++    """
++
++    def __init__(self, limit, window, clock=None):
++        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
++            raise ValueError('limit must be a whole number of at least 1')
++        if isinstance(window, bool) or not isinstance(window, (int, float)) or not window > 0:
++            raise ValueError('window must be a number of seconds greater than 0')
++        self.limit = limit
++        self.window = window
++        self._clock = clock if clock is not None else time.monotonic
++        self._counted = {}
++
++    def _inside(self, key, now):
++        """The times of the requests of `key` that still count at `now`, oldest first."""
++        times = self._counted.get(key)
++        if times is None:
++            return ()
++        while times and times[0] + self.window <= now:
++            times.popleft()
++        if not times:
++            del self._counted[key]
++        return times
++
++    def allow(self, key):
++        """Count a request for `key` and return True, or return False when the key is at its limit."""
++        now = self._clock()
++        if len(self._inside(key, now)) >= self.limit:
++            return False
++        self._counted.setdefault(key, deque()).append(now)
++        return True
++
++    def remaining(self, key):
++        """How many more requests `key` could make right now."""
++        return self.limit - len(self._inside(key, self._clock()))
++
++    def retry_after(self, key):
++        """Seconds until `key` may make its next request; 0.0 when it may make one now."""
++        now = self._clock()
++        times = self._inside(key, now)
++        if len(times) < self.limit:
++            return 0.0
++        return float(times[0] + self.window - now)
++
++    def reset(self, key):
++        """Forget everything `key` has done."""
++        self._counted.pop(key, None)
