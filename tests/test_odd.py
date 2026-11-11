@@ -993,6 +993,13 @@ class Distribution(Repo):
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn('ok      add', out.stdout, 'the closing gate of the installed command')
 
+    def test_the_launch_demo_still_shows_what_it_claims(self):
+        r = subprocess.run(['bash', os.path.join(self.REPO, 'launch', 'demo.sh')], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('the proof still passes with the change taken out', r.stdout)
+        self.assertIn('split: verified', r.stdout)
+        self.assertEqual(r.stdout.count('\nPASS'), 2)
+
     def action_step(self):
         """The shell the Action runs, read out of action.yml (stdlib only, so no YAML parser)."""
         with open(os.path.join(self.REPO, 'action.yml')) as f:

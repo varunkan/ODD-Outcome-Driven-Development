@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ODD: outcome-driven development</title>
+<meta name="description" content="Work is done when a proof says so, not when the agent says so. One small tool for Claude Code, Cursor, Copilot and any coding agent.">
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1c1a; --muted: #5f5b54; --line: #e4e0d8; --card: #ffffff;
+  --accent: #1f6f50; --accent-soft: #e3f1ea; --bad: #a3392b; --bad-soft: #f8e6e3;
+  --term-bg: #17191c; --term-fg: #d9dde3; --term-dim: #8a929c; --term-ok: #7fd1a3; --term-bad: #f08c7d;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131416; --fg: #ecebe8; --muted: #a6a29a; --line: #2b2d31; --card: #1b1d20;
+    --accent: #6fcf9f; --accent-soft: #19302a; --bad: #f08c7d; --bad-soft: #3a211d;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131416; --fg: #ecebe8; --muted: #a6a29a; --line: #2b2d31; --card: #1b1d20;
+  --accent: #6fcf9f; --accent-soft: #19302a; --bad: #f08c7d; --bad-soft: #3a211d;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 var(--sans); }
+main { max-width: 880px; margin: 0 auto; padding: 0 16px 80px; }
+a { color: var(--accent); }
+header { padding: 64px 0 24px; }
+.tag { display: inline-block; font: 600 13px var(--mono); color: var(--accent); background: var(--accent-soft);
+  padding: 3px 10px; border-radius: 99px; }
+h1 { font-size: clamp(32px, 6vw, 52px); line-height: 1.1; max-width: 760px; text-wrap: balance; margin: 18px 0 14px; letter-spacing: -0.02em; }
+.lede { font-size: 20px; color: var(--muted); max-width: 640px; margin: 0; }
+h2 { font-size: 26px; margin: 64px 0 12px; letter-spacing: -0.01em; }
+p { max-width: 700px; }
+.muted { color: var(--muted); }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.btn { font-weight: 600; text-decoration: none; padding: 10px 18px; border-radius: 8px; border: 1px solid var(--line); color: var(--fg); background: var(--card); }
+.btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+pre, code { font-family: var(--mono); font-size: 14px; }
+code { background: var(--card); border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px; }
+pre { margin: 0; overflow-x: auto; }
+.term { background: var(--term-bg); color: var(--term-fg); border-radius: 10px; padding: 18px 20px; line-height: 1.55; }
+.term .c { color: var(--term-dim); } .term .p { color: var(--term-fg); font-weight: 600; }
+.term .ok { color: var(--term-ok); } .term .bad { color: var(--term-bad); }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 18px; }
+.step { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+.step b { display: block; font-size: 15px; margin-bottom: 6px; }
+.step span { color: var(--muted); font-size: 15px; }
+.n { font: 700 13px var(--mono); color: var(--accent); }
+.verdict { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+.verdict div { border-radius: 10px; padding: 16px 18px; font-size: 15px; }
+.v-bad { background: var(--bad-soft); } .v-ok { background: var(--accent-soft); }
+.verdict strong { display: block; margin-bottom: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 14px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.wrap { overflow-x: auto; }
+.pending { border: 1px dashed var(--line); border-radius: 10px; padding: 18px 20px; background: var(--card); }
+ul.plain { padding-left: 20px; } ul.plain li { margin: 4px 0; max-width: 700px; }
+footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+@media (max-width: 560px) { .verdict { grid-template-columns: 1fr; } body { font-size: 16px; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <span class="tag">odd 0.3.0 · early · MIT</span>
+  <h1>Work is done when a proof says so, not when the agent says so.</h1>
+  <p class="lede">ODD is one small command and a half-page method for building software with a coding agent. It works
+    with Claude Code, Cursor, Copilot, Codex or anything else that can run a shell command.</p>
+  <div class="cta">
+    <a class="btn primary" href="#install">Install</a>
+    <a class="btn" href="https://github.com/varunkan/ODD-Outcome-Driven-Development">GitHub</a>
+    <a class="btn" href="https://github.com/varunkan/ODD-Outcome-Driven-Development/blob/main/WHY.md">Why it exists</a>
+  </div>
+</header>
+
+<h2>The problem</h2>
+<p>Coding agents report "done" for work that is not done. The tests pass, but they test nothing the change does. The
+  bug is still there, the summary says fixed, and nobody finds out until later. More instructions do not fix this: an
+  instruction is something the model may or may not follow.</p>
+
+<h2>The idea</h2>
+<div class="steps">
+  <div class="step"><span class="n">1</span><b>State the outcome first</b><span>One sentence saying who observes what, a
+    command that exits 0 only when it is true, and the files the change may touch.</span></div>
+  <div class="step"><span class="n">2</span><b>Make the change</b><span>The agent writes the test and the code, inside the
+    files it named.</span></div>
+  <div class="step"><span class="n">3</span><b><code>odd done</code> decides</b><span>It passes only if the proof passes,
+    <em>fails with the change taken out</em>, and passes again once the change is put back.</span></div>
+  <div class="step"><span class="n">4</span><b>CI recomputes it</b><span>The gate re-runs everything from the code and
+    trusts nothing the agent recorded. Every changed file must sit inside a verified outcome.</span></div>
+</div>
+<div class="verdict">
+  <div class="v-bad"><strong>Refused</strong>A test that asserts nothing, a weakened test, a proof that passes anyway, a
+    hand-written "done", files changed outside the stated boundary.</div>
+  <div class="v-ok"><strong>Accepted</strong>A proof that fails without the change and passes with it, on the code as it
+    is. Or an honest <code>odd park</code>: "this cannot be done as specified".</div>
+</div>
+
+<h2>See it catch one</h2>
+<p class="muted">Real output from <a href="https://github.com/varunkan/ODD-Outcome-Driven-Development/blob/main/launch/demo.sh"><code>launch/demo.sh</code></a>, shortened.</p>
+<div class="term"><pre><span class="c"># the ticket: a bill of 100.00 split three ways loses a cent</span>
+<span class="p">$ odd new split "A cashier who splits a bill three ways sees three amounts that add up to the bill." \
+    --proof "python3 -m unittest -q tests.test_split" --in "billing/**"</span>
+
+<span class="c"># the agent writes a test that only checks there are three parts, "fixes" the code, says done</span>
+<span class="p">$ odd done split</span>
+<span class="bad">odd: the proof still passes with the change taken out, so it does not depend on the change.</span>
+  taken out: billing/split.py
+
+<span class="c"># a real test (the parts add up to the bill) and a real fix</span>
+<span class="p">$ odd done split</span>
+<span class="ok">split: verified.</span> took out 1 file(s), 3 line(s); without them the proof said: FAILED (failures=1)
+
+<span class="p">$ odd gate --recompute --base main</span>      <span class="c"># what CI runs</span>
+  ok      split: A cashier who splits a bill three ways sees three amounts that add up to the bill.
+<span class="ok">PASS</span></pre></div>
+
+<h2 id="install">Install</h2>
+<div class="term"><pre><span class="c"># the command</span>
+<span class="p">$ pipx install odd-tool</span>                 <span class="c"># or pip install odd-tool, or download odd.py</span>
+<span class="p">$ cd your-project && odd init</span>         <span class="c"># writes .odd/ and the method into AGENTS.md</span></pre></div>
+<p>From there your coding agent follows the method in <code>AGENTS.md</code> by itself. To make it count, add the gate as
+  a required check. On GitHub Actions it is one step:</p>
+<div class="term"><pre><span class="p">- uses: actions/checkout@v4
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.3.0</span></pre></div>
+<p class="muted">The action judges each pull request with its own pinned copy of the tool, never the copy the pull
+  request carries, and reads the settings from the target branch, so a change cannot loosen its own gate. Other CI
+  systems use two lines that <code>odd init</code> prints.</p>
+
+<h2>Works with</h2>
+<p><code>odd init</code> writes the method into the root <code>AGENTS.md</code>, which Codex, Cursor, GitHub Copilot in VS
+  Code, Claude Code, Junie and Windsurf read without configuration. Gemini CLI, Aider and Copilot Chat outside VS Code
+  need one line. The command and the gate are the same for every tool and for a person. So far only Claude Code has
+  been run with it.</p>
+
+<h2>Next to Spec Kit, BMAD and Superpowers</h2>
+<p>They are good at structure: specs, plans, roles, skills. ODD does one thing they leave to the model.</p>
+<div class="wrap"><table>
+  <tr><th></th><th>What it adds</th><th>Who decides "done"</th></tr>
+  <tr><td><b>Spec Kit</b></td><td>Constitution, spec, plan, tasks, implement</td><td>The model, against written checklists</td></tr>
+  <tr><td><b>BMAD</b></td><td>Agent roles and story workflows</td><td>The model; tests and reviews are advisory</td></tr>
+  <tr><td><b>Superpowers</b></td><td>Skills with "iron laws" such as test first</td><td>The model; the rules are text</td></tr>
+  <tr><td><b>ODD</b></td><td>An outcome, a proof, a boundary</td><td>A command that re-runs the proof without the change</td></tr>
+</table></div>
+<p class="muted">From each project's own documentation, read 2026-11-11
+  (<a href="https://github.com/varunkan/ODD-Outcome-Driven-Development/blob/main/docs/evidence/04-spec-kit-bmad-superpowers.md">sources</a>).
+  ODD can sit underneath any of them as the last check.</p>
+
+<h2>Does it work better?</h2>
+<div class="pending">
+  <p style="margin-top:0"><b>Not claimed yet.</b> A same-task comparison is being run: ten tasks with hidden acceptance
+    tests (bug fixes, features, traps, a vague request, an impossible one), each done by plain Claude Code, ODD, Spec
+    Kit, BMAD and Superpowers, several times each. It measures how often the work really passes, how often each one
+    says "done" when it is not, and the cost in tokens, money and time.</p>
+  <p style="margin-bottom:0">The results will be published here with their spread, whatever they show. The harness is
+    open: <a href="https://github.com/varunkan/ODD-Outcome-Driven-Development/tree/main/bench">bench/</a>.</p>
+</div>
+
+<h2>Where it came from</h2>
+<p>The method was distilled from building a production restaurant point-of-sale system with coding agents over three
+  months: 1,856 instructions given, each catalogued and ruled on. Most were dropped. The two most expensive mistakes in
+  that project were its own process rules, and the
+  <a href="https://github.com/varunkan/ODD-Outcome-Driven-Development/blob/main/docs/evidence/02-pos-evidence-ledger.md">waste record</a>
+  is published with the rest of the
+  <a href="https://github.com/varunkan/ODD-Outcome-Driven-Development/tree/main/docs/evidence">evidence</a>.</p>
+
+<h2>Limits</h2>
+<ul class="plain">
+  <li>It checks that the proof depends on the change, not that the outcome is worth having or the proof thorough. A
+    person should read the outcome sentence and the proof: they are three lines.</li>
+  <li>On a developer's machine an agent with a shell can bypass any local check. The gate is the authority in CI, as a
+    required check, when the tool and CI settings need review to change and the agent cannot push to the target branch.</li>
+  <li>The check runs the proof three times, so the proof should be the narrowest command that shows the outcome.</li>
+  <li>Evidence so far comes from one project. Windows and macOS are untested.</li>
+</ul>
+
+<footer>
+  ODD: outcome-driven development · MIT licence ·
+  <a href="https://github.com/varunkan/ODD-Outcome-Driven-Development">source</a> ·
+  <a href="https://github.com/varunkan/ODD-Outcome-Driven-Development/blob/main/DESIGN.md">design and limits</a>
+</footer>
+</main>
+</body>
+</html>
