@@ -16,8 +16,12 @@ Code, ODD, Spec Kit, BMAD, Superpowers. Results are published whatever they show
 | cost, tokens, turns, seconds | the CLI's own figures, from the final `result` event of its stream-json transcript |
 | changed lines | against the "arm setup" commit: all the session wrote, planning documents included; `*.py` lines also apart |
 
-Per arm: pass rate, false-done rate, median cost, median seconds, with the spread across repeats. A difference inside
-the run-to-run spread is reported as no difference.
+Per arm (`report.py`, into `report.md` and `summary.json`): runs, graded, not graded, contaminated, stopped at a cap
+and work left outside; then, over graded uncontaminated runs only, pass rate, the whole claim table (false done never
+without under-claim and no claim beside it), regression failures, the arm check against the grade, medians and ranges
+of cost, tokens, turns, seconds and changed lines, the models seen, and the arm's VERSION and "To state" notes. Each
+arm is compared with plain task by task: a 95% bootstrap interval over tasks of the per-task difference; "differs"
+only when it excludes zero with at least three repeats; raw counts always printed.
 
 **The claim.** One parser, in `run.py`. It takes the last line of the final message that contains `RESULT:`, strips
 Markdown emphasis (`*`, `_`, backtick), list, quote and heading marks and surrounding spaces, and reads the verdict

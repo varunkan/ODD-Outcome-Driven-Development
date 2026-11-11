@@ -12,13 +12,17 @@ One run, in this order:
      environment built from an allow-list (agent_env)
   4. changed lines measured against the "arm setup" commit, in a scratch index outside the session
   5. two copies made outside the session: P, where arms/<arm>/post.sh runs (its exit status is the arm's own check),
-     and G, where .bench/final.txt is written, tasks/<id>/hidden copied in and the task's grade command run
-Writes <out>/<task>.<arm>.<n>.json. SPEC.md is the contract; RUNNER-NOTES.md explains the permission flags.
+     and G, where the shipped visible tests are put back and run (regression), .bench/final.txt and .bench/claim.json
+     are written, tasks/<id>/hidden copied in and the task's grade command run
+Writes <out>/<task>.<arm>.<n>.json and, beside it, the agent's stream-json transcript (.transcript.jsonl). A cap
+(turns, budget, timeout) is graded and named in stopped_at; no result, or an error result that is not a cap, is not
+graded. SPEC.md is the contract; RUNNER-NOTES.md explains the permission flags.
 
 No model is called with --dry-run, or when BENCH_FAKE_AGENT is set to a command. That command runs in the session
-directory with the prompt on stdin and must print a JSON object with a "result" string (optional: total_cost_usd,
-usage, num_turns, duration_ms). It is also given BENCH_TASK, BENCH_ARM, BENCH_REPEAT and BENCH_TASK_DIR; a real
-agent never is. --dry-run alone uses a built-in agent that changes nothing and answers NOT DONE.
+directory with the prompt on stdin and prints either one JSON object with a "result" string or stream-json lines
+ending in a "result" event (optional: total_cost_usd, usage, modelUsage, num_turns, duration_ms). It is also given
+BENCH_TASK, BENCH_ARM, BENCH_REPEAT and BENCH_TASK_DIR; a real agent never is. --dry-run alone uses a built-in agent
+that changes nothing and answers NOT DONE.
 
 exit 0 when every run was graded, 1 when any run could not be (its JSON names the error), 2 on bad arguments.
 """
@@ -47,7 +51,8 @@ PERMISSION_FLAGS = ['--permission-mode', 'acceptEdits', '--permission-prompts', 
 # (RUNNER-NOTES.md); whatever another machine needs is named with --pass-env.
 ENV_ALLOW = ('PATH', 'HOME', 'LANG', 'TERM', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR')
 SETUP_TIMEOUT, POST_TIMEOUT, GRADE_TIMEOUT = 900, 300, 180
-# The result subtypes CLI 2.1.322 printed when a cap was reached (RUNNER-NOTES.md): such a run is graded as it stands.
+# The result subtypes CLI 2.1.322 printed (exit 1, is_error true, no "result" text) when --max-turns 1 and
+# --max-budget-usd 0.00001 were reached on 2026-11-11. Such a run is graded as it stands.
 CAPS = {'error_max_turns': 'max_turns', 'error_max_budget_usd': 'max_budget'}
 DRY_AGENT = '%s -c %s' % (shlex.quote(sys.executable), shlex.quote(
     'import json; print(json.dumps({"result": "dry run: nothing was changed\\nRESULT: NOT DONE: dry run"}))'))
@@ -188,9 +193,10 @@ def contamination(transcript, repos, tmp, own_top, cache):
     pattern = re.compile('|'.join([re.escape(r) for r in repos] + ['tests_hidden', '/hidden/'] +
                                   [re.escape(t) + r'/bench-[\w.-]+' for t in temps]))
     own = os.path.basename(own_top)
+    # the whole cache path only: a path that merely starts with the same letters is not the cache
+    shared = re.compile('|'.join(re.escape(c) + r'(?![\w.-])' for c in {cache, os.path.realpath(cache)}))
     for text in tool_inputs(transcript):
-        for c in {cache, os.path.realpath(cache)}:
-            text = text.replace(c, '')
+        text = shared.sub('', text)
         for m in pattern.finditer(text):
             hit = m.group(0)
             if not (os.path.basename(hit) == own and any(hit.startswith(t + '/bench-') for t in temps)):
@@ -403,7 +409,8 @@ def grade(task, copy, env, rec):
     claim and final message are written and the hidden tests copied in."""
     shipped = os.path.join(task['dir'], 'repo', 'tests')
     if os.path.isdir(shipped):
-        shutil.copytree(shipped, os.path.join(copy, 'tests'), dirs_exist_ok=True)
+        shutil.rmtree(os.path.join(copy, 'tests'), ignore_errors=True)
+        shutil.copytree(shipped, os.path.join(copy, 'tests'))
         status = run(['python3', '-m', 'unittest', 'discover', '-s', 'tests', '-q'], copy, env, GRADE_TIMEOUT)[0]
         rec['regression_passed'] = status == 0
         if status is None:
@@ -507,9 +514,10 @@ def main(argv=None):
         for future in concurrent.futures.as_completed(futures):
             r = future.result()
             not_graded += r['passed'] is None
-            print('%-28s %-12s %d  %-10s claim=%-8s %s%s' % (
+            print('%-28s %-12s %d  %-10s claim=%-8s %s%s%s' % (
                 r['task'], r['arm'], r['repeat'],
                 'not graded' if r['passed'] is None else 'passed' if r['passed'] else 'failed', r['claim'],
+                'stopped at %s ' % r['stopped_at'] if r['stopped_at'] else '',
                 '' if r['cost_usd'] is None else '$%.2f ' % r['cost_usd'], r['error'] or ''), flush=True)
     except KeyboardInterrupt:
         for future in futures:
