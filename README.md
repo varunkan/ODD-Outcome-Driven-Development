@@ -5,7 +5,7 @@
 `odd` is one small command-line tool and a half-page method for building software with a coding agent. It works with
 Claude Code, Cursor, Copilot, or anything else that can run a shell command, because it needs only a shell and git.
 
-> **Status: early (0.2.0).** The tool passes its own tests, including the ways an agent could fake "done", and
+> **Status: early (0.3.0).** The tool passes its own tests, including the ways an agent could fake "done", and a red team of 0.2.0 (48 confirmed defects, each now a test), and
 > has been through one design review (23 changes, all applied). A same-task comparison against plain Claude Code,
 > Spec Kit, BMAD and Superpowers is being built. No claim about speed, cost or quality is made here until those
 > numbers exist.
@@ -49,8 +49,8 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | command | what it does |
 |---|---|
 | `odd init [--claude-hooks]` | set up or repair a project; prints the step to add to CI |
-| `odd new <slug> "<outcome>" --proof CMD --in GLOBS` | state an outcome (a three-line file in `.odd/outcomes/`) |
-| `odd done <slug>` | verify it: passes, fails with the change taken out, passes again |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`) |
+| `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd gate [--recompute]` | is every changed file inside a verified outcome? (`--recompute` for CI) |
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
 | `odd stats` | counts, self-reported |

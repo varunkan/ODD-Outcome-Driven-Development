@@ -43,8 +43,8 @@ files; their sentences and proofs are the specification, and each file is a task
 | command | what it does | exit |
 |---|---|---|
 | `odd init [--claude-hooks]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step and the conditions under which CI is the authority | 0 |
-| `odd new <slug> "<outcome>" --proof CMD --in GLOBS` | writes the outcome file | 0 |
-| `odd done <slug>` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file | 0 |
+| `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd gate [--base REF] [--recompute]` | checks the whole change (section 5) | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd stats` | counts, labelled self-reported | 0 |
@@ -118,13 +118,14 @@ and the CI configuration cannot change without a person's review, and (3) the ag
 target branch. Without all three the gate is advisory. The CI step runs the copy of the tool from the base revision:
 
 ```
-git show "origin/$TARGET:.odd/odd.py" > "$TMP/odd.py" 2>/dev/null || cp .odd/odd.py "$TMP/odd.py"
-python3 "$TMP/odd.py" gate --recompute --base "origin/$TARGET"
+git show "refs/remotes/origin/$TARGET:.odd/odd.py" > "$TMP/odd.py" 2>/dev/null || cp .odd/odd.py "$TMP/odd.py"
+python3 "$TMP/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET"
 ```
 
 It needs full history (not a depth-1 checkout) and the toolchain the proofs use, so it belongs at the end of the
-project's existing test job. On GitHub, do not move it to `pull_request_target`. Without CI, run
-`odd gate --recompute` before merging.
+project's existing test job. On GitHub, do not move it to `pull_request_target`. Without CI, fetch the target
+branch and run `odd gate --recompute --base <target branch>` on the committed work before merging. A ref name that
+could mean a tag, a local branch and a remote branch at once is refused rather than guessed.
 
 ## 6. Exemptions
 

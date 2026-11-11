@@ -313,8 +313,8 @@ class Attacks(Repo):
         self.write('calc.py', BROKEN + '# 1\n' * 30)  # the outcome does NOT hold
         cfg = oddmod.load_config(self.dir)
         o = oddmod.Outcome.load(self.dir, 'add')
-        changed = oddmod.changed_files(self.dir, oddmod.find_base(self.dir, cfg))
-        oddmod.record(self.dir, 'add', ok=True, hash=oddmod.content_hash(self.dir, cfg, o, changed), files=1, lines=30,
+        changed = oddmod.changed_files(self.dir, oddmod.find_base(self.dir, cfg)[0])
+        oddmod.record(self.dir, 'add', ok=True, hash=oddmod.content_hash(self.dir, cfg, o, changed)[0], tests=['tests/test_calc.py'], files=1, lines=30,
                       seconds=[0, 0, 0], red_says='forged', skip='')
         self.assertIn('PASS', self.ok('gate'))                             # local evidence is fast feedback, not proof
         self.assertIn('the proof fails', self.no('gate', '--recompute'))   # recomputation trusts nothing recorded
@@ -408,7 +408,7 @@ class Exemptions(Repo):
     def test_a_binary_file_outside_an_outcome_is_never_small(self):
         with open(self.path('model.bin'), 'wb') as f:
             f.write(b'\0\1\2')
-        self.assertIn('a binary file or submodule pointer', self.no('gate'))
+        self.assertIn('a binary file, directory or submodule pointer', self.no('gate'))
 
 
 class GitShapes(Repo):
@@ -486,8 +486,8 @@ class Files(Repo):
         m = oddmod.matches
         self.assertTrue(m('a.py', ['a.py']))
         self.assertFalse(m('data.py', ['a.py']))
-        self.assertTrue(m('src/pay/x/y.py', ['src/pay']) and m('src/pay/x/y.py', ['src/**']))
-        self.assertFalse(m('src2/y.py', ['src']))
+        self.assertTrue(m('src/pay/x/y.py', ['src/pay'], True) and m('src/pay/x/y.py', ['src/**']))
+        self.assertFalse(m('src2/y.py', ['src'], True) or m('src/pay/x/y.py', ['src/pay']))
         self.assertTrue(m('README.md', ['**/*.md']) and m('docs/a/b.md', ['**/*.md']))
         self.assertFalse(m('src/a/b.py', ['src/*.py']))
         self.assertTrue(m('src/b.py', ['./src/*.py']))
@@ -590,6 +590,377 @@ class ClaudeHooks(Repo):
         self.write('.odd/outcomes/bad.md', 'not an outcome file\n')
         self.assertEqual(self.hook('stop'), '')
         self.assertIn('hooks failed', self.ok('init'), 'a hook that failed open is reported, not hidden')
+
+
+class RedTeam(Repo):
+    """One fixture per defect the red team confirmed in 0.2.0 (docs/evidence/11-red-team.md)."""
+
+    def pad(self, rel, n=300):
+        self.write(rel, ''.join('x%d = %d\n' % (i, i) for i in range(n)))
+
+    def remote(self):
+        bare = tempfile.mkdtemp(prefix='odd-remote-')
+        self.addCleanup(shutil.rmtree, bare, True)
+        subprocess.run(['git', 'init', '-q', '--bare', bare], check=True)
+        self.git('remote', 'add', 'origin', bare)
+        self.git('push', '-q', 'origin', 'main')
+        self.git('fetch', '-q', 'origin')
+
+    # ---- which revision the change is measured from
+
+    def test_a_tag_or_branch_named_like_the_remote_branch_cannot_stand_in_for_it(self):
+        self.remote()
+        self.pad('big.py')
+        self.commit('300 lines, no outcome')
+        self.assertIn('outside every outcome', self.no('gate', '--recompute', '--base', 'origin/main'))
+        self.git('tag', 'origin/main', 'HEAD')
+        self.assertIn('more than one ref', self.no('gate', '--recompute', '--base', 'origin/main', code=2))
+        self.assertIn('outside every outcome', self.no('gate', '--recompute'), 'the default looks at the remote branch itself')
+        self.assertIn('outside every outcome', self.no('gate', '--recompute', '--base', 'refs/remotes/origin/main'))
+        self.git('tag', '-d', 'origin/main')
+        self.git('branch', 'origin/main', 'HEAD')
+        self.assertIn('more than one ref', self.no('gate', '--recompute', '--base', 'origin/main', code=2))
+
+    def test_recomputing_reads_the_settings_at_the_tip_of_the_target_branch(self):
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/config.json', json.dumps({'trivial_lines': 5}))
+        self.commit('the budget is tightened after the branch was cut')
+        self.git('checkout', '-q', 'feat')
+        self.pad('small.py', 20)
+        self.commit('20 lines')
+        self.assertIn('up to 5 need none', self.no('gate', '--recompute', '--base', 'main'))
+
+    def test_recomputing_ignores_a_default_branch_the_change_names_itself(self):
+        self.write('.odd/config.json', json.dumps({'default_branch': 'feat'}))
+        self.pad('big.py')
+        self.commit('points the base at its own branch')
+        out = self.no('gate', '--recompute')
+        self.assertIn('outside every outcome', out)
+        self.assertIn('CONTROL FILES CHANGED', out)
+
+    def test_recomputing_refuses_a_tree_that_is_not_what_was_committed(self):
+        self.pad('big.py')
+        self.commit('300 lines, no outcome')
+        os.remove(self.path('big.py'))  # reverted in the working tree only: a merge would still bring it
+        self.assertIn('big.py', self.no('gate', '--recompute', code=2))
+
+    def test_work_committed_on_the_branch_it_is_measured_from(self):
+        self.git('checkout', '-q', 'main')
+        self.outcome()
+        self.solve()
+        self.commit('fixed on main')  # what a tool that commits for the agent does
+        out = self.no('done', 'add')
+        self.assertIn('--base', out)
+        self.assertNotIn('counterfactual: skip', out, 'the way out is not an exemption')
+        self.assertIn('took out 1 file(s)', self.ok('done', 'add', '--base', 'HEAD~1'))
+
+    def test_a_target_branch_with_another_name(self):
+        self.git('branch', '-m', 'main', 'trunk')
+        self.assertIn('default_branch', self.ok('init'), 'init says it cannot tell where work leaves from')
+        self.outcome()
+        self.solve()
+        self.assertIn('--base', self.no('done', 'add', code=2))
+        out = self.ok('done', 'add', '--base', 'trunk')
+        self.assertIn('add: verified', out)
+        self.assertIn('PASS', out, 'the closing gate uses the same base')
+
+    # ---- what counts as changed, and how much
+
+    def test_a_file_named_like_a_pattern_is_only_that_file(self):
+        self.git('checkout', '-q', 'main')
+        self.write('src/v2.py', 'a = 1\n')
+        self.write('src/v[2].py', 'old\n')
+        self.commit('two files')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.pad('src/v[2].py', 400)
+        self.write('src/v2.py', 'a = 1\nb = 2\n')
+        self.assertIn('outside every outcome', self.no('gate'), 'the 400 lines are counted, not the neighbour\'s one')
+        self.outcome('v', "grep -q x399 'src/v[2].py'", 'src/v[2].py', 'A reader of the second version finds all four hundred values.')
+        self.ok('done', 'v')
+        self.assertEqual(self.read('src/v2.py'), 'a = 1\nb = 2\n', 'the neighbour outside the outcome is never rewritten')
+
+    def test_a_module_written_on_one_line_is_not_a_small_change(self):
+        self.write('one.py', '; '.join('x%d = %d' % (i, i) for i in range(2000)) + '\n')
+        self.assertIn('outside every outcome', self.no('gate'))
+        os.remove(self.path('one.py'))
+        self.write('calc.py', BROKEN + '; '.join('y%d = %d' % (i, i) for i in range(2000)) + '\n')
+        self.assertIn('outside every outcome', self.no('gate'), 'one long line added to an existing file')
+        self.write('calc.py', BROKEN)
+        for i in range(26):
+            self.write('empty%d.py' % i, '')
+        self.assertIn('outside every outcome', self.no('gate'), 'an empty file or a mode change costs one line')
+
+    def test_a_link_to_a_directory_is_one_line_and_a_submodule_pointer_is_never_small(self):
+        os.symlink('tests', self.path('latest'))
+        self.assertIn('small-change lane: 1 line(s)', self.ok('gate'))
+        os.remove(self.path('latest'))
+        sub = tempfile.mkdtemp(prefix='odd-sub-')
+        self.addCleanup(shutil.rmtree, sub, True)
+        for args in (['init', '-q', '-b', 'main'], ['-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-q',
+                                                    '--allow-empty', '-m', 'one']):
+            subprocess.run(['git'] + args, cwd=sub, check=True, capture_output=True)
+        self.git('checkout', '-q', 'main')
+        self.git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'vendor/lib')
+        self.commit('a submodule')
+        self.git('checkout', '-q', '-B', 'feat')
+        subprocess.run(['git', '-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m',
+                        'two'], cwd=self.path('vendor/lib'), check=True, capture_output=True)
+        self.write('.gitmodules', self.read('.gitmodules') + '\tignore = all\n')
+        self.git('add', '.gitmodules', 'vendor/lib')
+        out = self.no('gate')
+        self.assertIn('vendor/lib', out, 'the pointer moved, whatever .gitmodules says about ignoring it')
+
+    def test_a_directory_named_like_an_exempt_or_test_file_exempts_nothing(self):
+        m = oddmod.matches
+        self.assertFalse(m('notes.md/payload.py', oddmod.DEFAULTS['exempt']) or m('app.lock/worker.py', oddmod.DEFAULTS['exempt']))
+        self.assertFalse(m('LICENSE-tools/run.py', oddmod.DEFAULTS['exempt']) or m('x.test.d/run.py', oddmod.DEFAULTS['test_globs']))
+        self.pad('notes.md/payload.py')
+        self.assertIn('outside every outcome', self.no('gate'))
+
+    def test_bytecode_and_files_a_proof_writes_are_not_the_change(self):
+        self.write('.gitignore', '')  # a project that does not ignore __pycache__
+        self.write('pkg/__init__.py', '')
+        self.write('pkg/calc.py', BROKEN)
+        self.commit('a package')
+        self.git('branch', '-f', 'main')
+        proof = "test -f tests/seen.txt || echo first > tests/seen.txt; %s -m unittest -q tests.test_pkg" % sys.executable
+        self.outcome('pkg', proof, 'pkg/**')
+        self.write('tests/test_pkg.py', TEST.replace('from calc', 'from pkg.calc'))
+        self.write('pkg/calc.py', FIXED)
+        subprocess.run(proof, shell=True, cwd=self.dir, capture_output=True)  # the agent runs its test first
+        self.assertTrue(os.path.isdir(self.path('pkg/__pycache__')))
+        out = self.ok('done', 'pkg')
+        self.assertNotIn('\nFAIL', out, 'done does not contradict itself in one output')
+        self.ok('done', 'pkg')
+        self.assertIn('PASS', self.ok('gate'))
+        self.assertEqual([n for n in os.listdir(self.path('.git/odd')) if n.startswith('displaced')], [])
+
+    # ---- proofs
+
+    def test_a_proof_handed_to_an_interpreter_from_inside_the_change(self):
+        self.write('check.py', 'print("ok")\n')
+        self.write('calc.py', FIXED)
+        self.outcome('a', '%s check.py' % sys.executable, 'calc.py, check.py')
+        self.assertIn('part of the change', self.no('done', 'a', code=2))
+        self.write('shop/__init__.py', '')
+        self.write('shop/tests.py', 'import unittest\n\n\nclass T(unittest.TestCase):\n    def test_nothing(self):\n        self.assertTrue(True)\n')
+        self.outcome('b', '%s -m unittest shop.tests -q' % sys.executable, 'shop/**', 'A shopper sees the tests of the shop pass.')
+        self.assertIn('shop/tests.py', self.no('done', 'b', code=2))
+
+    def test_a_proof_that_leaves_a_process_behind_does_not_hold_the_check(self):
+        self.write('.odd/config.json', json.dumps({'proof_timeout': 3}))
+        bg = "%s -c 'import os, time; os.setsid(); time.sleep(8.031)' &" % sys.executable
+        self.outcome('add', "%s grep -q 'a + b' calc.py" % bg)
+        self.write('calc.py', FIXED)
+        t0 = time.time()
+        try:
+            self.assertIn('add: verified', self.ok('done', 'add'))
+            self.assertLess(time.time() - t0, 6, 'the proof ended; what it left running is not waited for')
+        finally:
+            subprocess.run(['pkill', '-f', 'time.sleep(8.031)'], capture_output=True)
+
+    def test_exit_255_without_the_change_is_a_failure_like_any_other(self):
+        self.outcome('add', "grep -q 'a + b' calc.py || exit 255")
+        self.write('calc.py', FIXED)
+        self.assertIn('add: verified', self.ok('done', 'add'))
+
+    # ---- taking the change out and putting it back
+
+    def test_a_directory_turned_into_a_file_or_a_link_is_refused_before_anything_is_touched(self):
+        self.git('checkout', '-q', 'main')
+        self.write('plugin/a.py', 'a = 1\n')
+        self.write('vendor/lib/v.py', 'V = 1\n')
+        self.write('shared/v.py', 'V = 2\n')
+        self.commit('directories')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.git('rm', '-rq', 'plugin', 'vendor/lib')
+        self.write('plugin', 'single-file plugin, uncommitted\n')
+        os.makedirs(self.path('vendor'), exist_ok=True)
+        os.symlink('../shared', self.path('vendor/lib'))
+        self.outcome('p', 'test -f plugin', 'plugin, plugin/**', 'A maintainer finds the plugin as a single file.')
+        self.outcome('l', 'test -L vendor/lib', 'vendor/**', 'A maintainer finds vendor/lib linked to the shared copy.')
+        for slug in ('p', 'l'):
+            self.assertIn('counterfactual: skip', self.no('done', slug, code=2))
+        self.assertEqual(self.read('plugin'), 'single-file plugin, uncommitted\n')
+        self.assertEqual(os.readlink(self.path('vendor/lib')), '../shared')
+        self.assertEqual(self.read('shared/v.py'), 'V = 2\n')
+        self.ok('stats')
+
+    def test_a_removed_tree_goes_back_to_absent_and_a_file_the_proof_rewrote_is_named(self):
+        self.git('checkout', '-q', 'main')
+        self.write('legacy/sub/x.py', 'x = 1\n')
+        self.write('old.txt', 'old\n')
+        self.commit('legacy')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.git('rm', '-rq', 'legacy', 'old.txt')
+        self.outcome('gone', 'test ! -d legacy', 'legacy/**', 'A maintainer no longer finds the legacy package.')
+        self.ok('done', 'gone')
+        self.assertFalse(os.path.exists(self.path('legacy')), 'the directories the check created are removed again')
+        self.outcome('old', 'test ! -f old.txt || { echo reformatted >> old.txt; exit 1; }', 'old.txt',
+                     'A maintainer no longer finds the old notes file.')
+        out = self.no('done', 'old', code=2)
+        self.assertIn('old.txt', out)
+        self.assertIn('did not exist before the check', out)
+
+    def test_losing_a_saved_copy_stops_with_the_paths_named_and_puts_the_rest_back(self):
+        self.write('other.py', 'o = 1\n')
+        self.commit('another file')
+        self.git('branch', '-f', 'main')
+        self.outcome('two', "grep -q 'a + b' calc.py && exit 0; rm -f .git/odd/cf-*/0; exit 1", 'calc.py, other.py')
+        self.write('calc.py', FIXED)
+        self.write('other.py', 'o = 2\n')
+        out = self.no('done', 'two', code=2)
+        self.assertIn('calc.py', out)
+        self.assertEqual(self.read('other.py'), 'o = 2\n', 'one path that cannot be put back does not strand the others')
+        self.assertEqual(self.odd('stats')[0], 2, 'and it is said again, not crashed on, until someone looks')
+
+    def test_recovery_puts_the_change_back_into_the_tree_it_runs_in(self):
+        InPlaceCheck._interrupt(self, signal.SIGKILL)
+        moved = self.dir + '-moved'
+        os.rename(self.dir, moved)
+        self.addCleanup(shutil.rmtree, moved, True)
+        old, self.dir = self.dir, moved
+        self.assertIn('1 file(s) were put back', self.no('stats', code=2))
+        self.assertEqual(self.read('calc.py'), FIXED)
+        self.assertFalse(os.path.exists(old), 'nothing is written under the path the tree used to have')
+
+    def test_a_killed_check_is_recovered_even_when_its_pid_still_answers(self):
+        InPlaceCheck._interrupt(self, signal.SIGKILL)
+        jp = [os.path.join(self.path('.git/odd'), n, 'journal.json') for n in os.listdir(self.path('.git/odd')) if n.startswith('cf-')][0]
+        with open(jp) as f:
+            j = json.load(f)
+        j['pid'] = os.getpid()  # a pid namespace, or a zombie: the number answers although the check is gone
+        with open(jp, 'w') as f:
+            json.dump(j, f)
+        self.assertIn('1 file(s) were put back', self.no('stats', code=2))
+        self.assertEqual(self.read('calc.py'), FIXED)
+
+    def test_a_check_killed_before_it_noted_what_it_left_never_overwrites_a_later_edit(self):
+        InPlaceCheck._interrupt(self, signal.SIGKILL)
+        jp = [os.path.join(self.path('.git/odd'), n, 'journal.json') for n in os.listdir(self.path('.git/odd')) if n.startswith('cf-')][0]
+        with open(jp) as f:
+            j = json.load(f)
+        for e in j['files']:
+            e.pop('left', None)  # killed between writing the journal and noting what the take-out left
+        with open(jp, 'w') as f:
+            json.dump(j, f)
+        redo = 'def add(a, b):\n    return b + a\n'
+        self.write('calc.py', redo)
+        self.assertIn('Edited meanwhile', self.no('stats', code=2))
+        self.assertEqual(self.read('calc.py'), redo)
+
+    # ---- settings, outcome files, messages
+
+    def test_settings_of_the_wrong_shape_stop_the_gate(self):
+        for text, word in (('{"exempt": "docs/**"}', 'exempt'), ('{"trivial_lines": 0,}', 'JSON'), ('{"trivial_line": 0}', 'trivial_line'),
+                           ('[]', 'config.json'), ('{"trivial_lines": true}', 'trivial_lines'), ('{"proof_timeout": "9"}', 'proof_timeout')):
+            self.write('.odd/config.json', text)
+            self.assertIn(word, self.no('gate', code=2), text)
+        self.commit('a string where a list belongs')
+        self.git('branch', '-f', 'main')
+        self.pad('big.py')
+        self.assertIn('proof_timeout', self.no('gate', '--recompute', '--base', 'main', code=2), 'the same for settings read from the base')
+
+    def test_errors_nobody_planned_for_are_could_not_run_and_say_where(self):
+        self.outcome()
+        with open(self.path('.odd/outcomes/add.md'), 'ab') as f:
+            f.write(b'caf\xe9\n')
+        self.assertIn('add.md', self.no('gate'), 'an outcome file that is not UTF-8 is named')
+        os.remove(self.path('.odd/outcomes/add.md'))
+        os.mkdir(self.path('AGENTS.md'))
+        self.assertIn('AGENTS.md', self.no('init', code=2))
+        os.rmdir(self.path('AGENTS.md'))
+        self.write('.claude/settings.local.json', '{"hooks": {},}')
+        self.assertIn('settings.local.json', self.no('init', '--claude-hooks', code=2))
+        self.assertFalse(os.path.exists(self.path('AGENTS.md')), 'nothing is half applied')
+
+    def test_new_writes_only_what_done_can_read(self):
+        self.assertIn('one line', self.no('new', 'a', SENTENCE, '--proof', 'true\nfalse', '--in', 'calc.py'))
+        self.ok('new', 'b', SENTENCE, '--proof', 'true', '--in', 'calc.py', '--in', 'other.py')
+        self.assertIn('in: calc.py, other.py', self.read('.odd/outcomes/b.md'))
+        self.assertIn('comma', self.ok('new', 'c', SENTENCE, '--proof', 'true', '--in', 'calc.py other.py'))
+
+    def test_the_local_gate_goes_by_the_latest_attempt_and_a_new_test_elsewhere_stales_nothing(self):
+        self.write('scale.txt', '3\n')
+        self.outcome('add', "grep -q 'a + b' calc.py && grep -q 3 scale.txt")
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+        self.write('tests/test_other.py', 'import unittest\n')
+        self.assertIn('PASS', self.ok('gate'), 'a test file added for something else leaves this outcome verified')
+        self.write('scale.txt', '4\n')
+        self.no('done', 'add')
+        self.assertIn('add: run:', self.no('gate'), 'the latest attempt on this content failed')
+
+    def test_parking_says_what_the_gate_will_do(self):
+        self.outcome()
+        self.write('calc.py', FIXED + '# pad\n' * 30)
+        out = self.ok('park', 'add', 'the rounding rule contradicts the ticket')
+        self.assertIn('more than 25', out)
+
+    # ---- Claude Code hooks and files
+
+    hook = lambda self, event, payload=None: ClaudeHooks.hook(self, event, payload)  # noqa: E731
+
+    def test_hooks_see_untracked_work_and_do_not_block_again_for_a_commit(self):
+        self.hook('session-start')
+        self.pad('newdir/big.py')
+        self.assertIn('with no outcome', self.hook('stop'))
+        self.hook('prompt-submit')
+        self.pad('newdir/big.py', 301)
+        self.assertIn('with no outcome', self.hook('stop'), 'an edit to an untracked file is this turn\'s work')
+        self.hook('prompt-submit')
+        self.git('add', '-A')
+        self.assertEqual(self.hook('stop'), '', 'staging changes no file')
+        self.git('commit', '-qm', 'wip')
+        self.assertEqual(self.hook('stop'), '', 'nor does a commit')
+
+    def test_a_question_is_not_blocked_for_edits_made_before_it(self):
+        self.hook('session-start')
+        self.write('calc.py', BROKEN + '# pad\n' * 30)
+        self.assertIn('"block"', self.hook('stop'))
+        self.write('calc.py', BROKEN + '# pad\n' * 33)  # the forced continuation edits again
+        self.assertEqual(self.hook('stop', {'stop_hook_active': True}), '')
+        self.hook('prompt-submit')
+        self.assertEqual(self.hook('stop'), '', 'the next turn only asked a question')
+        self.write('calc.py', BROKEN + '# pad\n' * 40)  # the person types between turns
+        self.hook('prompt-submit')
+        self.assertEqual(self.hook('stop'), '')
+
+    def test_parking_is_not_blocked_as_work_with_no_outcome(self):
+        self.hook('session-start')
+        self.outcome()
+        self.write('calc.py', BROKEN + '# pad\n' * 40)
+        self.ok('park', 'add', 'blocked: the owner must supply the rounding rule')
+        self.assertNotIn('"block"', self.hook('stop'))
+
+    def test_init_keeps_the_persons_own_hooks_and_refuses_a_shape_it_does_not_know(self):
+        mine = {'hooks': {'Stop': [{'hooks': [{'type': 'command', 'command': './notify-me.sh'},
+                                              {'type': 'command', 'command': 'python3 .odd/odd.py gate >> gate.log'}]}]}}
+        self.write('.claude/settings.local.json', json.dumps(mine))
+        self.ok('init', '--claude-hooks')
+        self.ok('init', '--claude-hooks')
+        hooks = json.loads(self.read('.claude/settings.local.json'))['hooks']
+        cmds = [h['command'] for g in hooks['Stop'] for h in g['hooks']]
+        self.assertIn('./notify-me.sh', cmds)
+        self.assertIn('python3 .odd/odd.py gate >> gate.log', cmds)
+        self.assertEqual(len(cmds), 3)
+        self.assertEqual(sorted(hooks), ['SessionStart', 'Stop', 'UserPromptSubmit'])
+        odd_shape = json.dumps({'hooks': {'Stop': {'hooks': [{'type': 'command', 'command': 'x.sh'}]}}})
+        self.write('.claude/settings.local.json', odd_shape)
+        self.assertIn('Stop', self.no('init', '--claude-hooks', code=2))
+        self.assertEqual(self.read('.claude/settings.local.json'), odd_shape)
+
+    def test_every_claude_file_claude_code_reads_instead_of_agents_md_gets_a_working_import(self):
+        self.write('.claude/CLAUDE.md', '# Project\n\n@AGENTS.md\n')  # what 0.2.0 wrote: resolves to .claude/AGENTS.md
+        self.ok('init')
+        self.ok('init')
+        text = self.read('.claude/CLAUDE.md')
+        self.assertEqual(text.count('@../AGENTS.md'), 1)
+        self.assertNotIn('\n@AGENTS.md', text)
+        os.remove(self.path('.claude/CLAUDE.md'))
+        self.write('CLAUDE.local.md', 'my notes\n')
+        self.assertIn('CLAUDE.local.md', self.ok('init'))
+        self.assertIn('@AGENTS.md', self.read('CLAUDE.local.md'))
 
 
 if __name__ == '__main__':
