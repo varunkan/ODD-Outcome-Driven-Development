@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "odd-tool"
+dynamic = ["version"]
+description = "Outcome-driven development: work is done when a proof says so, not when the agent says so."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["ai", "coding-agent", "claude-code", "cursor", "copilot", "agents-md", "testing", "ci"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Homepage = "https://github.com/varunkan/ODD-Outcome-Driven-Development"
+Documentation = "https://github.com/varunkan/ODD-Outcome-Driven-Development/blob/main/DESIGN.md"
+
+[project.scripts]
+odd = "odd:main"
+
+[tool.setuptools]
+py-modules = ["odd"]
+
+[tool.setuptools.dynamic]
+version = { attr = "odd.VERSION" }

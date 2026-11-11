@@ -1,0 +1,25 @@
+name: odd gate
+description: Fail the check unless every changed file is inside an outcome whose proof fails without the change.
+author: varunkan
+branding:
+  icon: check-circle
+  color: green
+inputs:
+  target:
+    description: The branch the change will merge into. Defaults to the pull request's base, else the default branch.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: odd gate --recompute
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target || github.base_ref || github.event.repository.default_branch }}
+      # The tool that judges the change is this action's own copy, pinned by the workflow, never the copy the change
+      # carries. Its settings are read at the tip of the target branch, so a pull request cannot loosen its own gate.
+      run: |
+        set -euo pipefail
+        if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --quiet --unshallow --no-tags origin; fi
+        git fetch --quiet --no-tags origin "+refs/heads/$TARGET:refs/remotes/origin/$TARGET"
+        python3 "$GITHUB_ACTION_PATH/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET"

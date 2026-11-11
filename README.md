@@ -26,10 +26,16 @@ so, and that is an acceptable result.
 
 ## Try it
 
+Install it either way; both give the same single file.
+
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/varunkan/ODD-Outcome-Driven-Development/main/odd.py
+pipx install odd-tool                # or: pip install odd-tool        (then the command is `odd`)
+curl -fsSLO https://raw.githubusercontent.com/varunkan/ODD-Outcome-Driven-Development/main/odd.py   # or just the file
+```
+
+```bash
 cd your-project                      # any git repository; needs a POSIX shell, git 2.23+ and Python 3.8+
-python3 ../odd.py init               # writes .odd/ (with its own copy of the tool) and the method into AGENTS.md
+odd init                             # (or: python3 ../odd.py init) writes .odd/, with its own copy of the tool, and the method into AGENTS.md
 
 python3 .odd/odd.py new split-bill \
   "A cashier who splits a bill three ways sees three totals that add up to the bill." \
@@ -69,6 +75,19 @@ The gate is the authority only in CI, and only when (1) it is a required check, 
 configuration need a person's review to change, and (3) the agent cannot merge or push to the target branch. The CI
 step takes the tool and its settings from the base branch, so a pull request cannot loosen its own gate. `odd init`
 prints that step.
+
+## In CI
+
+On GitHub Actions the gate is one step at the end of your test job:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.3.0
+```
+
+It fetches the history it needs, judges the change with the action's own pinned copy of the tool (never the copy the
+pull request carries) and reads the settings at the tip of the target branch. Pin a tag or a commit, and make the step
+a required check. Other CI systems use the two lines `odd init` prints; they do the same.
 
 ## Works with
 

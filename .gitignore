@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 bench/results/
 .DS_Store
+
+build/
+dist/
+*.egg-info/

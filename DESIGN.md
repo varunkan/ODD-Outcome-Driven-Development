@@ -12,7 +12,7 @@ One command-line tool, `odd`, in one file, and a half-page method that a coding 
 tree as it is, fails on the same tree with the change taken out, and passes again once the change is put back. For
 proofs that run from the repository, anyone, including CI, can recompute that.
 
-Install: download `odd.py`, run `python3 odd.py init` in a git repository. It needs a POSIX shell, git 2.23 or newer
+Install: `pipx install odd-tool` (or download `odd.py`), then run `odd init` in a git repository. It needs a POSIX shell, git 2.23 or newer
 and Python 3.8 or newer.
 
 ## 2. The unit of work: an outcome file
@@ -115,7 +115,7 @@ deleted, and control files changed.
 
 **CI is the authority only when** (1) the gate is a required check on the target branch, (2) the tool, its settings
 and the CI configuration cannot change without a person's review, and (3) the agent cannot merge or push to the
-target branch. Without all three the gate is advisory. The CI step runs the copy of the tool from the base revision:
+target branch. Without all three the gate is advisory. On GitHub Actions the step is `uses: varunkan/ODD-Outcome-Driven-Development@<tag>` (`action.yml`): it unshallows the checkout, fetches the target branch and runs the action's own copy of the tool, pinned by the workflow. Elsewhere the CI step runs the copy of the tool from the target branch:
 
 ```
 git show "refs/remotes/origin/$TARGET:.odd/odd.py" > "$TMP/odd.py" 2>/dev/null || cp .odd/odd.py "$TMP/odd.py"

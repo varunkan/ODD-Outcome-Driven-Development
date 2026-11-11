@@ -8,6 +8,7 @@ review named (docs/evidence/10-design-review.md).
 """
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -961,6 +962,80 @@ class RedTeam(Repo):
         self.write('CLAUDE.local.md', 'my notes\n')
         self.assertIn('CLAUDE.local.md', self.ok('init'))
         self.assertIn('@AGENTS.md', self.read('CLAUDE.local.md'))
+
+
+class Distribution(Repo):
+    """The two ways odd reaches people besides the single file: `pip install odd-tool` and the GitHub Action."""
+
+    REPO = os.path.dirname(HERE)
+
+    def test_the_installed_command_is_the_same_tool(self):
+        venv = tempfile.mkdtemp(prefix='odd-venv-')
+        self.addCleanup(shutil.rmtree, venv, True)
+        src = os.path.join(venv, 'src')  # built from a copy, so nothing is left in the repository
+        os.makedirs(src)
+        for name in ('pyproject.toml', 'odd.py', 'README.md', 'LICENSE'):
+            shutil.copy(os.path.join(self.REPO, name), src)
+        subprocess.run([sys.executable, '-m', 'venv', venv], check=True)
+        r = subprocess.run([os.path.join(venv, 'bin', 'python'), '-m', 'pip', 'install', '-q', '--no-deps',
+                            '--disable-pip-version-check', src], capture_output=True, text=True)
+        if r.returncode != 0 and re.search(r'(?i)connection|network|resolve|proxy|index', r.stderr):
+            self.skipTest('pip could not fetch setuptools to build with: ' + r.stderr.strip()[-200:])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        odd = os.path.join(venv, 'bin', 'odd')
+        run = lambda *a: subprocess.run([odd] + list(a), cwd=self.dir, capture_output=True, text=True)  # noqa: E731
+        self.assertEqual(run('--version').stdout.strip(), 'odd ' + oddmod.VERSION)
+        self.assertEqual(run('init').returncode, 0)
+        self.assertEqual(self.read('.odd/odd.py'), open(ODD).read(), 'the vendored copy is the installed file')
+        self.outcome()
+        self.solve()
+        out = run('done', 'add')
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn('ok      add', out.stdout, 'the closing gate of the installed command')
+
+    def action_step(self):
+        """The shell the Action runs, read out of action.yml (stdlib only, so no YAML parser)."""
+        with open(os.path.join(self.REPO, 'action.yml')) as f:
+            text = f.read()
+        body = text.split('      run: |\n', 1)[1]
+        return '\n'.join(l[8:] for l in body.split('\n') if l.startswith('        ') or not l.strip())
+
+    def ci(self, target='main'):
+        """A pull request's checkout as CI sees it: a depth-1 clone of the feature branch, then the Action's step."""
+        d = tempfile.mkdtemp(prefix='odd-ci-')
+        self.addCleanup(shutil.rmtree, d, True)
+        subprocess.run(['git', 'clone', '-q', '--depth', '1', '--branch', 'feat', 'file://' + self.dir, d], check=True,
+                       capture_output=True)
+        env = dict(os.environ, TARGET=target, GITHUB_ACTION_PATH=self.REPO)
+        env.pop('ODD_BASE', None)
+        r = subprocess.run(['bash', '-c', self.action_step()], cwd=d, env=env, capture_output=True, text=True)
+        return r.returncode, r.stdout + r.stderr
+
+    def test_the_action_passes_proven_work_and_fails_unproven_work(self):
+        self.outcome()
+        self.solve()
+        self.commit('proven')
+        rc, out = self.ci()
+        self.assertEqual(rc, 0, out)
+        self.assertIn('ok      add', out)
+        self.write('big.py', ''.join('x%d = %d\n' % (i, i) for i in range(300)))
+        self.commit('unproven')
+        rc, out = self.ci()
+        self.assertEqual(rc, 1, out)
+        self.assertIn('outside every outcome', out)
+
+    def test_the_action_judges_with_its_own_copy_never_the_one_the_change_carries(self):
+        self.ok('init')
+        self.commit('adopt odd')
+        self.git('checkout', '-q', 'main')
+        self.git('merge', '-q', 'feat')
+        self.git('checkout', '-q', 'feat')
+        self.write('.odd/odd.py', 'import sys\nprint("PASS")\nsys.exit(0)\n')
+        self.write('big.py', ''.join('x%d = %d\n' % (i, i) for i in range(300)))
+        self.commit('a change that brings its own judge')
+        rc, out = self.ci()
+        self.assertEqual(rc, 1, out)
+        self.assertIn('CONTROL FILES CHANGED', out)
 
 
 if __name__ == '__main__':

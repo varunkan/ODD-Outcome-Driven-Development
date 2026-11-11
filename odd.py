@@ -910,7 +910,11 @@ the owner; decide the rest yourself and note why in the outcome file. Do not edi
 '''
 BEGIN, END = '<!-- odd:begin -->', '<!-- odd:end -->'
 CI_HELP = '''
-To make the gate count, add this as the last step of your existing test job (full history, not a depth-1 checkout):
+To make the gate count, add it as the last step of your existing test job. On GitHub Actions, one step:
+
+  - uses: varunkan/ODD-Outcome-Driven-Development@v%s
+
+Elsewhere (full history, not a depth-1 checkout):
 
   git show "refs/remotes/origin/$TARGET:.odd/odd.py" > "$TMP/odd.py" 2>/dev/null || cp .odd/odd.py "$TMP/odd.py"
   python3 "$TMP/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET"
@@ -1002,7 +1006,7 @@ def cmd_init(a, root):
     except CouldNotRun as e:
         did.append('NOTE: %s' % e)
     print('odd %s is set up:\n  ' % VERSION + '\n  '.join(did))
-    print(CI_HELP % ODD)
+    print(CI_HELP % (VERSION, ODD))
     print('\nstart: %s new <slug> "<outcome>" --proof "<command>" --in "<globs>"' % ODD)
 
 
