@@ -124,6 +124,7 @@ nothing under the home directory. The skills call only `.specify/scripts/bash/*.
 
 ## To state with the results
 
+- No session of this arm had been run with a model when these notes were written (see "Not verified").
 - Two processes, chosen by the agent from the request: Spec-Driven Development (`/speckit-constitution`,
   `/speckit-specify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-implement`, `/speckit-converge`) to build
   something, the bundled bug extension (`/speckit-bug-assess`, `/speckit-bug-fix`, `/speckit-bug-test`) to repair

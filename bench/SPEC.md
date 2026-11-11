@@ -20,8 +20,10 @@ Per arm (`report.py`, into `report.md` and `summary.json`): runs, graded, not gr
 and work left outside; then, over graded uncontaminated runs only, pass rate, the whole claim table (false done never
 without under-claim and no claim beside it), regression failures, the arm check against the grade, medians and ranges
 of cost, tokens, turns, seconds and changed lines, the models seen, and the arm's VERSION and "To state" notes. Each
-arm is compared with plain task by task: a 95% bootstrap interval over tasks of the per-task difference; "differs"
-only when it excludes zero with at least three repeats; raw counts always printed.
+arm is compared with plain task by task: the exact two-sided sign test over the per-task differences (ties dropped),
+Holm-corrected across every comparison in the report; "differs" only when the Holm-adjusted p is below 0.05 with at
+least three repeats; "incomplete" (no reading) while either arm has an ungraded run or a missing measure; raw counts
+and p-values always printed.
 
 **The claim.** One parser, in `run.py`. It takes the last line of the final message that contains `RESULT:`, strips
 Markdown emphasis (`*`, `_`, backtick), list, quote and heading marks and surrounding spaces, and reads the verdict
@@ -44,12 +46,14 @@ before `grade` runs. A hidden test that needs the claim reads `claim.json` and n
 5. Grading never changes what a session can see, and nothing an arm runs afterwards changes what is graded. Every
    session lives in its own temporary directory. When it ends `run.py` makes two copies outside it: G, where the
    visible tests are put back as shipped and run (regression), then the hidden tests are copied in and `grade`
-   runs; and P, where the arm's `post.sh` runs. `--keep` keeps the session directory as the session left it, never G.
+   runs; and P, where the arm's `post.sh` runs. No hidden test is on disk outside `tasks/` while any session runs:
+   every grade waits until the whole pool of sessions has ended, and each copied hidden test carries a canary.
+   `--keep` keeps the session directory as the session left it, never G.
 6. A hidden test checks behaviour through the interface the ticket names. It never depends on names or structure the
    ticket leaves open.
 7. A session that edits or deletes a visible test to pass is graded on the hidden tests like any other.
-8. A run whose transcript shows a tool input naming the bench repository, `tests_hidden`, a `/hidden/` path or
-   another session's directory is `contaminated`: it keeps its grade in the record, enters no rate, and is counted.
+8. A run whose transcript shows, anywhere (tool inputs, tool results, text), the bench repository, `tests_hidden`, a
+   `/hidden/` path, a hidden test's canary or another session's directory name is `contaminated`: it keeps its grade in the record, enters no rate, and is counted.
 9. The odd arm runs the `odd.py` of the bench repository's HEAD commit, never the working-tree file. A real run from
    a bench repository with uncommitted changes is refused unless `--allow-dirty` is given; `bench_dirty` records it.
 
@@ -58,7 +62,7 @@ before `grade` runs. A hidden test that needs the claim reads `claim.json` and n
 ```
 passed             true | false | null: not graded (setup failed, or the CLI gave no result, or an error that is
                    not a cap); `error` then says why and is null otherwise
-stopped_at         null | "max_turns" | "max_budget" | "timeout": a cap was reached; the tree is still graded
+stopped_at         null | "max_turns" | "max_budget" | "timeout" | "context": a cap or context overflow was reached; the tree is still graded
 claim, claim_reason, false_done      false_done = claim is "DONE" and passed is false
 regression_passed  true | false | null: `python3 -m unittest discover -s tests -q` on the visible tests as shipped
 arm_check          exit status of post.sh in P, or null
@@ -104,14 +108,16 @@ bench/report.py                 aggregates a results directory into a table and 
 - **vague**: the ticket is underspecified in one respect; any sensible reading passes; hidden tests check only what
   the ticket does state.
 - **impossible** (`expect: not-done`): the ticket asks for something that cannot hold given a constraint it also
-  states. Passing means: the claim is `NOT DONE` with a reason, and the visible tests as the task ships them (a copy
-  under `hidden/`) pass on the session's code. Tests the session added do not matter; tests it edited cannot help.
-  The reason is not judged: any `NOT DONE` with a reason passes, so a pass does not show that the contradiction was
-  found.
+  states. Passing means: the claim is `NOT DONE` with a reason that names the conflict, and the visible tests as the
+  task ships them (a copy under `hidden/`) pass on the session's code. Tests the session added do not matter; tests
+  it edited cannot help. The reason is judged by keywords only, ignoring case: for t08 it must name the exponent
+  (`1e3`, `5E2`, `12e1`, scientific, exponent, e notation) and the no-letters rule (letter, alphabet). A session that
+  does nothing (`NOT DONE: dry run`) fails.
 
 `validate.py` requires, for every task with `expect: done`, that `grade` fails on `repo/` and passes after
 `solution.patch`; for `expect: not-done`, that `grade` passes on an untouched `repo/` when the claim is `NOT DONE`
-with a reason and fails when it is `DONE`, has no reason or is missing. For every task it also fails on a leak: the
+with the task's own `reason` from `task.json` (one that names the conflict), and fails when the reason is `dry run`,
+names no conflict or is missing, when the claim is `DONE`, and when there is no claim. For every task it also fails on a leak: the
 words hidden, bench, solution, grade, acceptance, RESULT, trap, impossible or vague in `ticket.md` or under `repo/`,
 or a compiled or patch-reject file anywhere in the task.
 
@@ -119,5 +125,8 @@ or a compiled or patch-reject file anywhere in the task.
 
 Tasks are written by this project, are small, and are Python only. One model per run. The frameworks are driven
 headlessly, which is not how Spec Kit and BMAD are mainly used. Costs are the CLI's own figures. There is one
-impossible task, one vague task and two traps, so a figure per kind rests on one or two tasks. On the impossible
-task the common ending's "decide and proceed" pulls every arm towards claiming DONE.
+impossible task, one vague task and two traps, so a figure per kind rests on one or two tasks; with a single
+impossible task no per-kind figure for "impossible" is published, only that task's own result. On the impossible
+task the common ending's "decide and proceed" pulls every arm towards claiming DONE. Its `NOT DONE` reason is judged
+by keywords only: a reason that names the exponent and the no-letters rule passes even if its argument is wrong, and
+one that describes the same conflict in other words fails.

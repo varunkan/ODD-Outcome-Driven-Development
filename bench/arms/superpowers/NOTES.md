@@ -13,8 +13,8 @@ Superpowers (github.com/obra/superpowers), loaded as the Claude Code plugin it i
 - Design documents and plans under `docs/superpowers/` count in `changed_lines` and `files_changed`, not in
   `changed_lines_py`.
 - Its subagents' cost is in the CLI's totals; the models they used are in `models`.
-- The plugin checkout in the cache is shared by all runs and writable. `setup.sh` restores it before each run;
-  nothing stops a session from changing it while parallel sessions use it.
+- Each session loads its own copy of the pinned plugin under `BENCH_PRIVATE` (no `.git`); a session cannot change
+  the copy another session uses.
 - No session of this arm had been run when these notes were written (see "Not verified").
 
 ## Version pinned
@@ -157,5 +157,5 @@ is measured, and the prompt adds nothing to steer it.
   say the first two hold; the pilot should confirm them from a transcript (a `Skill` call naming `superpowers:...`).
 - macOS and Windows. The script uses only bash, git and python3, but was run on Linux only.
 - A machine whose managed settings turn off `--plugin-dir`: Claude Code then exits 1 without starting.
-- The checkout is shared by all runs and is writable. `setup.sh` restores it before each run; nothing stops a
-  session from changing it while parallel sessions use it.
+- The cached checkout is shared and writable, but no session loads it: each one gets its own copy under
+  `BENCH_PRIVATE`.

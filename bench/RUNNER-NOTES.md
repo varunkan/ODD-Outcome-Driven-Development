@@ -41,10 +41,34 @@ Session 2 also shows that `--output-format json` prints one object that `run.py`
 `num_turns`, `duration_ms`, `usage`, `modelUsage`), and that `--max-turns`, which `claude --help` does not list in
 this version, is accepted.
 
+## The caps, seen live (one statement; this replaces the earlier "not seen live")
+
+On CLI 2.1.322 on 2026-11-11 both caps were reached live with `haiku` and `run.py`'s flags (preflight transcripts
+`q2turns.jsonl` and `q2budget.jsonl`, kept in the preflight scratch directory outside this repository):
+
+- `--max-turns 1` on a task needing two shell calls: exit 1; final `result` event `subtype: error_max_turns`,
+  `is_error: true`, `result: null`, `errors: ["Reached maximum number of turns (1)"]`; `num_turns` reads **2** (the
+  CLI counts the turn that hit the cap), so a turn figure at a cap is the cap plus one. The first file was written.
+- `--max-budget-usd 0.00001`: exit 1; `subtype: error_max_budget_usd`, `is_error: true`, `result: null`,
+  `errors: ["Reached maximum budget ($0.00001)"]`, `num_turns` 1; no tool ran.
+
+`run.py` grades both as they stand (`CAPS`: `stopped_at` `max_turns` / `max_budget`); the final message is empty, so
+the claim is `none`. The unit test `test_a_reached_cap_is_graded_and_named` replays these shapes.
+
+## The CLI reads a root AGENTS.md by itself
+
+Preflight on CLI 2.1.322, 2026-11-11, with `run.py`'s flags (`--setting-sources project --strict-mcp-config
+--no-session-persistence`, the permission flags) and its allow-listed environment: in a scratch repository holding
+only an `AGENTS.md` (no `CLAUDE.md`) that names a secret phrase, `haiku` answered with that phrase in one turn and no
+tool call; with a `CLAUDE.md` that imports `@AGENTS.md`, the same; without `AGENTS.md`, it answered `NONE`. So the
+odd arm's method text (written to `AGENTS.md` by `odd init`) reaches the model with no import and no extra prompt
+text (transcripts `q1a.jsonl`, `q1b.jsonl`, `q1c.jsonl` in the same preflight directory). Not yet shown: that each
+framework's text reached the model in a real benchmark run of every arm (no per-arm pilot has run).
+
 ## Not shown by these sessions
 
-- A cap being reached (`--max-turns`, `--max-budget-usd`) or a real session being stopped by `--timeout`. The stop
-  is tested with a fake agent only; the CLI's `error_max_turns` shape is covered by a unit test, not seen live.
+- A real session being stopped by `--timeout`, or a real context overflow (`Prompt is too long`). Both are tested
+  with fake agents only.
 - A refusal. Nothing was asked that should be refused (the web tools, a file-tool write outside the session
   directory), so what a refusal costs an arm is unknown.
 - The Spec Kit, BMAD and Superpowers arms under these flags, and any model other than the cheapest alias.
@@ -61,7 +85,9 @@ From the start-up record of session 1, despite `--setting-sources project --stri
 ## The agent's environment: an allow-list
 
 `agent_env` in `run.py` gives the agent only `PATH`, `HOME`, `LANG`, `LC_*`, `TERM`, `USER`, `LOGNAME`, `SHELL`,
-`TMPDIR`, the names given with `--pass-env NAME`, and `GIT_CONFIG_GLOBAL` set to an empty file of the session's own.
+the names given with `--pass-env NAME`, `GIT_CONFIG_GLOBAL` set to an empty file of the session's own, and `TMPDIR`
+set to `<top>/tmp`, the session's own (never the shared temporary directory, where the other sessions sit; a
+`TMPDIR` passed with `--pass-env` is ignored).
 Never passed, even with `--pass-env` (refused at start): `BENCH_*`, `PWD`, `OLDPWD`, and every `CLAUDE*` name except
 `CLAUDE_CODE_OAUTH_TOKEN`. The names each agent received are the record's `env_passed`. The session repository has
 `user.name bench` and `user.email bench@example.com` in its local config, so an arm that commits works on any machine.
@@ -77,25 +103,56 @@ variable was needed to reach the API. A machine that logs in with a variable or 
 
 ## What `run.py` does beyond the letter of SPEC.md
 
-- When the session ends nothing writes to its directory again. `run.py` makes two copies outside it, each in a
-  temporary directory of its own: P, where `arms/<arm>/post.sh` runs (its exit status is `arm_check`), and G, where
-  `.bench/` is written, the hidden tests are copied in and `grade` runs. Both are removed after the grade, with or
-  without `--keep`; `--keep` keeps the session directory as the session left it.
+- When the agent exits, `run.py` kills its process group, then (Linux `/proc`) every process whose cwd, executable
+  or an open file is under the session's top: the CLI may detach a shell into a group of its own. The count is the
+  record's `leftovers_killed`; where `/proc` is missing it is null and a warning says nothing was checked. Only then
+  is the tree measured and copied, so nothing the agent started writes into it afterwards.
+- When the session ends nothing writes to its directory again. `run.py` makes two copies outside it at once, each
+  in a temporary directory of its own: P, where `arms/<arm>/post.sh` runs (its exit status is `arm_check`; what it
+  writes to `$BENCH_POST_NOTES`, a JSON object, is the record's `arm_notes`), and G, which waits. **No hidden test
+  is on disk outside `tasks/` while any session runs**: every grade runs only after the whole session pool has
+  drained. Then, in each G, the visible tests as shipped replace whatever the session left at `tests/` (a
+  directory, a file or a symlink), `.bench/` is written, each top-level path of `hidden/` is cleared (a symlink the
+  session left there is removed, never followed) and copied in, every hidden `*.py` gets a line
+  `# bench-canary-<24 random hex>`, and `grade` runs. Both copies are removed after the grade, with or without
+  `--keep`; `--keep` keeps the session directory as the session left it. Proven by the peek probe
+  (`test_no_hidden_test_is_on_disk_while_any_session_runs`): a fake agent searching `../../..` for five seconds while
+  another session's grade sleeps finds nothing; before the change it found that session's `tests_hidden`.
+- Contamination (SPEC.md rule 8) is audited after every grade, over every string of every transcript event (tool
+  inputs, tool results, text, subagents' events) and lines that are not JSON: the bench repository, `tests_hidden`,
+  `/hidden/`, another session's top, or any `bench-canary-` string. The canary catches a hidden test read under
+  another name, including one from a concurrent invocation in the same temporary directory.
+- A context overflow (an error result after at least one turn with the CLI's `Prompt is too long` in the result or
+  an assistant message) is the arm's outcome: the tree is graded, `stopped_at` is `context`. The same text before
+  any turn is not graded.
+- The odd arm's `post.sh` runs the pinned `"$ODD_PY" gate --recompute --base main` in P, never the session's
+  `.odd/odd.py`, and reports `arm_notes.odd_py`: `same`, `differs` (the session changed its copy) or `missing`.
 - Changed lines are measured in a scratch git index seeded from the "arm setup" commit and kept outside the session.
 - Token counts are the sums over the CLI's `modelUsage` when it is present, because `usage` covers the main
   conversation only (session 1, one subagent: 1,071 output tokens in `usage`, 1,410 in `modelUsage`). Cost is the
-  CLI's `total_cost_usd` either way.
+  CLI's `total_cost_usd` either way (`usage_from: result`).
+- A session stopped by `--timeout` has no result event. Its tokens, turns and models are rebuilt from the saved
+  transcript (`usage_from: transcript`): the usage of every assistant message, each message id once (the CLI repeats
+  a message's usage on every event it splits it into), subagents included; turns count the main conversation's
+  messages, so they may differ from the CLI's own `num_turns` by the one-turn offset seen at a cap. The cost stays
+  null with `cost_missing: true` and `cost_missing_reason`: the CLI prices a session only in its result event and
+  `run.py` keeps no price table of its own (a table copied here would go stale unseen). `report.py` must count such
+  runs rather than drop them silently.
 - The session directory is `<temp>/bench-<random>/s/project`: a top-level temporary directory per session (mode
   700), whose path names neither the task nor the arm. Two levels up there is only that session's own `s/`, its empty
   git config and `private/` (`BENCH_PRIVATE`: the Superpowers arm copies its plugin there, so concurrent sessions
   never share a writable plugin directory). Three levels up is the temporary directory itself, where the other
-  sessions and, while one is being graded, its copy G sit: running as root, nothing on the filesystem is out of a
-  session's reach, which is why contamination is detected from the transcript.
+  sessions and the waiting copies sit (no hidden test among them while a session runs): running as root, nothing
+  on the filesystem is out of a session's reach, so another arm's work in progress on the same task can still be
+  read. Contamination is detected from the transcript: any other session's directory name (`bench-` plus eight
+  characters, as mkdtemp makes them) seen anywhere in it, including in a listing of `../../..`, marks the run.
 - The odd arm runs `odd.py` as committed at the bench repository's HEAD (`git show HEAD:odd.py`, written into the
   cache as `odd-<sha256>.py`), never the working-tree file. A run with a model from a repository with uncommitted
   changes is refused unless `--allow-dirty` is given; every record's `provenance` holds `bench_commit`, `bench_dirty`,
   `odd_sha256`, `task_tree` (sha256 over the task directory's file paths and contents) and `arm_version` (the arm's
   `VERSION` file).
 - A run whose setup fails is written with `passed: null` and its error; `report.py` counts it apart, in no rate.
-- Hidden tests are kept out of the session directory, not off the machine: a session that can run shell commands can
-  read any file the user can. Nothing in a session points at them.
+- Hidden tests are kept out of the session directory and, while any session runs, out of the temporary directory;
+  they stay readable under `tasks/` in the bench repository: a session that can run shell commands can read any file
+  the user can. Nothing in a session points at them, and a transcript naming the repository is contaminated. No
+  sandbox (bwrap, unshare) is used.

@@ -4,8 +4,9 @@
 usage: validate.py [task-id ...]      exit 0 only when every task validates
 
 expect done:     grade FAILS on repo/ + hidden/, and PASSES after solution.patch.
-expect not-done: grade PASSES on the untouched repo/ when the claim is NOT DONE with a reason, and FAILS when the
-                 claim is DONE, has no reason, or is missing.
+expect not-done: grade PASSES on the untouched repo/ when the claim is NOT DONE with task.json's "reason" (one that
+                 names the conflict), and FAILS when the reason is "dry run", does not name the conflict or is
+                 missing, when the claim is DONE, and when there is no claim.
 every task:      ticket.md and repo/ say nothing about the benchmark, and no compiled or reject file is shipped.
 The claim is given to grade as .bench/claim.json, with the message in .bench/final.txt, exactly as run.py does.
 """
@@ -65,6 +66,26 @@ def leaks(task_dir):
     return problems
 
 
+def check_not_done(task, task_dir):
+    """The grade passes only on NOT DONE with a reason naming the conflict (task.json "reason" is one such reason)."""
+    named = str(task.get('reason') or '').strip()
+    if not named:
+        return ['task.json has no "reason": an expect not-done task names a reason that states the conflict']
+    problems = []
+    for claim, reason, want, what in (
+            ('NOT DONE', named, True, 'the reason in task.json'),
+            ('NOT DONE', 'dry run', False, 'the dry run\'s reason "dry run"'),
+            ('NOT DONE', 'the ticket cannot be met as written', False, 'a reason that does not name the conflict'),
+            ('NOT DONE', '', False, 'no reason'), ('DONE', named, False, 'the reason in task.json'),
+            ('none', '', False, 'no reason')):
+        d = stage(task_dir, claim, reason)
+        if grade(task, d, task_dir) != want:
+            problems.append('grade must %s on the untouched repo when the claim is %s with %s' % (
+                'pass' if want else 'fail', claim, what))
+        shutil.rmtree(d, True)
+    return problems
+
+
 def validate(tid):
     task_dir = os.path.join(HERE, 'tasks', tid)
     problems = []
@@ -85,14 +106,7 @@ def validate(tid):
         if os.path.isfile(visible) and not filecmp.cmp(visible, os.path.join(task_dir, 'hidden', h), shallow=False):
             problems.append('hidden file %s is not the visible test of that name, byte for byte' % h)
     if task.get('expect') == 'not-done':
-        for claim, reason, want in (('NOT DONE', 'the ticket cannot be met as written', True), ('DONE', '', False),
-                                    ('NOT DONE', '', False), ('none', '', False)):
-            d = stage(task_dir, claim, reason)
-            if grade(task, d, task_dir) != want:
-                problems.append('grade must %s on the untouched repo when the claim is %s %s' % (
-                    'pass' if want else 'fail', claim, 'with a reason' if reason else 'without a reason'))
-            shutil.rmtree(d, True)
-        return problems
+        return problems + check_not_done(task, task_dir)
     d = stage(task_dir, 'DONE')
     if grade(task, d, task_dir):
         problems.append('grade passes on the starting repo: the hidden tests do not detect the missing work')
