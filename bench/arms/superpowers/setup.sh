@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Superpowers (github.com/obra/superpowers), pinned. It is a Claude Code plugin: 15 skills and one SessionStart hook
 # that puts the text of its "using-superpowers" skill into every new session. This script keeps one unmodified
-# checkout of the pinned release in BENCH_CACHE and writes that directory's absolute path into .bench-plugin-dir at
-# the repository root. The runner loads it for the one session with `claude --plugin-dir <that path>`.
+# checkout of the pinned release in BENCH_CACHE, copies it into BENCH_PRIVATE (this session's own directory outside
+# the repository, so concurrent sessions never share a writable plugin) and writes the copy's absolute path into
+# .bench-plugin-dir at the repository root. The runner loads it with `claude --plugin-dir <that path>`.
 # Nothing is written to the home directory or to .claude/. Sources and what was verified: NOTES.md.
 set -euo pipefail
 
@@ -12,6 +13,7 @@ COMMIT="22f0b463e7a5e579904dd6211a520321035526f7"  # the commit that tag names: 
 POINTER=".bench-plugin-dir"                        # read by the runner; holds the path and nothing else
 
 : "${BENCH_CACHE:?BENCH_CACHE must name a writable cache directory}"
+: "${BENCH_PRIVATE:?BENCH_PRIVATE must name a directory of this session, outside the repository}"
 
 fail() { echo "superpowers setup: $*" >&2; exit 1; }
 
@@ -58,6 +60,13 @@ if ! unmodified; then
   unmodified || fail "could not restore $plugin to commit $COMMIT"
   echo "superpowers setup: files in $plugin had been changed, added or removed; restored the pinned commit" >&2
 fi
+
+# The session's own copy, from the checkout just verified; without .git, as an installed plugin would be.
+copy="$(mkdir -p "$BENCH_PRIVATE" && cd "$BENCH_PRIVATE" && pwd -P)/superpowers"
+rm -rf "$copy"
+cp -a "$plugin" "$copy"
+rm -rf "$copy/.git"
+plugin="$copy"
 
 grep -qs "\"version\": \"${TAG#v}\"" "$plugin/.claude-plugin/plugin.json" ||
   fail "$plugin/.claude-plugin/plugin.json does not declare version ${TAG#v}"

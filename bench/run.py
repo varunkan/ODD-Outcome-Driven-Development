@@ -2,16 +2,17 @@
 """Run the comparison: every task x arm x repeat is one headless session, graded afterwards on hidden tests.
 
 usage: run.py --model M [--tasks ID ...] [--arms ARM ...] [--repeats N] [--max-turns T] [--max-budget-usd B]
-              [--timeout SECONDS] [--jobs J] [--out DIR] [--keep] [--dry-run]
+              [--timeout SECONDS] [--jobs J] [--out DIR] [--keep] [--dry-run] [--pass-env NAME ...] [--allow-dirty]
 
 One run, in this order:
-  1. a fresh copy of tasks/<id>/repo in a session directory outside any git repository, committed as "start"
-  2. arms/<arm>/setup.sh run there (env BENCH_CACHE, ODD_PY), committed as "arm setup"
-  3. the agent, with arms/<arm>/prompt.md as the prompt ({ticket} replaced by the task's ticket.md)
-  4. changed lines measured against the "arm setup" commit, in a scratch index so the tree is left as the session left it
-  5. arms/<arm>/post.sh, when the arm has one: its exit status is recorded as the arm's own check
-  6. the final message written to .bench/final.txt, and the claim read from its last line starting with RESULT:
-  7. only now tasks/<id>/hidden copied in and the task's grade command run
+  1. a fresh copy of tasks/<id>/repo as <temp>/bench-<random>/s/project, a directory of its own outside any git
+     repository; git init on main with a local identity, committed as "start"
+  2. arms/<arm>/setup.sh run there (env BENCH_CACHE, ODD_PY, BENCH_PRIVATE), committed as "arm setup"; branch "work"
+  3. the agent, prompted with arms/<arm>/prompt.md ({ticket} replaced), a blank line and arms/TAIL.md, in an
+     environment built from an allow-list (agent_env)
+  4. changed lines measured against the "arm setup" commit, in a scratch index outside the session
+  5. two copies made outside the session: P, where arms/<arm>/post.sh runs (its exit status is the arm's own check),
+     and G, where .bench/final.txt is written, tasks/<id>/hidden copied in and the task's grade command run
 Writes <out>/<task>.<arm>.<n>.json. SPEC.md is the contract; RUNNER-NOTES.md explains the permission flags.
 
 No model is called with --dry-run, or when BENCH_FAKE_AGENT is set to a command. That command runs in the session
@@ -23,6 +24,7 @@ exit 0 when every run was graded, 1 when any run could not be (its JSON names th
 """
 import argparse
 import concurrent.futures
+import hashlib
 import json
 import os
 import re
@@ -36,12 +38,17 @@ import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ODD_PY = os.path.abspath(os.path.join(HERE, '..', 'odd.py'))
+BENCH_REPO = os.path.dirname(HERE)
 GIT = ['git', '-c', 'user.name=bench', '-c', 'user.email=bench@example.com']
 # What lets a headless session edit files and run commands in its directory. Evidence: RUNNER-NOTES.md.
 PERMISSION_FLAGS = ['--permission-mode', 'acceptEdits', '--permission-prompts', 'none',
                     '--allowedTools', 'Bash,Read,Glob,Grep,Skill']
+# What the agent inherits (SPEC.md rule 3). On this machine PATH and HOME alone let the CLI log in and reach the API
+# (RUNNER-NOTES.md); whatever another machine needs is named with --pass-env.
+ENV_ALLOW = ('PATH', 'HOME', 'LANG', 'TERM', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR')
 SETUP_TIMEOUT, POST_TIMEOUT, GRADE_TIMEOUT = 900, 300, 180
+# The result subtypes CLI 2.1.322 printed when a cap was reached (RUNNER-NOTES.md): such a run is graded as it stands.
+CAPS = {'error_max_turns': 'max_turns', 'error_max_budget_usd': 'max_budget'}
 DRY_AGENT = '%s -c %s' % (shlex.quote(sys.executable), shlex.quote(
     'import json; print(json.dumps({"result": "dry run: nothing was changed\\nRESULT: NOT DONE: dry run"}))'))
 
@@ -86,14 +93,109 @@ def git(session, env, *args):
     return out.strip()
 
 
+def passable(name):
+    """False for the harness's own variables, the launch directory and a hosting agent session's variables."""
+    hosting = name.startswith('CLAUDE') and name != 'CLAUDE_CODE_OAUTH_TOKEN'  # that one is a login, not a session
+    return not (name.startswith('BENCH_') or name in ('PWD', 'OLDPWD') or hosting)
+
+
+def agent_env(source, extra, gitconfig):
+    """The agent's environment: the allow-list, LC_*, the names given with --pass-env, and an empty global git
+    config, so neither the machine's configuration nor the shell that started run.py reaches the session."""
+    env = {k: v for k, v in source.items() if (k in ENV_ALLOW or k.startswith('LC_') or k in extra) and passable(k)}
+    return dict(env, GIT_CONFIG_GLOBAL=gitconfig)
+
+
+def bench_state(env):
+    """(HEAD commit or None, uncommitted changes?) of the repository holding run.py. No commit counts as dirty."""
+    status, head, _ = run(['git', 'rev-parse', 'HEAD'], BENCH_REPO, env, 60)
+    if status != 0:
+        return None, True
+    status, changes, _ = run(['git', 'status', '--porcelain'], BENCH_REPO, env, 60)
+    return head.strip(), status != 0 or bool(changes.strip())
+
+
+def odd_from_head(cache, env):
+    """odd.py as committed at HEAD, written into the cache under its hash: the odd arm runs that, never the
+    working-tree file, so every result names the exact method text it ran. Returns (path, sha256)."""
+    found = subprocess.run(['git', 'show', 'HEAD:odd.py'], cwd=BENCH_REPO, env=env, capture_output=True)
+    if found.returncode != 0:
+        raise RuntimeError('no odd.py at HEAD of %s: %s' % (BENCH_REPO, found.stderr.decode(errors='replace').strip()))
+    digest = hashlib.sha256(found.stdout).hexdigest()
+    path = os.path.join(cache, 'odd-%s.py' % digest)
+    if not os.path.isfile(path):
+        part = tempfile.mkstemp(dir=cache)[1]
+        with open(part, 'wb') as f:
+            f.write(found.stdout)
+        os.replace(part, path)  # whole or absent, even with two runs starting at once
+    return path, digest
+
+
+def tree_hash(directory):
+    """sha256 over every file's relative path and contents, in sorted order: the task exactly as it was run."""
+    h = hashlib.sha256()
+    for base, dirs, files in os.walk(directory):
+        dirs.sort()
+        for name in sorted(files):
+            path = os.path.join(base, name)
+            with open(path, 'rb') as f:
+                h.update(os.path.relpath(path, directory).encode() + b'\0' + hashlib.sha256(f.read()).digest())
+    return h.hexdigest()
+
+
+def first_line(path):
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding='utf-8') as f:
+        return f.readline().strip() or None
+
+
+# Markdown around the claim line: emphasis (an underscore only at a word's edge, so snake_case in a reason survives),
+# then list, quote and heading marks. A framework that wraps the line must not lose its claim (SPEC.md, the claim).
+EMPHASIS = re.compile(r'[*`]|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])')
+LEADING_MARKS = re.compile(r'^(?:[\s>#+-]+|\d+[.)]\s+)+')
+VERDICT = re.compile(r'RESULT:\s*(NOT\s+DONE|DONE)\s*(?:[:\-\u2013\u2014]\s*(.*))?$', re.IGNORECASE)
+
+
 def parse_claim(final):
-    """DONE, NOT DONE or none, from the LAST line that starts with RESULT: (spaces and Markdown emphasis ignored)."""
-    for line in reversed(final.splitlines()):
-        line = line.strip().strip('*`_').strip()
-        if line.startswith('RESULT:'):
-            said = line[len('RESULT:'):].strip()
-            return 'NOT DONE' if re.match(r'NOT DONE\b', said) else 'DONE' if re.match(r'DONE\b', said) else 'none'
-    return 'none'
+    """(claim, reason): the last line of the final message that contains RESULT:, cleaned of Markdown, must read
+    RESULT: DONE or RESULT: NOT DONE, optionally with ':' or a dash and a reason; anything else is ('none', '')."""
+    line = next((x for x in reversed(final.splitlines()) if 'RESULT:' in x), '')
+    line = LEADING_MARKS.sub('', EMPHASIS.sub('', line)).strip()
+    found = VERDICT.match(line) if line.startswith('RESULT:') else None
+    if not found:
+        return 'none', ''
+    return ('NOT DONE' if found.group(1).upper() != 'DONE' else 'DONE'), (found.group(2) or '').strip()
+
+
+def tool_inputs(transcript):
+    """Every tool input in a stream-json transcript, as JSON text (subagents' calls included: they are events too)."""
+    for line in transcript.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        content = (event.get('message') or {}).get('content') if isinstance(event, dict) else None
+        for block in content if isinstance(content, list) else []:
+            if isinstance(block, dict) and block.get('type') == 'tool_use':
+                yield json.dumps(block.get('input'))
+
+
+def contamination(transcript, repos, tmp, own_top, cache):
+    """The first string a tool input used to reach the bench repository, hidden tests or another session's
+    directory (SPEC.md rule 8), or None. The shared cache is the arms' own install location, so it is not one."""
+    temps = sorted({tmp, os.path.realpath(tmp)}, key=len, reverse=True)
+    pattern = re.compile('|'.join([re.escape(r) for r in repos] + ['tests_hidden', '/hidden/'] +
+                                  [re.escape(t) + r'/bench-[\w.-]+' for t in temps]))
+    own = os.path.basename(own_top)
+    for text in tool_inputs(transcript):
+        for c in {cache, os.path.realpath(cache)}:
+            text = text.replace(c, '')
+        for m in pattern.finditer(text):
+            hit = m.group(0)
+            if not (os.path.basename(hit) == own and any(hit.startswith(t + '/bench-') for t in temps)):
+                return hit[:120]
+    return None
 
 
 def parse_result(stdout):
@@ -124,8 +226,9 @@ def tokens(result):
 
 def agent_command(prompt, model, max_turns, max_budget_usd, session):
     """The real agent. Every arm gets the same line; an arm's setup may name one plugin directory."""
-    cmd = ['claude', '-p', prompt, '--model', model, '--output-format', 'json', '--setting-sources', 'project',
-           '--strict-mcp-config', '--max-turns', str(max_turns), '--max-budget-usd', str(max_budget_usd)]
+    cmd = ['claude', '-p', prompt, '--model', model, '--output-format', 'stream-json', '--verbose',
+           '--setting-sources', 'project',
+           '--strict-mcp-config', '--no-session-persistence', '--max-turns', str(max_turns), '--max-budget-usd', str(max_budget_usd)]
     cmd += PERMISSION_FLAGS
     marker = os.path.join(session, '.bench-plugin-dir')
     if os.path.isfile(marker):
@@ -135,14 +238,31 @@ def agent_command(prompt, model, max_turns, max_budget_usd, session):
 
 
 def changed(session, env, base, scratch):
-    """(lines, files) that differ from the arm-setup commit, .bench/ excluded: git add -A, then diff --shortstat,
-    in a scratch index seeded from that commit, so the session's own index and tree stay as it left them."""
+    """(lines, files, lines in *.py) that differ from the arm-setup commit, .bench/ excluded: git add -A, then diff
+    --shortstat, in a scratch index seeded from that commit, so the session's own index and tree stay as it left
+    them. The *.py figure leaves out the planning documents a framework writes."""
     env = dict(env, GIT_INDEX_FILE=os.path.join(scratch, 'index'))
     git(session, env, 'read-tree', base)
     git(session, env, 'add', '-A')
-    stat = git(session, env, 'diff', '--cached', '--shortstat', base, '--', '.', ':(exclude).bench')
-    n = {word: int(count) for count, word in re.findall(r'(\d+) (file|insertion|deletion)', stat)}
-    return n.get('insertion', 0) + n.get('deletion', 0), n.get('file', 0)
+    counts = []
+    for paths in (['.'], ['*.py']):
+        stat = git(session, env, 'diff', '--cached', '--shortstat', base, '--', *paths, ':(exclude).bench')
+        n = {word: int(count) for count, word in re.findall(r'(\d+) (file|insertion|deletion)', stat)}
+        counts.append((n.get('insertion', 0) + n.get('deletion', 0), n.get('file', 0)))
+    return counts[0][0], counts[0][1], counts[1][0]
+
+
+def git_state(session, env):
+    """(branch, worktrees, left_outside): the branch checked out, the worktree count, and whether work sits where the
+    grade never looks (another worktree, or a branch other than main/work with commits HEAD does not reach)."""
+    branch = git(session, env, 'branch', '--show-current') or None
+    trees = [x[len('worktree '):] for x in git(session, env, 'worktree', 'list', '--porcelain').splitlines()
+             if x.startswith('worktree ')]
+    outside = any(os.path.realpath(t) != os.path.realpath(session) for t in trees)
+    for name in git(session, env, 'for-each-ref', '--format=%(refname:short)', 'refs/heads').splitlines():
+        if name not in ('main', 'work') and git(session, env, 'rev-list', '--count', 'HEAD..' + name) != '0':
+            outside = True
+    return branch, len(trees), outside
 
 
 def one_run(cfg, task, arm, repeat):
@@ -153,12 +273,18 @@ def one_run(cfg, task, arm, repeat):
            'cache_read_tokens': None, 'cache_creation_tokens': None, 'num_turns': None, 'duration_ms': None,
            'wall_seconds': None, 'changed_lines': None, 'files_changed': None, 'exit_status': None,
            'arm_check': None, 'error': None, 'final': '', 'max_turns': cfg['max_turns'],
-           'max_budget_usd': cfg['max_budget_usd'], 'timeout_seconds': cfg['timeout'], 'cli': cfg['cli']}
+           'max_budget_usd': cfg['max_budget_usd'], 'timeout_seconds': cfg['timeout'], 'cli': cfg['cli'],
+           'provenance': dict(cfg['provenance'], task_tree=cfg['trees'][task['id']], arm_version=cfg['versions'][arm]),
+           'env_passed': None, 'stopped_at': None, 'claim_reason': '', 'regression_passed': None,
+           'changed_lines_py': None, 'transcript': None, 'contaminated': False, 'contaminated_by': None,
+           'models': [], 'branch': None, 'worktrees': None, 'left_outside': None, 'warnings': []}
     errors = []
-    scratch = tempfile.mkdtemp(prefix='r', dir=cfg['tmp'])  # the name says nothing about the task or the arm
-    session = os.path.join(scratch, 'project')
+    # A top-level directory per session (mkdtemp: mode 700) whose name says nothing about the task or the arm. The
+    # session sits two levels down, so its own surroundings hold no other session and no hidden tests.
+    top = tempfile.mkdtemp(prefix='bench-')
+    session = os.path.join(top, 's', 'project')
     try:
-        graded = session_and_grade(cfg, task, arm, repeat, rec, errors, scratch, session)
+        graded = session_and_grade(cfg, task, arm, repeat, rec, errors, top, session)
     except Exception as e:  # one broken run must not stop the others
         errors.append('%s: %s' % (type(e).__name__, e))
         graded = False
@@ -169,7 +295,7 @@ def one_run(cfg, task, arm, repeat):
     if cfg['keep']:
         rec['session_dir'] = session
     else:
-        shutil.rmtree(scratch, ignore_errors=True)
+        shutil.rmtree(top, ignore_errors=True)
     name = '%s.%s.%d.json' % (task['id'], arm, repeat)
     with open(os.path.join(cfg['out'], name), 'w', encoding='utf-8') as f:
         json.dump(rec, f, indent=2)
@@ -177,12 +303,19 @@ def one_run(cfg, task, arm, repeat):
     return rec
 
 
-def session_and_grade(cfg, task, arm, repeat, rec, errors, scratch, session):
+def session_and_grade(cfg, task, arm, repeat, rec, errors, top, session):
     env, task_dir, arm_dir = cfg['env'], task['dir'], os.path.join(cfg['root'], 'arms', arm)
-    arm_env = dict(env, BENCH_CACHE=cfg['cache'], ODD_PY=ODD_PY)
+    private = os.path.join(top, 'private')  # the arm's per-session files outside the repository (a plugin copy)
+    os.makedirs(private)
+    arm_env = dict(env, BENCH_CACHE=cfg['cache'], ODD_PY=cfg['odd_py'], BENCH_PRIVATE=private)
+    gitconfig = os.path.join(top, 'gitconfig')
+    open(gitconfig, 'w').close()
 
     shutil.copytree(os.path.join(task_dir, 'repo'), session)
     git(session, env, 'init', '-q', '-b', 'main')
+    # the agent's own commits get this identity whatever the machine has (its global config is the empty file)
+    git(session, env, 'config', 'user.name', 'bench')
+    git(session, env, 'config', 'user.email', 'bench@example.com')
     git(session, env, 'add', '-A')
     git(session, env, 'commit', '-q', '--allow-empty', '-m', 'start')
     with cfg['setup_locks'][arm]:  # two sessions of one arm must not fill the shared cache at once
@@ -194,51 +327,96 @@ def session_and_grade(cfg, task, arm, repeat, rec, errors, scratch, session):
     git(session, env, 'add', '-A')
     git(session, env, 'commit', '-q', '--allow-empty', '-m', 'arm setup')
     base = git(session, env, 'rev-parse', 'HEAD')
+    git(session, env, 'checkout', '-q', '-b', 'work')  # every arm starts here; no setup.sh makes a branch
 
     with open(os.path.join(arm_dir, 'prompt.md'), encoding='utf-8') as f:
         template = f.read()
     with open(os.path.join(task_dir, 'ticket.md'), encoding='utf-8') as f:
-        prompt = template.replace('{ticket}', f.read().strip())
+        prompt = template.replace('{ticket}', f.read().strip()).rstrip('\n') + '\n\n' + cfg['tail']
+    agent = agent_env(os.environ, cfg['pass_env'], gitconfig)
+    rec['env_passed'] = sorted(agent)
     started = time.time()
     if cfg['fake']:
-        fake_env = dict(env, BENCH_TASK=task['id'], BENCH_ARM=arm, BENCH_REPEAT=str(repeat), BENCH_TASK_DIR=task_dir)
+        fake_env = dict(agent, BENCH_TASK=task['id'], BENCH_ARM=arm, BENCH_REPEAT=str(repeat), BENCH_TASK_DIR=task_dir)
         status, out, err = run(cfg['fake'], session, fake_env, cfg['timeout'], stdin=prompt)
     else:
         cmd = agent_command(prompt, cfg['model'], cfg['max_turns'], cfg['max_budget_usd'], session)
-        status, out, err = run(cmd, session, env, cfg['timeout'])
+        status, out, err = run(cmd, session, agent, cfg['timeout'])
     rec['wall_seconds'] = round(time.time() - started, 1)
     rec['exit_status'] = status
+    rec['transcript'] = '%s.%s.%d.transcript.jsonl' % (task['id'], arm, repeat)
+    with open(os.path.join(cfg['out'], rec['transcript']), 'w', encoding='utf-8') as f:
+        f.write(out)
+    # A cap is the arm's own outcome and is graded; anything else without a clean result is the machine's failure
+    # and enters no rate, so a rate limit or a crash never counts against an arm.
+    result = parse_result(out) or {}
     if status is None:
-        errors.append('the agent was stopped after %d seconds' % cfg['timeout'])
-    result = parse_result(out)
-    if result is None:
+        rec['stopped_at'] = 'timeout'
+    elif result.get('subtype') in CAPS:
+        rec['stopped_at'] = CAPS[result['subtype']]
+    elif not result:
         errors.append('the agent printed no result object: %s' % (err or out).strip()[-300:])
-        result = {}
     elif result.get('is_error') or str(result.get('subtype') or 'success') != 'success':
-        errors.append('the agent reported %s' % (result.get('subtype') or 'an error'))
+        errors.append('the agent reported %s: %s' % (
+            'an error' if result.get('subtype') in (None, 'success') else result['subtype'],
+            str(result.get('result') or result.get('errors') or '')[:300]))
     rec.update(cost_usd=result.get('total_cost_usd'), num_turns=result.get('num_turns'),
-               duration_ms=result.get('duration_ms'))
+               duration_ms=result.get('duration_ms'), models=sorted(result.get('modelUsage') or {}))
     (rec['input_tokens'], rec['output_tokens'], rec['cache_read_tokens'],
      rec['cache_creation_tokens']) = tokens(result)
     final = result.get('result') if isinstance(result.get('result'), str) else ''
-    rec['final'], rec['claim'] = final, parse_claim(final)
+    rec['final'] = final
+    rec['claim'], rec['claim_reason'] = parse_claim(final)
+    hit = contamination(out, sorted({BENCH_REPO, cfg['root']}), tempfile.gettempdir(), top, cfg['cache'])
+    rec['contaminated'], rec['contaminated_by'] = hit is not None, hit
 
+    # The session is over and is never written again: what the arm runs afterwards and the grade each get a copy of
+    # it, outside it, so neither can change the other and --keep keeps the tree exactly as the session left it.
+    copies = [tempfile.mkdtemp(prefix='bench-'), tempfile.mkdtemp(prefix='bench-')]
     try:
-        rec['changed_lines'], rec['files_changed'] = changed(session, env, base, scratch)
-    except RuntimeError as e:
-        errors.append('changed lines not measured: %s' % e)
-    post = os.path.join(arm_dir, 'post.sh')
-    if os.path.isfile(post):
-        rec['arm_check'] = run(['bash', post], session, arm_env, POST_TIMEOUT)[0]
-    os.makedirs(os.path.join(session, '.bench'), exist_ok=True)
-    with open(os.path.join(session, '.bench', 'final.txt'), 'w', encoding='utf-8') as f:
-        f.write(final + '\n')
+        try:
+            rec['changed_lines'], rec['files_changed'], rec['changed_lines_py'] = changed(session, env, base, copies[0])
+            rec['branch'], rec['worktrees'], rec['left_outside'] = git_state(session, env)
+        except RuntimeError as e:
+            rec['warnings'].append('git state not measured: %s' % e)
+        if errors:
+            return False
+        post_copy, grade_copy = (copy_of(session, d) for d in copies)
+        post = os.path.join(arm_dir, 'post.sh')
+        if os.path.isfile(post):
+            rec['arm_check'] = run(['bash', post], post_copy, arm_env, POST_TIMEOUT)[0]
+        return grade(task, grade_copy, env, rec)
+    finally:
+        for d in copies:
+            shutil.rmtree(d, ignore_errors=True)
 
-    # Only now, with the session over and measured, do the hidden tests enter its directory.
-    shutil.copytree(os.path.join(task_dir, 'hidden'), session, dirs_exist_ok=True)
-    status, out, err = run(task['grade'], session, env, GRADE_TIMEOUT)
-    if status is None:
-        errors.append('grade was stopped after %d seconds' % GRADE_TIMEOUT)
+
+def copy_of(session, directory):
+    copy = os.path.join(directory, 'project')
+    shutil.copytree(session, copy, symlinks=True)
+    return copy
+
+
+def grade(task, copy, env, rec):
+    """The grade, in copy G, the only place the hidden tests are ever copied to. First the visible tests as the task
+    ships them replace whatever the session left (regression: behaviour the hidden tests may not cover), then the
+    claim and final message are written and the hidden tests copied in."""
+    shipped = os.path.join(task['dir'], 'repo', 'tests')
+    if os.path.isdir(shipped):
+        shutil.copytree(shipped, os.path.join(copy, 'tests'), dirs_exist_ok=True)
+        status = run(['python3', '-m', 'unittest', 'discover', '-s', 'tests', '-q'], copy, env, GRADE_TIMEOUT)[0]
+        rec['regression_passed'] = status == 0
+        if status is None:
+            rec['warnings'].append('the visible tests were stopped after %d seconds' % GRADE_TIMEOUT)
+    os.makedirs(os.path.join(copy, '.bench'), exist_ok=True)
+    with open(os.path.join(copy, '.bench', 'final.txt'), 'w', encoding='utf-8') as f:
+        f.write(rec['final'] + '\n')
+    with open(os.path.join(copy, '.bench', 'claim.json'), 'w', encoding='utf-8') as f:
+        json.dump({'claim': rec['claim'], 'reason': rec['claim_reason']}, f)
+    shutil.copytree(os.path.join(task['dir'], 'hidden'), copy, dirs_exist_ok=True)
+    status = run(task['grade'], copy, env, GRADE_TIMEOUT)[0]
+    if status is None:  # code that hangs is the session's outcome: a fail, not a machine error
+        rec['warnings'].append('grade was stopped after %d seconds' % GRADE_TIMEOUT)
     rec['passed'] = status == 0
     return True
 
@@ -263,11 +441,16 @@ def main(argv=None):
     ap.add_argument('--keep', action='store_true', help='keep the session directories')
     ap.add_argument('--dry-run', action='store_true', help='call no model: BENCH_FAKE_AGENT, or a do-nothing agent')
     ap.add_argument('--root', default=HERE, help='directory holding tasks/ and arms/ (default: beside this file)')
+    ap.add_argument('--pass-env', nargs='+', default=[], metavar='NAME', help='more variables the agent may inherit')
+    ap.add_argument('--allow-dirty', action='store_true', help='run a model even with uncommitted bench changes')
     a = ap.parse_args(argv)
 
     fake = os.environ.get('BENCH_FAKE_AGENT') or (DRY_AGENT if a.dry_run else None)
     if not fake and not a.model:
         ap.error('--model is required unless --dry-run')
+    refused = [n for n in a.pass_env if not passable(n)]
+    if refused:
+        ap.error('never passed to the agent: %s' % ', '.join(refused))
     root = os.path.abspath(a.root)
     all_tasks = names_in(os.path.join(root, 'tasks'), ('task.json', 'ticket.md', 'repo', 'hidden'))
     all_arms = names_in(os.path.join(root, 'arms'), ('setup.sh', 'prompt.md'))
@@ -275,27 +458,42 @@ def main(argv=None):
     if unknown or not all_tasks or not all_arms or a.repeats < 1 or a.jobs < 1:
         ap.error('unknown or incomplete task or arm: %s' % ', '.join(unknown) if unknown
                  else 'need at least one task, one arm, one repeat and one job')
+    tail_path = os.path.join(root, 'arms', 'TAIL.md')
+    if not os.path.isfile(tail_path):
+        ap.error('%s is missing: the ending every prompt gets' % tail_path)
+    with open(tail_path, encoding='utf-8') as f:
+        tail = f.read()
+    env = {k: v for k, v in os.environ.items() if k not in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE')}
+    commit, dirty = bench_state(env)
+    if dirty and not fake and not a.allow_dirty:
+        ap.error('%s has uncommitted changes (or no commit), so a result could not name what ran; commit them, '
+                 'or pass --allow-dirty and the record says so' % BENCH_REPO)
     tasks = []
     for tid in a.tasks or all_tasks:
         with open(os.path.join(root, 'tasks', tid, 'task.json'), encoding='utf-8') as f:
             tasks.append(dict(json.load(f), id=tid, dir=os.path.join(root, 'tasks', tid)))
     arms = a.arms or all_arms
 
-    env = {k: v for k, v in os.environ.items() if k not in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE')}
-    tmp = tempfile.mkdtemp(prefix='ws-')
+    tmp = tempfile.gettempdir()
     if run(['git', 'rev-parse', '--show-toplevel'], tmp, env, 60)[0] == 0:
-        shutil.rmtree(tmp, ignore_errors=True)
         sys.exit('the temporary directory %s is inside a git repository; set TMPDIR to one that is not' % tmp)
     out = os.path.abspath(a.out or os.path.join(HERE, 'results', time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())))
     cache = os.environ.get('BENCH_CACHE') or os.path.join(tempfile.gettempdir(), 'bench-cache')
     os.makedirs(out, exist_ok=True)
     os.makedirs(cache, exist_ok=True)
     try:
+        odd_py, odd_sha = odd_from_head(cache, env)
+    except RuntimeError as e:
+        sys.exit(str(e))
+    try:
         cli = None if fake else (run(['claude', '--version'], tmp, env, 60)[1].strip() or None)
     except OSError:
-        shutil.rmtree(tmp, ignore_errors=True)
         sys.exit('the claude command was not found; install it, or use --dry-run')
-    cfg = {'root': root, 'out': out, 'tmp': tmp, 'cache': cache, 'env': env, 'fake': fake, 'keep': a.keep, 'cli': cli,
+    cfg = {'root': root, 'out': out, 'cache': cache, 'env': env, 'fake': fake, 'keep': a.keep, 'cli': cli,
+           'tail': tail, 'pass_env': a.pass_env, 'odd_py': odd_py,
+           'provenance': {'bench_commit': commit, 'bench_dirty': dirty, 'odd_sha256': odd_sha},
+           'trees': {t['id']: tree_hash(t['dir']) for t in tasks},
+           'versions': {arm: first_line(os.path.join(root, 'arms', arm, 'VERSION')) for arm in arms},
            'model': 'none (fake agent)' if fake else a.model, 'max_turns': a.max_turns, 'max_budget_usd': a.max_budget_usd,
            'timeout': a.timeout, 'setup_locks': {arm: threading.Lock() for arm in arms}}
 
@@ -324,9 +522,7 @@ def main(argv=None):
         return 130
     pool.shutdown(wait=True)
     if a.keep:
-        print('session directories kept under %s' % tmp)
-    else:
-        shutil.rmtree(tmp, ignore_errors=True)
+        print('session directories kept: each record names its own in session_dir')
     print('%d run(s) written to %s, %d not graded' % (len(todo), out, not_graded))
     return 1 if not_graded else 0
 
