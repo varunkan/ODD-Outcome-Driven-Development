@@ -156,3 +156,13 @@ variable was needed to reach the API. A machine that logs in with a variable or 
   they stay readable under `tasks/` in the bench repository: a session that can run shell commands can read any file
   the user can. Nothing in a session points at them, and a transcript naming the repository is contaminated. No
   sandbox (bwrap, unshare) is used.
+
+## The agent can see a dollar cap, so measured runs do not set one (pilot, 2026-11-11)
+
+`--max-budget-usd` is written into the agent's system prompt: asked to quote any budget, a headless session started
+with `--max-budget-usd 2` answered "USD budget: $0/$2; $2 remaining", and one started without it found none. A
+`--max-turns` cap is not shown ("I found no turn limit"). In the pilot, the BMAD session on t01 read its workflow and
+then reported that it "did not run the BMAD workflow's review and spec steps, to stay within budget". A visible cap
+therefore penalises the arms whose process has more steps. `run.py` passes `--max-budget-usd` only when it is given
+explicitly (default off) and every measured run is bounded by `--max-turns` and `--timeout` alone. Every session sees
+the same token count (`<total_tokens>`), which the CLI shows regardless.

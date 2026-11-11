@@ -603,12 +603,17 @@ class PiecesTest(unittest.TestCase):
     def test_the_real_agent_command_carries_the_caps_and_isolation_flags(self):
         session = tempfile.mkdtemp(prefix='bench-test-')
         self.addCleanup(shutil.rmtree, session, True)
-        cmd = self.mod.agent_command('/skill\nthe ticket', 'some-model', 80, 4.0, session)
+        cmd = self.mod.agent_command('/skill\nthe ticket', 'some-model', 80, None, session)
         self.assertEqual(cmd[:3], ['claude', '-p', '/skill\nthe ticket'])
         self.assertIn('--verbose', cmd)  # stream-json in print mode needs it
         for flag, value in (('--model', 'some-model'), ('--output-format', 'stream-json'), ('--setting-sources', 'project'),
-                            ('--max-turns', '80'), ('--max-budget-usd', '4.0')):
+                            ('--max-turns', '80')):
             self.assertEqual(cmd[cmd.index(flag) + 1], value)
+        # the CLI writes a dollar budget into the agent's system prompt ("USD budget: $0/$2"), and the pilot's BMAD run
+        # skipped its review steps "to stay within budget": a measured run never shows the agent a budget
+        self.assertNotIn('--max-budget-usd', cmd)
+        with_cap = self.mod.agent_command('x', 'm', 80, 4.0, session)
+        self.assertEqual(with_cap[with_cap.index('--max-budget-usd') + 1], '4.0')
         self.assertIn('--strict-mcp-config', cmd)
         self.assertIn('--no-session-persistence', cmd)
         self.assertEqual(cmd[-len(self.mod.PERMISSION_FLAGS):], self.mod.PERMISSION_FLAGS)

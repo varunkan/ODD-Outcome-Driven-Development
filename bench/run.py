@@ -344,7 +344,9 @@ def agent_command(prompt, model, max_turns, max_budget_usd, session):
     """The real agent. Every arm gets the same line; an arm's setup may name one plugin directory."""
     cmd = ['claude', '-p', prompt, '--model', model, '--output-format', 'stream-json', '--verbose',
            '--setting-sources', 'project',
-           '--strict-mcp-config', '--no-session-persistence', '--max-turns', str(max_turns), '--max-budget-usd', str(max_budget_usd)]
+           '--strict-mcp-config', '--no-session-persistence', '--max-turns', str(max_turns)]
+    if max_budget_usd is not None:  # the CLI shows this to the agent ("USD budget: $0/$2"), which changes what it does
+        cmd += ['--max-budget-usd', str(max_budget_usd)]
     cmd += PERMISSION_FLAGS
     marker = os.path.join(session, '.bench-plugin-dir')
     if os.path.isfile(marker):
@@ -623,7 +625,9 @@ def main(argv=None):
     ap.add_argument('--repeats', type=int, default=1)
     ap.add_argument('--model', help='required unless --dry-run')
     ap.add_argument('--max-turns', type=int, default=80)
-    ap.add_argument('--max-budget-usd', type=float, default=4)
+    ap.add_argument('--max-budget-usd', type=float, default=None,
+                    help='off by default: the CLI writes it into the agent\'s system prompt, and agents then cut steps; '
+                         'a measured run is bounded by --max-turns and --timeout, which the agent does not see')
     ap.add_argument('--timeout', type=int, default=2400, help='seconds one session may take')
     ap.add_argument('--jobs', type=int, default=2, help='sessions at a time')
     ap.add_argument('--out', help='results directory (default: results/<UTC timestamp> beside this file)')

@@ -17,6 +17,7 @@ documents behind it.
 | 09 | [The rulings](09-rulings.md) | What happened to each of the 1,856 instructions? | 224 rule clusters with verdict, evidence grade and durability; drops and overturned rulings explained. |
 | 10 | [Design review](10-design-review.md) | What was wrong with the first design of the lean tool, and what changed? | Four critics (tamper, correctness, friction, portability) and one ruling: 23 required changes. |
 | 11 | [Red team of 0.2.0](11-red-team.md) | Can the tool be made to report done, lose work or crash? | Six attackers, each finding reproduced independently; each confirmed one is now a test. |
+| 12 | [Pilot of the comparison](12-pilot.md) | Does the harness measure fairly, and what will the full run cost? | 15 real sessions; harness evidence, not a result. |
 
 ## Data and tools
 
