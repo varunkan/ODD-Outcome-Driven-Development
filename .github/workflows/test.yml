@@ -25,9 +25,10 @@ jobs:
       - run: python -m unittest discover -s bench/tests
       - run: python bench/validate.py
   gate:
-    # odd judges its own pull requests with the action it ships
+    # odd judges its own pull requests with the action it ships, once this repository has adopted it (odd init)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./
+      - if: hashFiles('.odd/config.json') != ''
+        uses: ./
