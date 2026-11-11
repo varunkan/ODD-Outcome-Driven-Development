@@ -231,8 +231,10 @@ class RunTest(unittest.TestCase):
                 self.assertNotIn(name, s['env'])
             self.assertNotEqual(s['pwd'], '/launch')  # the shell that starts the fake agent sets its own PWD
             self.assertIn('FAKE_LOG_DIR', s['env'])  # --pass-env
-            self.assertEqual(self.rec('tiny-add', arm, 2)['env_passed'], sorted(
-                set(s['env']) - {'BENCH_TASK', 'BENCH_ARM', 'BENCH_REPEAT', 'BENCH_TASK_DIR', 'PWD'}))
+            # what the agent saw is what run.py passed, plus what a shell or the OS sets by itself (macOS adds one)
+            self_set = {'BENCH_TASK', 'BENCH_ARM', 'BENCH_REPEAT', 'BENCH_TASK_DIR', 'PWD', 'SHLVL', '_',
+                        '__CF_USER_TEXT_ENCODING'}
+            self.assertEqual(self.rec('tiny-add', arm, 2)['env_passed'], sorted(set(s['env']) - self_set))
             # the path says nothing about the task or the arm
             self.assertRegex(s['cwd'], r'/bench-[a-z0-9_]+/s/project$')
             self.assertFalse(os.path.realpath(s['cwd']).startswith(os.path.realpath(BENCH)))
