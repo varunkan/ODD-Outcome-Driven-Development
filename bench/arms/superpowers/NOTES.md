@@ -2,6 +2,21 @@
 
 Superpowers (github.com/obra/superpowers), loaded as the Claude Code plugin it is, for one session at a time.
 
+## To state with the results
+
+- Release v7.0.2 is measured, loaded with `--plugin-dir`. The prompt is the ticket alone, as for the plain arm.
+- The workflow is written for a person who answers: it waits for approval of a design, consent to a worktree, a
+  choice of how to execute and a choice of how to finish. Nobody answers here, and what the session then does is
+  part of what is measured.
+- Its skills can move the work to another branch or a git worktree. Only the files left in the session directory
+  are graded, which the common ending tells every arm; a run that left work elsewhere is marked `left_outside`.
+- Design documents and plans under `docs/superpowers/` count in `changed_lines` and `files_changed`, not in
+  `changed_lines_py`.
+- Its subagents' cost is in the CLI's totals; the models they used are in `models`.
+- The plugin checkout in the cache is shared by all runs and writable. `setup.sh` restores it before each run;
+  nothing stops a session from changing it while parallel sessions use it.
+- No session of this arm had been run when these notes were written (see "Not verified").
+
 ## Version pinned
 
 Release `v7.0.2`, published 2026-11-03, marked "Latest" on 2026-11-11 (the default branch was at the same commit).
@@ -67,9 +82,10 @@ should treat "`.bench-plugin-dir` present but not passed" as an error.
 
 ## The prompt
 
-The ticket and the two common closing sentences, byte for byte the plain arm's prompt. The README says "because
-the skills trigger automatically, you don't need to do anything special", and the project's own tests pass a plain
-request. No slash command and no skill name is added, so the only difference from the plain arm is the plugin.
+The ticket alone, byte for byte the plain arm's prompt; the runner adds the common ending (`arms/TAIL.md`). The
+README says "because the skills trigger automatically, you don't need to do anything special", and the project's own
+tests pass a plain request. No slash command and no skill name is added, so the only difference from the plain arm
+is the plugin.
 
 ## Reading this arm's results
 

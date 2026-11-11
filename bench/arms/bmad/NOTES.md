@@ -2,6 +2,21 @@
 
 The BMAD Method (BMad Method), started through its unattended build skill in one headless session.
 
+## To state with the results
+
+- The stable 6.12 line is measured (`bmad-method@6.12.4`), not the v7 preview.
+- It is run through the unattended skill `bmad-build-auto`, one headless session per task. BMAD's attended build
+  (`bmad-build`, with human checkpoints) and its planning path (`bmad-spec`, stories, one session each) are not
+  measured.
+- The skill halts `blocked` when a request has more than one defensible reading; the common ending tells every arm
+  to decide and proceed. On the vague task the two pull against each other.
+- The skill writes its status into its own record file and does not know the `RESULT:` line, which only the common
+  ending asks for. A run with claim `none` may still have recorded a status under `_bmad-output/`.
+- Its records under `_bmad-output/` count in `changed_lines` and `files_changed`, not in `changed_lines_py`.
+- It needs Node.js 20.12 or later, npx and uv on the machine, and the subagent tool in the session: without
+  subagents the skill halts `blocked`, and the run then shows the harness, not the method.
+- No session of this arm had been run when these notes were written (see "Not verified").
+
 ## Version pinned
 
 `bmad-method@6.12.4` from npm (published 2026-10-14; tarball integrity
@@ -55,7 +70,8 @@ was not run here.
 
 ## What the prompt is, and where each part is documented
 
-The prompt is `/bmad-build-auto`, then the ticket, then the two common closing sentences. Nothing else is added.
+The prompt is `/bmad-build-auto`, then the ticket; the runner adds the common ending (`arms/TAIL.md`). Nothing else
+is added.
 
 - A small change. The documented entry point is the build skill, given the request as it is: "Already have a
   repository and a small change you want to make? ... run the installed `bmad-build` skill"; "A typical session is
@@ -87,9 +103,9 @@ The prompt is `/bmad-build-auto`, then the ticket, then the two common closing s
 - `uv` and Python 3.11 or later on the session's PATH, as in setup.
 - A git identity that can commit. The skill requires a clean working tree at the start, which the harness's commit
   after setup gives it, and it commits its own work locally at the end.
-- Changed lines should be counted against the commit made after setup, and BMAD's own records under `_bmad-output/`
-  (one spec file per run, sometimes a patch file) are part of what the session writes. Whether they count as changed
-  lines is the harness's decision; it should be the same decision for every arm's planning files.
+- Changed lines are counted against the commit made after setup. BMAD's own records under `_bmad-output/` (one spec
+  file per run, sometimes a patch file) are part of what the session writes: they count in `changed_lines`, as
+  every arm's planning files do, and not in `changed_lines_py`.
 
 ## Known interactions with the common prompt ending
 
@@ -160,8 +176,8 @@ Other:
   `uv run --no-cache _bmad/scripts/render_skill.py --project-root <repo> --skill <repo>/.claude/skills/bmad-build-auto`
   exits 0, prints the path of a rendered `workflow.md` under `_bmad/render/`, and leaves `git status` clean.
 - Six simultaneous first runs of `npx bmad-method@6.12.4` against one empty npm cache all exit 0.
-- `prompt.md`: starts with `/bmad-build-auto`, has one line that is exactly `{ticket}`, and ends with the same two
-  sentences as the plain arm, byte for byte.
+- `prompt.md`: starts with `/bmad-build-auto` and has one line that is exactly `{ticket}`. (It then also held the
+  common ending, which is now `arms/TAIL.md`.)
 
 ## Not verified
 
@@ -173,7 +189,7 @@ Other:
   the skill not starting, check `slash_commands` first.
 - Subagents under the benchmark's permission mode. If the subagent tool is unavailable the skill halts `blocked`,
   and the arm then measures the harness, not the method.
-- How the skill judges "a branch that fits the intent" when the task repository is on its default branch.
+- How the skill judges "a branch that fits the intent" on the `work` branch every session starts on.
 - macOS, Windows, and a machine where uv has to download Python because none at 3.11 or later is installed.
 - The installer's best-effort update check (`npm view bmad-method@latest version`, five-second limit) on a machine
   with no network; a warm cache was not tested offline.
