@@ -41,7 +41,7 @@ product Dart in 407 files**; 108 PNG screenshots 12.5 MB; 449 files under script
 ## Peaks worth naming
 - Week of 2026-08-31: 746 commits, 579 of them process-only; 200,926 process lines vs 12,826 product lines (15.7x).
 - Week of 2026-10-05 (judged swarm): 284 decision-judge rulings recorded in one week; 71,426 test lines vs 9,750 product.
-- CLAUDE.md grew 23 KB -> 95 KB in seven weeks, then the context budget (#64) held it at 31.5 KB for six weeks.
+- CLAUDE.md grew 23 KB -> 95 KB in seven weeks at weekly snapshots (the largest single commit: 101,591 bytes, 646b42240, 2026-10-06), then the context budget (#64) held it at 31.5 KB for six weeks.
 - Directives that themselves record being restated or not followed (text markers, needs human confirmation of each):
   #46 ("same thing again", "violated"), #48 ("not at all followed"), #49 ("fourth" telling), #65 ("reaffirmed");
   weaker markers ("ignored") on #32, #34, #44 may be phrasing ("should not be ignored").

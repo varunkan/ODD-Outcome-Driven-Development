@@ -142,7 +142,7 @@ Of 224 rule clusters, 145 survive in the principles above, 48 were duplicates, a
 - Hook effectiveness has no before/after: the failure of prose is measured, the effect of enforcement is not.
 - Project total token spend was never recorded.
 - No comparison run against Spec Kit, BMAD or Superpowers exists yet; any comparative claim needs the same task run through each with cost and escaped defects recorded.
-- Five figures could not be verified in the records and must be re-cited or removed before publication: the "18 judge rounds, about 12M tokens" figure, a 22.2M-token read projection, the pinned-model incident, a 6.3M-token audit figure, and the peak instruction-file size (95 KB or 101 KB).
+- The five figures earlier validation could not verify were checked against the source repository on 2026-11-11. Kept, with sources: the 22.2M-versus-26.6k comparison (docs/process/history/CLAUDE.md:536-538; it is a projection, context size times remaining turns, not a metered bill); the ~6.3M-token cross-branch audit (docs/process/history/agent-judge.md:188-190, as recorded there); the peak instruction-file size, 101,591 bytes at commit 646b42240 on 2026-10-06 (git cat-file over every commit of CLAUDE.md; 95 KB is the weekly snapshot in doc 01). Removed, because no record holds them: the '18 judge rounds, about 12M tokens' figure and the pinned-model incident. Neither is used as evidence anywhere in these documents.
 
 ---
 
@@ -184,7 +184,7 @@ Of 224 rule clusters, 145 survive in the principles above, 48 were duplicates, a
 - Content-scoped staleness: key evidence on the content hash of the files inside an outcome's boundary so a commit or an unrelated edit does not invalidate proofs. Evidence: in the draft toolkit a plain commit turned every proof stale and re-proving was quadratic (audit.json, measured).
 - Per-session run state and a doctor command: key the active run by session id so parallel sessions and subagents work, and ship one command that says whether each hook is installed and live. Evidence: one shared active pointer blocked unrelated sessions; a missing hook file exits 2 and blocks every matched tool call; fail-open without a health check hides absent enforcement (audit.json).
 - A recorded project total: one script that sums token spend per outcome and for the project. Evidence: total spend is not recorded anywhere, only per-run figures (pos.json honest_assessment).
-- Before publication, re-cite or remove the figures this validation could not verify: the '18 judge rounds, about 12M tokens' figure (OU-R3), the 22.2M-versus-26.6k projection (FR1-R3), the pinned-model incident (FR1-R23), the 6.3M-token audit figure (DE-R38), and the conflicting 95 KB and 101 KB peak sizes for the instruction file.
+- Done: see the resolution of the five unverified figures under Limits above.
 
 ## Classes of instruction that were dropped
 
