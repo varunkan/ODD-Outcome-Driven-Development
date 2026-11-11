@@ -1,0 +1,125 @@
+{
+ "subject": "GitHub Spec Kit (github/spec-kit) \u2014 spec-driven development toolkit",
+ "what_it_is": "An MIT-licensed open-source toolkit from GitHub that scaffolds a spec-first process into a coding agent. Its README describes it as giving \"AI coding agents structured processes, reusable templates, and documented outcomes\".\n\nScale and currency (read 2026-11-11): about 149k stars and 13.4k forks; latest release 1.4.0, dated 10 Nov.\n\nInstall: `uv tool install specify-cli`, then `specify init <project> --integration <agent>` (Python 3.11+, uv). The docs list 43 integration options, Claude among them. For Claude Code it installs each command as a skill; the copy vendored in this repo (version 0.8.11, `ai_skills: true`) is nine `.claude/skills/speckit-*/SKILL.md` files of 106 to 372 lines each, plus five templates and five bash scripts under `.specify/`.\n\nWorkflow, per the current quickstart:\n- `/speckit-constitution`: project principles, run once; later steps are checked against them.\n- `/speckit-specify`: feature spec from a plain-language description (what and why, no tech stack).\n- `/speckit-clarify` (optional): up to 5 targeted questions, answers written back into the spec.\n- `/speckit-plan`: technical plan and design artifacts.\n- `/speckit-checklist` (optional): a requirements-quality checklist, described as unit tests for the spec.\n- `/speckit-tasks`: dependency-ordered `tasks.md`.\n- `/speckit-analyze` (optional): read-only consistency report across spec, plan and tasks; constitution conflicts are always CRITICAL.\n- `/speckit-implement`: executes the tasks; checks checklist state first and asks before proceeding if items are unchecked.\n- `/speckit-converge` (newer): checks the code against spec, plan and tasks, appends missing tasks, and repeats with implement until it reports \"Converged\".\n- `/speckit-taskstoissues`: removed from core in 1.3.0 and moved to a `github` extension.\n\nArtifacts: `.specify/memory/constitution.md`, `.specify/feature.json` (a pointer to the one active feature), and a per-feature folder holding `spec.md`, `plan.md`, `tasks.md`, checklists and design files such as research, data model and contracts. Boeckeler counted eight files in one feature folder and a separate branch per spec.\n\nTemplate devices: `[NEEDS CLARIFICATION: ...]` markers (\"Don't guess\"), phase gates for simplicity, anti-abstraction and integration-first, and a \"Complexity Tracking\" table for justified violations.\n\nSince 1.x it has grown into a platform: extensions (bug fixing, idea assessment), presets, workflows, overlays, bundles and catalogs. The README now calls the processes \"independent entry points, not mandatory phases\".",
+ "core_principles": [
+  "Power inversion: \"Code serves specifications\"; the spec is the primary artifact and code is one expression of it (spec-driven.md).",
+  "Intent as the source of truth: specs should be \"living, executable artifacts\", precise enough to generate working systems (GitHub blog, Sept 2025).",
+  "Separate what and why (spec) from how (plan); mark ambiguity explicitly with [NEEDS CLARIFICATION] instead of guessing.",
+  "A constitution of non-negotiable principles. The reference one has nine articles: Library-First, CLI Interface, Test-First (\"No implementation code shall be written before\" tests are approved and failing), Simplicity (\"Maximum 3 projects\"), Anti-Abstraction, Integration-First (\"Prefer real databases over mocks\"); articles IV to VI are project-defined.",
+  "Phased refinement with a human verifying at each phase: \"The AI generates the artifacts; you ensure they're right.\"",
+  "Checklists act as a definition of done and as unit tests for the spec; features must trace to concrete user stories (\"No speculative or 'might need' features\").",
+  "Test ordering: contracts, then integration, end-to-end and unit tests, then source."
+ ],
+ "enforcement": "Mostly advisory prompting; nothing I read forces the agent to follow the process.\n\n- The process lives in long SKILL.md prompts and markdown templates. Gates (constitution check, checklist status, phase gates) are instructions the model interprets. Boeckeler makes the same point: the checklists are interpreted by the AI, so compliance is not guaranteed.\n- Before implementing, the implement skill counts `- [ ]` items in the checklists and asks the user whether to proceed. That is a soft prompt, not a block.\n- \"Extension hooks\" (`before_implement`, `after_implement` in `.specify/extensions.yml`) are, in the vendored 0.8.11 skill, also prompt text: the model is told to read the YAML and emit `EXECUTE_COMMAND`, and to skip silently if the YAML is invalid. They are not Claude Code PreToolUse hooks.\n- The deterministic parts are the bash scripts, which create the branch and feature directory, resolve paths and check that prerequisite files exist. They do not check content or behaviour.\n- `/speckit-analyze` is strictly read-only and only recommends resolving CRITICAL findings before implement.\n- `/speckit-converge` is a model-judged loop of code against spec; I found no test or proof requirement in its description.\n- Newer releases add a workflow engine (shell steps, gates, opt-in \"strict shell execution\" in 1.2.6) and extension runtime events, which could carry real enforcement. The README does not describe any mechanism that blocks an agent from skipping steps.",
+ "strengths": [
+  "Very wide adoption and agent-neutral reach: about 149k stars and 43 integration options, so its vocabulary (constitution, spec, plan, tasks) is a de facto shared language.",
+  "Clean separation of what/why from how, and an explicit ambiguity marker instead of silent guessing.",
+  "Clarify is bounded (at most 5 questions) and analyze is read-only, so both are cheap and safe to run.",
+  "A dependency-ordered tasks.md gives the agent small units that can be checked one at a time.",
+  "Requirement-to-task traceability and an anti-speculation rule are built into the templates.",
+  "The spec, plan, tasks, code, review lifecycle surfaces issues earlier, and template customization cuts unnecessary output (Thoughtworks Radar, April 2026, ring Assess).",
+  "The newer converge step closes a known gap by re-checking code against the spec and looping.",
+  "Extensible: presets, extensions and workflows let teams trim or replace the default process, and bug-fix and idea-assessment entry points no longer require a full spec first.",
+  "One third-party benchmark found fewer review defects per merged ticket than a no-spec control (0.57 against 0.86) and fewer rework rounds (0.62 against 0.74)."
+ ],
+ "weaknesses": [
+  "Review burden and verbosity. Boeckeler (martinfowler.com, 15 Oct 2025): it \"created a LOT of markdown files for me to review\", repetitive and tedious; \"I'd rather review code than all these markdown files.\"",
+  "Measured overhead. Eberhardt (Scott Logic, 26 Nov 2025): one CRUD feature took 33.5 min of agent time, 2,577 lines of markdown and 3.5 hours of review for 689 lines of code, against about 8 min of agent time and 24 min of review and testing without it; he estimates roughly ten times slower.",
+  "Tiny features explode. Zaninotto (marmelab, 12 Nov 2025): displaying the current date produced 8 files and about 1,300 lines of text.",
+  "One opinionated workflow, overkill for small work: Boeckeler found it excessive for a 3 to 5 point story and did not finish the implementation.",
+  "The agent does not reliably follow the artifacts. Boeckeler saw it ignore research notes about existing classes and create duplicates, and over-apply constitution articles. Zaninotto saw an agent tick \"verify implementation\" without writing a single unit test.",
+  "False sense of control or security: heavy up-front specification conflicts with small iterative steps (Boeckeler); critics call it a waterfall revival (Zaninotto, Eberhardt).",
+  "Double review: the technical plan already contains code, so reviewers read it twice (Zaninotto).",
+  "Spec drift. Boeckeler classes it \"spec-first only, not spec-anchored over time\": per-change branches mean specs live only for one change, despite the \"living artifact\" messaging.",
+  "Brownfield weakness: agents find context by text search and miss existing functions; Zaninotto calls SDD \"mostly unusable\" for large existing codebases. Thoughtworks does report teams using it mostly in brownfield, with instruction bloat and context rot as the stated challenges.",
+  "Unclear target user: it needs both product-analysis and design skills (Boeckeler, Zaninotto).",
+  "Redundancy with the agent's own plan mode and task lists; Eberhardt expects the guided steps to matter less as agents improve.",
+  "Workflow gaps left unanswered: issue #1193 (how to resume, amend a spec mid-implement, merge the branch, skip test tasks) got no maintainer reply and was auto-closed as \"not planned\" after 180 days.",
+  "Concurrency hazard seen in this repo: `.specify/feature.json` is a single repo-global pointer to the active feature, so parallel agents clobber each other; the local implement skill was patched to stop running the bundled scripts for that reason.",
+  "Scope growth: the project is now a platform of extensions, presets, workflows, overlays, bundles and catalogs, which works against the simplicity its own constitution preaches (my inference)."
+ ],
+ "evidence_of_effectiveness": "No first-party measurements found. The GitHub launch post (Sept 2025) cites no data, and an ESEM 2026 paper states that no vendor has published empirical evidence and that GitHub describes Spec Kit as \"an experiment\".\n\nAdoption is large (about 149k stars, 13.4k forks), but that is popularity, not effectiveness.\n\nIndependent evidence is mixed to negative:\n- **Hill, ESEM 2026:** 88,052 pull requests across 119 open-source repositories; none of five vendor-derived hypotheses were supported. After matching, spec'd and unspec'd PRs were indistinguishable on defects (-0.6pp, p = 0.133) and rework showed no protective effect. The caveat matters: it measured issue and ticket references, not Spec Kit output, which no sampled repository commits, so tool adoption itself \"remains untested\".\n- **Uvik benchmark (vendor blog, Oct 2026):** 50 brownfield Python tickets on one model, blind-reviewed. Spec Kit against a no-spec control:\n\n| Metric | Spec Kit | No spec |\n|---|---|---|\n| Merge rate | 80% | 72% |\n| Review defects per merged ticket | 0.57 | 0.86 |\n| Cost per merged ticket | $3.33 | $2.43 |\n| Median time to merge | 44 min | 29 min |\n\n  The merge-rate gap is inside their stated \u00b110pp noise band, and 34% of Spec Kit's tokens went to the spec phase. One team, private code, not peer-reviewed.\n- **Eberhardt (single developer, hobby app):** roughly ten times slower than iterative prompting, with a bug in the Spec Kit build and none in the baseline.\n- **Thoughtworks Radar (April 2026):** ring Assess; a qualitative report that the lifecycle surfaced issues earlier and that experienced engineers with strong architectural practices benefit most.\n\nIn short: weak evidence of somewhat fewer review defects at clearly higher cost and time, and no controlled evidence that the full workflow pays for itself.",
+ "lessons_for_odd": [
+  "Copy: one short statement of intent before any code, and an explicit ambiguity marker instead of guessing. The value sits in the first few lines of the spec, not the full artifact set.",
+  "Copy: a bounded clarify step (at most 5 questions) and a read-only cross-artifact analysis; both are cheap and non-destructive.",
+  "Copy: dependency-ordered small tasks, kept machine-validated. The repo's own `tasks_dag.py` goes beyond Spec Kit's prose ordering.",
+  "Copy: the converge idea of re-checking the result against the intent and looping, but make the oracle an executable proof test, not a model's opinion of the code against markdown.",
+  "Avoid: markdown volume. The documented failure is thousands of lines of spec for hundreds of lines of code and hours of review. Set a hard artifact budget per outcome (for example one outcome sentence, one proof test, one short context file) and make the human review the proof, not prose.",
+  "Avoid: one fixed pipeline for every size of work. Tier ceremony from the diff or risk, as the repo already does, and make the default path the shortest.",
+  "Avoid: gates that are prompt text. Spec Kit's checklists and hooks are interpreted by the model and get skipped. Put anything that must hold in a PreToolUse hook, a script exit code or a merge gate, and prove each gate can fail.",
+  "Avoid: self-reported completion. \"Verify implementation\" was ticked with no tests written; require a RED-then-GREEN proof captured by a script, with the tree sha.",
+  "Avoid: global mutable state such as `.specify/feature.json`. Key all state by outcome or requirement id so parallel agents cannot clobber each other.",
+  "Avoid: 150 to 370 line skill prompts and platform sprawl. Thoughtworks names instruction bloat and context rot as the live problems. Keep skills short and push detail into scripts, which also survives model upgrades better than prompt choreography.",
+  "Beat: spec drift. Make the durable artifact the executable proof test plus a one-line outcome, which cannot drift silently because it fails.",
+  "Beat: brownfield duplication. Require a \"name the nearest existing code\" step with a cited search before writing, since Spec Kit agents were seen regenerating existing classes.",
+  "Beat: the evidence gap. Spec Kit publishes no measurements. Ship with a reproducible measurement (tokens, wall clock, review minutes, defects against a no-process control on the same tickets) and state the noise band.",
+  "Beat: obsolescence risk. Eberhardt expects guided steps to matter less as agents improve; constrain outcomes and proofs (what must be true) and leave the how to the model.",
+  "Caution for this project: the benchmark shows process costs about a third more tokens and about 50% more time for a modest defect gain. A toolkit that adds judges and stages on top must show it does better than that, or it repeats the same criticism."
+ ],
+ "sources": [
+  {
+   "title": "github/spec-kit README",
+   "url": "https://github.com/github/spec-kit"
+  },
+  {
+   "title": "spec-driven.md (Spec Kit philosophy and constitution)",
+   "url": "https://github.com/github/spec-kit/blob/main/spec-driven.md"
+  },
+  {
+   "title": "Spec Kit docs home",
+   "url": "https://github.github.com/spec-kit/"
+  },
+  {
+   "title": "Spec Kit quickstart",
+   "url": "https://github.github.com/spec-kit/quickstart.html"
+  },
+  {
+   "title": "Spec Kit releases",
+   "url": "https://github.com/github/spec-kit/releases"
+  },
+  {
+   "title": "Spec Kit issue #1193: Seeking Guidance on Proper Usage of the Spec Kit Workflow",
+   "url": "https://github.com/github/spec-kit/issues/1193"
+  },
+  {
+   "title": "GitHub blog (Den Delimarsky, 2 Sept 2025): Spec-driven development with AI",
+   "url": "https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/"
+  },
+  {
+   "title": "Birgitta Boeckeler (15 Oct 2025): Understanding Spec-Driven-Development: Kiro, spec-kit, and Tessl",
+   "url": "https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html"
+  },
+  {
+   "title": "Colin Eberhardt, Scott Logic (26 Nov 2025): Putting Spec Kit Through Its Paces",
+   "url": "https://blog.scottlogic.com/2025/11/26/putting-spec-kit-through-its-paces-radical-idea-or-reinvented-waterfall.html"
+  },
+  {
+   "title": "Francois Zaninotto, marmelab (12 Nov 2025): Spec-Driven Development: The Waterfall Strikes Back",
+   "url": "https://marmelab.com/blog/2025/11/12/spec-driven-development-waterfall-strikes-back.html"
+  },
+  {
+   "title": "Thoughtworks Technology Radar (April 2026): GitHub Spec Kit, ring Assess",
+   "url": "https://www.thoughtworks.com/radar/languages-and-frameworks/github-spec-kit"
+  },
+  {
+   "title": "Brenn Hill, ESEM 2026: Specification Artifacts in Open-Source Pull Request Workflows Do Not Reduce Defects",
+   "url": "https://drops.dagstuhl.de/storage/00lipics/lipics-vol394-esem2026/LIPIcs.ESEM.2026.84/LIPIcs.ESEM.2026.84.pdf"
+  },
+  {
+   "title": "Uvik Software SDD Benchmark 2026 (vendor blog)",
+   "url": "https://uvik.net/blog/spec-driven-development-benchmark/"
+  }
+ ],
+ "unverified": [
+  "Web pages were read through a summarizing fetch tool, so quotes from them are as that tool relayed them; only the ESEM abstract and the local Spec Kit files were read as raw text.",
+  "The upstream reference page for core commands returned 404. Descriptions of clarify, analyze, checklist and taskstoissues come from the quickstart and from the copy vendored in this repo (version 0.8.11, locally modified), not the current 1.4.0 text.",
+  "Whether extension hooks in 1.4.0 are still prompt-interpreted, or now run through the CLI's workflow engine or real agent lifecycle hooks, is not confirmed. The README mentions \"extension runtime events\" and 1.3.0 adds CLI-side hooks, which I did not inspect.",
+  "Exactly how `/speckit-converge` judges convergence (model opinion or tests) was not read from its source, only from the quickstart description.",
+  "The Thoughtworks blurb was returned as a summary, not verbatim.",
+  "The Uvik benchmark is a vendor blog on private repositories and cannot be reproduced; I only read its own page.",
+  "The ESEM paper's full results and the Eberhardt figures were not cross-checked beyond the abstract and the blog post respectively; the fetch reported the same markdown line count for his Plan and Tasks rows, which may be a transcription slip.",
+  "No GitHub issues specifically about token cost, verbosity or drift were read; the search did not honour the site restriction and only #1193 was opened.",
+  "The 'honest critique' page from the search results returned 404 and was not used.",
+  "Star and fork counts and the release date (\"10 Nov\", year not shown) are as the page showed on 2026-11-11."
+ ]
+}
