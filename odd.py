@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """odd: outcome-driven development. "Done" is recomputed from the code, not claimed.
 
-An outcome is one sentence, a proof command and a boundary, kept in .odd/outcomes/<slug>.md. It is done only when the
-proof passes on the tree as it is and fails on the same tree with the change taken out. `odd gate` checks that every
-change since the base is covered by such an outcome; with --recompute (CI) it trusts nothing recorded.
+An outcome is one sentence, a proof command and a boundary, kept in .odd/outcomes/<slug>.md. It is verified when the
+proof passes on the tree as it is, fails on the same tree with the change taken out, and passes again once the
+change is put back. `odd gate` checks that every changed product file is inside the boundary of one verified
+outcome; with --recompute (CI) it trusts nothing recorded.
 
-  odd init [--claude] [--cursor] [--copilot] [--ci] [--hook pre-push|pre-commit]
-  odd new <slug> "<outcome>" --proof "<command>" --in "<globs>" [--tests "<globs>"] [--after <slug>] [--real]
-  odd red <slug>          the proof fails now, before the change (optional early check)
-  odd done <slug>         verify and record; exit 0 only when verified
-  odd gate [--base REF] [--recompute]     exit 0 pass, 1 fail, 2 could not run
-  odd park|abort <slug> "<reason>"        honest exits: blocked / cannot be done as specified
-  odd widen <slug> <glob> "<reason>"      add files to the boundary, on the record
-  odd status | odd stats | odd doctor | odd escape <slug> "<what escaped>"
+  odd init [--claude-hooks]                               install or repair
+  odd new <slug> "<outcome>" --proof "<command>" --in "<globs>"
+  odd done <slug>                                         exit 0 verified, 1 not shown, 2 could not run
+  odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
+  odd park <slug> "<reason>"                              blocked, or cannot be done as specified
+  odd stats                                               counts (self-reported)
 
-Python 3.8+, standard library only. One file, so a project can vendor it as .odd/odd.py.
+Needs a POSIX shell, git 2.23+ and Python 3.8+. One file, standard library only, so a project vendors it as
+.odd/odd.py. Design and limits: DESIGN.md.
 """
 import argparse
 import collections
@@ -29,42 +29,46 @@ import subprocess
 import sys
 import time
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 DEFAULTS = {
-    'trivial_lines': 25,       # changed lines allowed outside any outcome (the small-change lane)
-    'exempt': ['.odd/**', '**/*.md', 'LICENSE*', '.gitignore', '.gitattributes'],
-    'test_globs': ['tests/**', 'test/**', '**/__tests__/**', '**/test_*.py', '**/*_test.*', '**/*.test.*',
-                   '**/*.spec.*', 'spec/**'],  # a proof's own files: allowed for every outcome, never reverted
-    'proof_timeout': 900,      # seconds per proof run
-    'max_skips': None,         # outcomes allowed to skip the counterfactual check (None: listed, not limited)
-    'default_branch': None,    # detected when None
-    'guard': 'boundary',       # editor hook: refuse writes outside the open outcome's boundary ('off' disables)
-    'stop_gate': True,         # editor hook: at turn end, block when this turn's changes fail the gate
+    'trivial_lines': 25,   # product lines that may change outside any outcome (a per-change budget)
+    'exempt': ['.odd/outcomes/**', '**/*.md', 'LICENSE*', '.gitignore', '.gitattributes',
+               '**/*.lock', '**/package-lock.json', '**/pnpm-lock.yaml', '**/go.sum'],
+    'test_globs': ['**/tests/**', '**/test/**', '**/spec/**', '**/__tests__/**', '**/test_*.py', '**/*_test.*',
+                   '**/*.test.*', '**/*.spec.*'],   # a proof's own files: never taken out, need no outcome
+    'proof_timeout': 900,  # seconds per proof run
+    'default_branch': None,
 }
-CONTROL = ('.odd/config.json', '.odd/odd.py')   # read from the base revision when recomputing
+CONTROL = ('.odd/odd.py', '.odd/config.json')   # no outcome needed; always reported; read from the base in CI
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
-BINARY_LINES = 1000  # a binary or unreadable change is never "trivial"
+BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
+ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 
 
 class Fail(Exception):
-    """The outcome does not hold (exit 1)."""
+    """The outcome is not shown (exit 1)."""
 
 
 class CouldNotRun(Exception):
-    """The check could not be performed (exit 2). Never reported as a pass."""
+    """Nothing was established (exit 2). Never reported as a pass."""
 
 
-# ---------------------------------------------------------------- git and files
+# ---------------------------------------------------------------- git, paths, settings
 
-def sh(args, cwd, input=None):
-    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, input=input)
+def sh(args, cwd, **kw):
+    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, **kw)
 
 
-def git(root, *args, ok=(0,)):
+def git(root, *args):
     r = sh(['git'] + list(args), root)
-    if r.returncode not in ok:
+    if r.returncode != 0:
         raise CouldNotRun('git %s: %s' % (' '.join(args[:3]), (r.stderr or r.stdout).strip()[:300]))
     return r.stdout
+
+
+def zlist(root, *args):
+    return [x for x in git(root, *args).split('\0') if x]
 
 
 def find_root():
@@ -79,23 +83,15 @@ def odd_dir(root, *p):
 
 
 def state_dir(root, *p):
-    """Working state (journals, local evidence, editor-hook marks) lives under the git directory: it cannot be
-    committed, and a proof looking at the working tree sees nothing of it. One per worktree."""
+    """Journals, local evidence and hook marks live under the git directory: they cannot be committed, and a proof
+    looking at the working tree sees nothing of them. One per worktree."""
     d = git(root, 'rev-parse', '--git-dir').strip()
     return os.path.join(d if os.path.isabs(d) else os.path.join(root, d), 'odd', *p)
-
-
-def zlist(root, *args):
-    return [x for x in git(root, *args).split('\0') if x]
 
 
 def rev(root, ref):
     r = sh(['git', 'rev-parse', '--verify', '--quiet', ref + '^{commit}'], root)
     return r.stdout.strip() if r.returncode == 0 else None
-
-
-def is_ancestor(root, a, b='HEAD'):
-    return sh(['git', 'merge-base', '--is-ancestor', a, b], root).returncode == 0
 
 
 def glob_re(pat):
@@ -121,7 +117,6 @@ def glob_re(pat):
 
 
 def matches(path, globs):
-    path = path.replace(os.sep, '/')
     return any(glob_re(g).match(path) for g in globs if g.strip())
 
 
@@ -130,8 +125,8 @@ def split_globs(s):
 
 
 def load_config(root, base=None):
-    """The project's settings. When recomputing, they come from the base revision, so a change cannot loosen its own
-    gate; a project adopting odd in this very change gets the defaults."""
+    """Settings. When recomputing they come from the base revision, so a change cannot loosen its own gate; a
+    project adopting odd in this very change gets the defaults."""
     cfg = dict(DEFAULTS)
     try:
         if base:
@@ -140,72 +135,76 @@ def load_config(root, base=None):
         else:
             with open(odd_dir(root, 'config.json')) as f:
                 text = f.read()
-        cfg.update(json.loads(text))
+        cfg.update({k: v for k, v in json.loads(text).items() if k in DEFAULTS})
     except (OSError, ValueError):
         pass
     return cfg
 
 
-def default_branch(root, cfg):
-    if cfg.get('default_branch'):
-        return cfg['default_branch']
-    r = sh(['git', 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], root)
-    if r.returncode == 0 and r.stdout.strip():
-        return r.stdout.strip().split('/', 1)[-1]
-    for name in ('main', 'master'):
-        if rev(root, 'origin/' + name) or rev(root, name):
-            return name
-    return None
-
-
-def gate_base(root, cfg, arg=None):
-    """The revision changes are measured from: --base, $ODD_BASE, else where this branch left the default branch."""
+def find_base(root, cfg, arg=None):
+    """The one revision everything is measured from: where this branch left the target branch."""
+    if not rev(root, 'HEAD'):
+        return None  # no commits yet: everything is new
     ref = arg or os.environ.get('ODD_BASE')
     if ref:
-        sha = rev(root, ref)
-        if not sha:
-            raise CouldNotRun('base revision %r not found (in CI, fetch full history: fetch-depth: 0)' % ref)
-        mb = sh(['git', 'merge-base', 'HEAD', sha], root)
-        return mb.stdout.strip() if mb.returncode == 0 and mb.stdout.strip() else sha
-    head = rev(root, 'HEAD')
-    if not head:
-        return None  # no commits yet: everything is new
-    d = default_branch(root, cfg)
-    for cand in (('origin/' + d) if d else None, d):
-        if cand and rev(root, cand):
-            mb = sh(['git', 'merge-base', 'HEAD', cand], root)
+        cands = [ref]
+    else:
+        d = cfg.get('default_branch')
+        if not d:
+            r = sh(['git', 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], root)
+            d = r.stdout.strip().split('/', 1)[-1] if r.returncode == 0 and r.stdout.strip() else None
+        names = [d] if d else ['main', 'master']
+        cands = ['origin/' + n for n in names] + names
+    for c in cands:
+        if rev(root, c):
+            mb = sh(['git', 'merge-base', 'HEAD', c], root)
             if mb.returncode == 0 and mb.stdout.strip():
                 return mb.stdout.strip()
-    return head
+            raise CouldNotRun('HEAD and %s share no history here (a shallow clone?). Fetch it: git fetch --unshallow '
+                              '(in CI: a full-history checkout, fetch-depth: 0)' % c)
+    if ref:
+        raise CouldNotRun('base revision %r not found. Fetch it: git fetch origin %s' % (ref, ref.split('/')[-1]))
+    raise CouldNotRun('cannot tell which branch this work leaves from (no main, master or origin/HEAD): pass --base '
+                      '<branch>, or set "default_branch" in .odd/config.json')
 
 
 EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 
 def changed_files(root, base):
-    """Every path that differs from base in the working tree (committed, staged or not) plus untracked files.
-    Computed from git, so files written through a shell are seen like any other."""
+    """Every path that differs from the base in the working tree (committed, staged or not), plus untracked files.
+    A rename is a delete and an add. Computed from git, so files written through a shell are seen like any other."""
     names = set(zlist(root, 'diff', '--name-only', '--no-renames', '-z', base or EMPTY_TREE))
     names |= set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z'))
     return sorted(names)
 
 
 def changed_lines(root, base, path):
+    if os.path.isdir(os.path.join(root, path)):
+        return BIG  # a submodule pointer
     r = sh(['git', 'diff', '--numstat', '--no-renames', base or EMPTY_TREE, '--', path], root)
     line = r.stdout.strip().splitlines()[0] if r.stdout.strip() else ''
     if line:
         a, d = line.split('\t')[:2]
-        n = BINARY_LINES if '-' in (a, d) else int(a) + int(d)
-        return n or BINARY_LINES  # a mode-only, link or submodule change has no lines and is not "small"
+        return BIG if '-' in (a, d) else int(a) + int(d)
     try:  # untracked
         with open(os.path.join(root, path), 'rb') as f:
             data = f.read()
-        return BINARY_LINES if b'\0' in data[:8000] else data.count(b'\n') + (1 if data and not data.endswith(b'\n') else 0)
+        return BIG if b'\0' in data[:8000] else data.count(b'\n') + (1 if data and not data.endswith(b'\n') else 0)
     except OSError:
-        return BINARY_LINES
+        return BIG
 
 
-# ---------------------------------------------------------------- outcome files
+def classify(changed, cfg):
+    """(control, exempt, tests, product) — each changed path falls in exactly one."""
+    control = [p for p in changed if p in CONTROL]
+    exempt = [p for p in changed if p not in CONTROL and matches(p, cfg['exempt'])]
+    tests = [p for p in changed if p not in control and p not in exempt and matches(p, cfg['test_globs'])]
+    rest = set(control) | set(exempt) | set(tests)
+    return control, exempt, tests, [p for p in changed if p not in rest]
+
+
+# ---------------------------------------------------------------- outcome files and local evidence
 
 class Outcome:
     """`.odd/outcomes/<slug>.md`: front matter of `key: value` lines (an indented line continues the value above),
@@ -214,13 +213,14 @@ class Outcome:
     def __init__(self, root, slug):
         self.root, self.slug = root, slug
         self.path = odd_dir(root, 'outcomes', slug + '.md')
-        self.f, self.notes = collections.OrderedDict(), ''
+        self.rel = '.odd/outcomes/%s.md' % slug
+        self.f, self.notes = collections.OrderedDict(), '\n'
 
     @classmethod
     def load(cls, root, slug):
         o = cls(root, slug)
         if not os.path.isfile(o.path):
-            raise Fail('no outcome %r (odd status lists them; odd new creates one)' % slug)
+            raise Fail('no outcome %r in .odd/outcomes/ (%s new creates one)' % (slug, ODD))
         with open(o.path, encoding='utf-8') as f:
             lines = f.read().split('\n')
         if not lines or lines[0].strip() != '---':
@@ -231,6 +231,8 @@ class Outcome:
             m = re.match(r'^([a-z_]+):\s?(.*)$', line)
             if m:
                 key = m.group(1)
+                if key not in FIELDS:
+                    raise Fail('%s line %d: unknown field "%s" (the fields are: %s)' % (o.rel, n + 1, key, ', '.join(FIELDS)))
                 o.f[key] = m.group(2).strip()
             elif line[:1] in (' ', '\t') and key and line.strip():
                 o.f[key] = (o.f[key] + ' ' + line.strip()).strip()
@@ -243,19 +245,18 @@ class Outcome:
         for k in ('outcome', 'proof', 'in'):
             if not o.f.get(k):
                 raise Fail('%s: missing "%s:"' % (o.rel, k))
-        o.f.setdefault('status', 'open')
         return o
 
-    @property
-    def rel(self):
-        return '.odd/outcomes/%s.md' % self.slug
-
-    def get(self, k, d=''):
-        return self.f.get(k, d)
+    def get(self, k):
+        return self.f.get(k, '')
 
     @property
-    def status(self):
-        return self.get('status', 'open')
+    def ins(self):
+        return split_globs(self.get('in'))
+
+    @property
+    def parked(self):
+        return self.get('parked')
 
     @property
     def skip(self):
@@ -267,32 +268,25 @@ class Outcome:
         with open(self.path, 'w', encoding='utf-8') as f:
             f.write('---\n' + ''.join('%s: %s\n' % kv for kv in self.f.items()) + '---\n' + self.notes)
 
-    def note(self, text):
-        self.notes = self.notes.rstrip('\n') + ('\n' if self.notes.strip() else '') + text + '\n'
-
 
 def all_outcomes(root):
     d = odd_dir(root, 'outcomes')
-    out = []
-    for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
-        if name.endswith('.md'):
-            out.append(Outcome.load(root, name[:-3]))
-    return out
+    return [Outcome.load(root, n[:-3]) for n in (sorted(os.listdir(d)) if os.path.isdir(d) else []) if n.endswith('.md')]
 
 
 def now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')
 
 
-def record(root, slug, kind, **data):
-    """Evidence is a log for people and for `odd stats`. CI never trusts it."""
-    os.makedirs(odd_dir(root, 'evidence'), exist_ok=True)
-    with open(odd_dir(root, 'evidence', slug + '.jsonl'), 'a') as f:
-        f.write(json.dumps(dict(ts=now(), kind=kind, **data)) + '\n')
+def record(root, slug, **data):
+    """Local evidence: a cache for the local gate and a log for `odd stats`. Never committed, never trusted in CI."""
+    os.makedirs(state_dir(root, 'evidence'), exist_ok=True)
+    with open(state_dir(root, 'evidence', slug + '.jsonl'), 'a') as f:
+        f.write(json.dumps(dict(ts=now(), **data)) + '\n')
 
 
 def evidence(root, slug):
-    p, out = odd_dir(root, 'evidence', slug + '.jsonl'), []
+    p, out = state_dir(root, 'evidence', slug + '.jsonl'), []
     if os.path.isfile(p):
         with open(p) as f:
             for line in f:
@@ -303,23 +297,14 @@ def evidence(root, slug):
     return out
 
 
-def proof_globs(o, cfg):
-    return split_globs(o.get('tests')) + list(cfg['test_globs'])
-
-
-def covers(o, cfg, path):
-    return matches(path, split_globs(o.get('in'))) or matches(path, proof_globs(o, cfg))
-
-
 def content_hash(root, cfg, o, changed):
-    """Identity of what was verified: the proof, the boundary and the bytes of every file the outcome covers.
-    A commit, or an edit to a file outside it, leaves the hash unchanged."""
+    """Identity of what was verified: the proof, the boundary, the bytes of every file inside it and of every
+    changed test file. A commit, or an edit to a file outside it, leaves the hash unchanged."""
     h = hashlib.sha256()
-    for k in ('proof', 'in', 'tests', 'counterfactual'):
+    for k in ('proof', 'in', 'counterfactual'):
         h.update((k + '=' + o.get(k) + '\n').encode())
-    listed = set(zlist(root, 'ls-files', '-c', '-o', '--exclude-standard', '-z'))
-    own = split_globs(o.get('in')) + split_globs(o.get('tests'))
-    for path in sorted(p for p in listed if matches(p, own) or (p in changed and matches(p, cfg['test_globs']))):
+    listed = zlist(root, 'ls-files', '-c', '-o', '--exclude-standard', '-z')
+    for path in sorted(p for p in set(listed) if matches(p, o.ins) or (p in changed and matches(p, cfg['test_globs']))):
         try:
             with open(os.path.join(root, path), 'rb') as f:
                 h.update(path.encode() + b'\0' + hashlib.sha256(f.read()).digest())
@@ -328,11 +313,16 @@ def content_hash(root, cfg, o, changed):
     return h.hexdigest()[:20]
 
 
-# ---------------------------------------------------------------- proofs and the counterfactual
+def last_ok(root, slug):
+    ev = [e for e in evidence(root, slug) if e.get('ok')]
+    return ev[-1] if ev else None
+
+
+# ---------------------------------------------------------------- proofs, and taking the change out
 
 def run_proof(root, cmd, timeout):
-    """(exit code or None on timeout, last lines of output). No environment variable marks the run, so a proof has
-    nothing from the tool to tell the counterfactual run apart."""
+    """(exit code or None on timeout, last lines of output, seconds). No environment variable marks the run."""
+    t0 = time.time()
     kw = {'start_new_session': True} if os.name == 'posix' else {}
     p = subprocess.Popen(cmd, shell=True, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          errors='replace', **kw)
@@ -344,11 +334,11 @@ def run_proof(root, cmd, timeout):
             pass
     try:
         out, _ = p.communicate(timeout=timeout)
-        return p.returncode, '\n'.join(out.strip().splitlines()[-20:])[-2000:]
+        return p.returncode, '\n'.join(out.strip().splitlines()[-20:])[-2000:], round(time.time() - t0, 1)
     except subprocess.TimeoutExpired:
         kill()
         p.communicate()
-        return None, 'timed out after %ss' % timeout
+        return None, 'timed out after %ss' % timeout, round(time.time() - t0, 1)
     except BaseException:  # interrupted: do not leave the proof running while the tree is put back
         kill()
         raise
@@ -356,11 +346,7 @@ def run_proof(root, cmd, timeout):
 
 def pid_alive(pid):
     if os.name != 'posix':
-        import ctypes
-        h = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
-        if h:
-            ctypes.windll.kernel32.CloseHandle(h)
-        return bool(h)
+        return True  # cannot ask safely there; the journal's age decides
     try:
         os.kill(int(pid), 0)
         return True
@@ -369,7 +355,7 @@ def pid_alive(pid):
 
 
 def _state(path):
-    """What is at a path right now: None (nothing), ('link', target) or ('file', sha256)."""
+    """What is at a path right now: None, ['link', target] or ['file', sha256]."""
     if os.path.islink(path):
         return ['link', os.readlink(path)]
     if os.path.isfile(path):
@@ -379,8 +365,8 @@ def _state(path):
 
 
 def _bump(path, after):
-    """Give the path an mtime two seconds past anything this run saw, so caches keyed on mtime (Python bytecode,
-    make) notice both the revert and the restore even when size and second are unchanged."""
+    """A modification time two seconds past anything this run saw, so caches keyed on it (Python bytecode, make)
+    notice both the revert and the restore even when size and second are unchanged."""
     t = max(time.time(), after or 0) + 2
     try:
         os.utime(path, (t, t), follow_symlinks=False)
@@ -389,10 +375,10 @@ def _bump(path, after):
     return t
 
 
-def restore(jdir):
-    """Put back what a counterfactual run took out. A path is restored only if it still holds exactly what the run
-    left there; if someone edited it meanwhile, their version stays and the saved one is kept beside the journal.
-    Returns (restored, displaced paths)."""
+def put_back(jdir):
+    """Undo a take-out from its journal. A path is put back only if it still holds exactly what the check left
+    there; an edit made meanwhile stays, and the earlier version is kept beside the journal.
+    Returns (paths put back, descriptions of displaced versions)."""
     jp = os.path.join(jdir, 'journal.json')
     if not os.path.isfile(jp):
         shutil.rmtree(jdir, ignore_errors=True)
@@ -403,11 +389,15 @@ def restore(jdir):
     for e in j['files']:
         path = os.path.join(j['root'], e['path'])
         if 'left' in e and _state(path) != e['left']:
-            if e['saved'] is not None:
-                keep = os.path.join(os.path.dirname(jdir), 'displaced', os.path.basename(jdir), e['path'])
+            if e['kind'] != 'none':
+                keep = os.path.join(os.path.dirname(jdir), 'displaced-' + os.path.basename(jdir), e['path'])
                 os.makedirs(os.path.dirname(keep), exist_ok=True)
-                shutil.copyfile(os.path.join(jdir, e['saved']), keep) if e['kind'] == 'file' else open(keep, 'w').write(e['link'])
-                displaced.append('%s (your earlier version: %s)' % (e['path'], keep))
+                if e['kind'] == 'file':
+                    shutil.copyfile(os.path.join(jdir, e['saved']), keep)
+                else:
+                    with open(keep, 'w') as f:
+                        f.write(e['link'])
+                displaced.append('%s (your earlier version is at %s)' % (e['path'], keep))
             continue
         if os.path.lexists(path):
             os.remove(path)
@@ -424,10 +414,9 @@ def restore(jdir):
 
 
 def recover(root, timeout):
-    """A check that was killed mid-run leaves a journal; restore from it unless that check is still running.
-    Returns a message when something was restored, so the caller can stop and let the user look."""
-    sd = state_dir(root)
-    msgs = []
+    """A check that was killed mid-run leaves a journal. Put the change back unless that check is still running.
+    Returns a message when something was put back, so the caller stops and the tree can be looked at."""
+    sd, msgs = state_dir(root), []
     for name in sorted(os.listdir(sd)) if os.path.isdir(sd) else []:
         jdir = os.path.join(sd, name)
         jp = os.path.join(jdir, 'journal.json')
@@ -440,21 +429,15 @@ def recover(root, timeout):
             continue
         if pid_alive(j.get('pid', -1)) and time.time() - j.get('started', 0) < 3 * timeout + 120:
             continue
-        n, displaced = restore(jdir)
+        n, displaced = put_back(jdir)
         msgs.append('an earlier check was interrupted while the change was taken out; %d file(s) were put back%s'
                     % (n, ('. Edited meanwhile and left as they are: ' + '; '.join(displaced)) if displaced else ''))
     return ' '.join(msgs)
 
 
-def counterfactual(root, cfg, o, base, changed):
-    """Run the proof with this outcome's product change taken out, in place, then put the change back.
-    Returns (exit code or None on timeout, output tail, the paths taken out)."""
-    ins, tests = split_globs(o.get('in')), proof_globs(o, cfg)
-    targets = [p for p in changed if matches(p, ins) and not matches(p, tests) and not p.startswith('.odd/')]
-    if not targets:
-        raise Fail('nothing inside "in: %s" changed since %s (other than the proof\'s own files), so the proof cannot be '
-                   'shown to depend on the change. Fix "in", or add "counterfactual: skip - <reason>" when nothing can '
-                   'fail first (a pure refactor, a dependency bump).' % (o.get('in'), (base or 'the start')[:10]))
+def without_change(root, cfg, o, base, targets):
+    """Run the proof with `targets` (this outcome's changed product files) taken out, in place, then put them back.
+    Returns (exit code or None on timeout, output tail, seconds)."""
     ran = set()  # the command word of each step of the proof: `./check.sh && pytest x` runs ./check.sh and pytest
     for step in re.split(r'&&|\|\||[;|\n]', o.get('proof')):
         words = [w for w in step.split() if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', w)]
@@ -462,8 +445,8 @@ def counterfactual(root, cfg, o, base, changed):
             ran.add(words[0][2:] if words[0].startswith('./') else words[0])
     named = [p for p in targets if p in ran]
     if named:
-        raise Fail('the proof runs %s, which is part of the change and would be taken out by the check, so any '
-                   'failure would count. Keep what the proof runs outside "in" (a test path).' % ', '.join(named))
+        raise CouldNotRun('the proof runs %s, which is part of the change and would be taken out by the check. Keep '
+                          'what the proof runs under a test path (for example tests/).' % ', '.join(named))
     sd = state_dir(root)
     os.makedirs(sd, exist_ok=True)
     for name in os.listdir(sd):
@@ -477,15 +460,15 @@ def counterfactual(root, cfg, o, base, changed):
         full = os.path.join(root, p)
         e = {'path': p, 'kind': 'none', 'saved': None}
         if os.path.islink(full):
-            e.update(kind='link', link=os.readlink(full), saved='link')
+            e.update(kind='link', link=os.readlink(full))
         elif os.path.isfile(full):
             shutil.copyfile(full, os.path.join(jdir, str(n)))
             st = os.stat(full)
             e.update(kind='file', saved=str(n), mode=st.st_mode & 0o7777, mtime=st.st_mtime)
         elif os.path.isdir(full):
             shutil.rmtree(jdir, ignore_errors=True)
-            raise CouldNotRun('%s is a directory entry (a submodule?); verify inside it, or use "counterfactual: skip - '
-                              '<reason>"' % p)
+            raise CouldNotRun('%s is a directory entry (a submodule pointer?) and cannot be taken out: add '
+                              '"counterfactual: skip - <reason>" to the outcome' % p)
         entries.append(e)
     journal = {'root': root, 'pid': os.getpid(), 'started': time.time(), 'files': entries}
 
@@ -496,18 +479,17 @@ def counterfactual(root, cfg, o, base, changed):
             os.fsync(f.fileno())
 
     save()  # everything needed to undo is on disk before the first file is touched
-    before = git(root, 'status', '--porcelain', '-z', '--untracked-files=no')
     displaced = []
     try:
         try:
-            for e in entries:  # removals first, then git writes the earlier versions (content, mode, links, filters)
+            for e in entries:  # removals first, then git writes the base versions (content, mode, links, filters)
                 if e['path'] not in at_base and os.path.lexists(os.path.join(root, e['path'])):
                     os.remove(os.path.join(root, e['path']))
             back = [e['path'] for e in entries if e['path'] in at_base]
             if back:
                 r = sh(['git', 'restore', '--source=' + base, '--worktree', '--'] + back, root)
                 if r.returncode != 0:
-                    raise CouldNotRun('git could not write the earlier versions (git 2.23 or newer is needed): %s'
+                    raise CouldNotRun('git could not write the base versions (git 2.23 or newer is needed): %s'
                                       % r.stderr.strip()[:200])
             for e in entries:
                 full = os.path.join(root, e['path'])
@@ -517,116 +499,143 @@ def counterfactual(root, cfg, o, base, changed):
             save()
         except OSError as err:  # never run a proof on a half-reverted tree
             raise CouldNotRun('could not take the change out (%s); nothing was verified' % err)
-        rc, tail = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+        rc, tail, secs = run_proof(root, o.get('proof'), cfg['proof_timeout'])
     finally:
-        _, displaced = restore(jdir)
+        _, displaced = put_back(jdir)
     if displaced:
         raise CouldNotRun('files changed while the check was running and were left as they are: ' + '; '.join(displaced))
-    if git(root, 'status', '--porcelain', '-z', '--untracked-files=no') != before:
-        raise CouldNotRun('the working tree is not as it was before the check (the proof may write tracked files); '
-                          'compare with: git status')
-    return rc, tail, targets
+    return rc, tail, secs
 
 
-def verify(root, cfg, o, base, changed):
-    """The proof passes on the tree as it is, and fails on the same tree with the change taken out.
-    Returns a result dict; raises Fail (the outcome is not shown) or CouldNotRun (nothing was established)."""
-    t0 = time.time()
-    rc, tail = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+def verify(root, cfg, o, base, changed, say=lambda s: None):
+    """Green, red with the change taken out, green again. Returns a result dict; raises Fail (the outcome is not
+    shown) or CouldNotRun (nothing was established)."""
+    _, _, _, product = classify(changed, cfg)
+    targets = [p for p in product if matches(p, o.ins)]
+    lines = sum(changed_lines(root, base, p) for p in targets)
+    rc, tail, s1 = run_proof(root, o.get('proof'), cfg['proof_timeout'])
     if rc is None:
         raise CouldNotRun('the proof timed out (%ss): %s' % (cfg['proof_timeout'], o.get('proof')))
     if rc != 0:
         raise Fail('the proof fails (exit %d): %s\n%s' % (rc, o.get('proof'), _indent(tail)))
-    res = {'green': rc, 'counterfactual': 'skip', 'out': [], 'red_says': ''}
-    if not o.skip:
-        crc, ctail, out = counterfactual(root, cfg, o, base, changed)
-        if crc == 0:
-            raise Fail('the proof still passes with the change taken out, so it does not depend on the change.\n'
-                       '  taken out: %s\n  usual causes: the proof asserts nothing the change does; the result comes '
-                       'from an installed dependency or a cache rather than these files; the test lives in a file '
-                       'that was taken out.' % ', '.join(out[:8]))
-        if crc is None or crc in (126, 127) or crc >= 128 or crc < 0:
-            raise CouldNotRun('with the change taken out the proof did not fail, it could not run (%s). A proof must '
-                              'run to completion and exit non-zero.\n%s'
-                              % ('timeout' if crc is None else 'exit %d' % crc, _indent(ctail)))
-        res.update(counterfactual=crc, out=out, red_says=(ctail.strip().splitlines() or [''])[-1][:160])
-    res['seconds'] = round(time.time() - t0, 1)
+    res = {'files': len(targets), 'lines': lines, 'seconds': [s1], 'red_says': '', 'skip': o.skip}
+    if o.skip:
+        return res
+    if not targets:
+        raise Fail('nothing inside "in: %s" changed since %s, so the proof cannot be shown to depend on the change. '
+                   'Paths are relative to the repository root. If this change removes or restructures code and '
+                   'nothing can fail first, add the line "counterfactual: skip - <reason>" to %s.'
+                   % (o.get('in'), (base or 'the first commit')[:10], o.rel))
+    say('  proof passed in %ss; two more runs (without the change, then with it again), about %ss' % (s1, round(2 * s1, 1)))
+    crc, ctail, s2 = without_change(root, cfg, o, base, targets)
+    if crc == 0:
+        raise Fail('the proof still passes with the change taken out, so it does not depend on the change.\n'
+                   '  taken out: %s\n  usual causes: the proof asserts nothing the change does; the result comes '
+                   'from an installed dependency or a cache rather than these files; the test lives in a file that '
+                   'was taken out (keep it under a test path); this change removes or restructures code (then add '
+                   '"counterfactual: skip - <reason>").' % ', '.join(targets[:8]))
+    if crc is None or crc in (126, 127) or crc >= 128 or crc < 0:
+        raise CouldNotRun('with the change taken out the proof did not fail, it could not run (%s). A proof must run '
+                          'to completion and exit non-zero.\n%s' % ('timeout' if crc is None else 'exit %d' % crc, _indent(ctail)))
+    rc3, tail3, s3 = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+    if rc3 != 0:
+        raise Fail('the proof passed, failed without the change, and then did not pass again with the change put back '
+                   '(%s). A proof must give the same answer each time it runs; this one may leave state behind.\n%s'
+                   % ('timeout' if rc3 is None else 'exit %d' % rc3, _indent(tail3)))
+    res.update(seconds=[s1, s2, s3], red_says=(ctail.strip().splitlines() or ['(no output)'])[-1][:160])
     return res
-
-
-def _untracked_hint(root, paths):
-    """Build output the proof itself wrote (caches, compiled files) shows up as an uncovered change when the project
-    does not ignore it. Say so, instead of leaving the reader to guess."""
-    un = set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z'))
-    hit = [p for p in paths if p in un]
-    return (' Untracked: %s. If that is build output, add it to .gitignore.' % ', '.join(hit[:4])) if hit else ''
 
 
 def _indent(text):
     return '\n'.join('    ' + l for l in (text or '').splitlines()[-12:])
 
 
+def _describe(o, res):
+    if res.get('skip'):
+        return 'SKIPPED the take-out check (%s): the proof passes; %d line(s) in %d file(s) not verified' % (
+            res['skip'].split('-', 1)[-1].strip() or 'no reason', res['lines'], res['files'])
+    return 'took out %d file(s), %d line(s); without them the proof said: %s; %s s' % (
+        res['files'], res['lines'], res['red_says'], '+'.join(str(s) for s in res['seconds']))
+
+
 # ---------------------------------------------------------------- the gate
 
-def gate(root, base_arg=None, recompute=False, mode='gate'):
-    """(exit code, report lines). mode 'stop' is the editor's turn-end check: parked and aborted outcomes have been
-    acknowledged, so their files do not block."""
+def survey(root, base_arg=None, recompute=False):
+    """Everything the gate and the hooks need to know about the change, computed once."""
     cfg0 = load_config(root)
-    base = gate_base(root, cfg0, base_arg)
+    base = find_base(root, cfg0, base_arg)
     cfg = load_config(root, base) if recompute and base else cfg0
     changed = changed_files(root, base)
-    lines, problems = [], []
-    control = [p for p in changed if p in CONTROL or p.startswith('.github/workflows/odd')]
-    if recompute and control:
-        lines.append('CONTROL FILES CHANGED (settings and tool are read from the base revision; a person must review): '
-                     + ', '.join(control))
-    work = [p for p in changed if not matches(p, cfg['exempt'])]
+    control, exempt, tests, product = classify(changed, cfg)
     inplay = [o for o in all_outcomes(root) if o.rel in changed]
-    verified, skips = [], []
-    for o in inplay:
-        if o.status != 'done':
-            lines.append('  %-9s %s: %s%s' % (o.status.upper(), o.slug, o.get('outcome')[:90],
-                                              (' [%s]' % o.get('reason')) if o.get('reason') else ''))
-            continue
+    active = [o for o in inplay if not o.parked]
+    return dict(cfg=cfg, base=base, changed=changed, control=control, exempt=exempt, tests=tests, product=product,
+                inplay=inplay, active=active)
+
+
+def gate(root, base_arg=None, recompute=False, say=lambda s: None):
+    """(exit code, report lines). Raises CouldNotRun."""
+    s = survey(root, base_arg, recompute)
+    cfg, base, changed, product, active = s['cfg'], s['base'], s['changed'], s['product'], s['active']
+    lines, problems, skips, verified = [], [], [], []
+    for p in product:  # within one change a file belongs to one outcome
+        owners = [o.slug for o in active if matches(p, o.ins)]
+        if len(owners) > 1:
+            problems.append('%s is inside the boundary of %s: within one change a file belongs to one outcome. Make '
+                            'them one outcome, or ship them as successive changes.' % (p, ' and '.join(owners)))
+    for o in active:
         try:
             if recompute:
-                res = verify(root, cfg, o, base, changed)
-                how = 'recomputed in %ss' % res['seconds']
+                say('%s: %s' % (o.slug, o.get('proof')))
+                res = verify(root, cfg, o, base, changed, say)
             else:
-                ev = [e for e in evidence(root, o.slug) if e.get('kind') == 'done' and e.get('ok')]
-                if not ev or ev[-1].get('hash') != content_hash(root, cfg, o, changed):
-                    raise Fail('its files changed since it was verified; run: odd done %s' % o.slug)
-                how = 'verified %s' % ev[-1]['ts']
+                ev = last_ok(root, o.slug)
+                if not ev or ev.get('hash') != content_hash(root, cfg, o, changed):
+                    raise Fail('run: %s done %s' % (ODD, o.slug))
+                res = ev
             verified.append(o)
-            if o.skip:
-                skips.append(o)
-            lines.append('  %-9s %s: %s (%s; proof: %s)' % ('PROVEN' if o.get('real') == 'yes' else 'DONE', o.slug,
-                                                           o.get('outcome')[:90], how, o.get('proof')[:60]))
+            if res.get('skip'):
+                skips.append('%s - %s, %d line(s)' % (o.slug, res['skip'].split('-', 1)[-1].strip(), res['lines']))
+            lines += ['  ok      %s: %s' % (o.slug, o.get('outcome')[:100]), '          ' + _describe(o, res)]
         except Fail as e:
             problems.append('%s: %s' % (o.slug, e))
-    acknowledged = [o for o in inplay if o.status in ('parked', 'aborted')] if mode == 'stop' else []
-    uncovered = [p for p in work if not any(covers(o, cfg, p) for o in verified + acknowledged)]
-    n = sum(changed_lines(root, base, p) for p in uncovered)
-    if uncovered and n > cfg['trivial_lines']:
-        open_ = [o.slug for o in inplay if o.status == 'open']
-        problems.append('%d changed line(s) in %d file(s) are not covered by a verified outcome (up to %d lines need none): %s%s'
-                        % (n, len(uncovered), cfg['trivial_lines'], ', '.join(uncovered[:8]),
-                           ', ...' if len(uncovered) > 8 else '') + _untracked_hint(root, uncovered))
-        problems.append('  next: ' + ('odd done %s' % open_[0] if open_ else 'odd new <slug> "<outcome>" --proof "<command>" --in "<globs>"')
-                        + ', or odd widen <slug> <glob> "<reason>" if a file belongs to an existing outcome')
-    elif uncovered:
-        lines.append('  note: %d line(s) changed outside any outcome (%s): allowed, the small-change lane is %d lines'
-                     % (n, ', '.join(uncovered[:5]), cfg['trivial_lines']))
-    if skips:
-        lines.append('  note: %d outcome(s) skip the counterfactual check: %s' % (
-            len(skips), '; '.join('%s (%s)' % (o.slug, o.skip) for o in skips)))
-        if cfg.get('max_skips') is not None and len(skips) > cfg['max_skips']:
-            problems.append('%d outcome(s) skip the counterfactual check; this project allows %d' % (len(skips), cfg['max_skips']))
-    head = 'odd gate%s: base %s, %d file(s) changed, %d outcome(s) in this change' % (
-        ' --recompute' if recompute else '', (base or 'none')[:10], len(changed), len(inplay))
+    for o in s['inplay']:
+        if o.parked:
+            lines.append('  parked  %s: %s (a parked outcome covers no files)' % (o.slug, o.parked))
+    stray = [p for p in product if not any(matches(p, o.ins) for o in active)]
+    n = sum(changed_lines(root, base, p) for p in stray)
+    if stray and n > cfg['trivial_lines']:
+        un = set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z'))
+        hint = [p for p in stray if p in un]
+        problems.append(
+            '%s changed line(s) in %d file(s) are outside every outcome (up to %d need none): %s%s\n'
+            '    state the outcome in .odd/outcomes/<slug>.md, then run %s done <slug>:\n'
+            '      ---\n      outcome: <one sentence: who observes what>\n      proof: <a command that exits 0 only when that is true>\n'
+            '      in: %s\n      ---%s'
+            % ('a binary file or submodule pointer and other' if n >= BIG else n, len(stray), cfg['trivial_lines'],
+               ', '.join(stray[:8]), ', ...' if len(stray) > 8 else '', ODD,
+               ', '.join(sorted({p.split('/')[0] + '/**' if '/' in p else p for p in stray})[:6]),
+               ('\n    untracked: %s. If that is build output, add it to .gitignore instead.' % ', '.join(hint[:4])) if hint else ''))
+    elif stray:
+        lines.append('  small-change lane: %d line(s) outside any outcome (%s); the budget is %d'
+                     % (n, ', '.join(stray[:5]), cfg['trivial_lines']))
+    if s['exempt']:
+        lines.append('  exempt paths: %d file(s), %s line(s)' % (
+            len(s['exempt']), sum(min(changed_lines(root, base, p), 10 ** 5) for p in s['exempt'])))
+    if s['tests']:
+        old = set(zlist(root, 'ls-tree', '-r', '--name-only', '-z', base, '--', *s['tests'])) if base else set()
+        touched = [p for p in s['tests'] if p in old]
+        lines.append('  test files: %d changed%s' % (len(s['tests']), ('; existed before and were modified or deleted: '
+                                                                    + ', '.join(touched[:8])) if touched else ''))
+    if s['control']:
+        lines.append('  CONTROL FILES CHANGED (a person must review; in CI the tool and settings are read from the base): '
+                     + ', '.join(s['control']))
+    head = '%s gate%s: base %s, %d file(s) changed, %d outcome(s) in this change' % (
+        ODD, ' --recompute' if recompute else '', (base or 'none')[:10], len(changed), len(s['inplay']))
+    tail = ' (%d skipped the take-out check: %s)' % (len(skips), '; '.join(skips)) if skips else ''
     if problems:
-        return 1, [head] + lines + ['FAIL'] + ['  ' + p for p in problems]
-    return 0, [head] + lines + ['PASS']
+        return 1, [head] + lines + ['FAIL' + tail] + ['  ' + p for p in problems]
+    return 0, [head] + lines + ['PASS' + tail]
 
 
 # ---------------------------------------------------------------- commands
@@ -640,448 +649,262 @@ def cmd_new(a, root):
     sentence = ' '.join(a.outcome.split())
     if len(sentence.split()) < 4 or re.search(r'<[^>]+>', sentence):
         raise Fail('the outcome is one full sentence: who observes what result')
-    o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(split_globs(a.in_))),
-                ('tests', ', '.join(split_globs(a.tests))), ('real', 'yes' if a.real else 'no'),
-                ('base', (rev(root, 'HEAD') or '')[:12]), ('status', 'open')])
-    if a.after:
-        o.f['after'] = a.after
-    if a.skip_counterfactual:
-        o.f['counterfactual'] = 'skip - ' + a.skip_counterfactual
-    o.notes = '\n'
+    if not a.proof.strip() or not split_globs(a.in_):
+        raise Fail('--proof and --in must not be empty')
+    o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(split_globs(a.in_)))])
     o.save()
-    record(root, a.slug, 'new')
-    print('%s created.\nnext: write the proof and see it fail (odd red %s), make the change inside "%s", then: odd done %s'
-          % (o.rel, a.slug, o.get('in'), a.slug))
-
-
-def cmd_red(a, root):
-    o, cfg = Outcome.load(root, a.slug), load_config(root)
-    rc, tail = run_proof(root, o.get('proof'), cfg['proof_timeout'])
-    record(root, a.slug, 'red', rc=rc)
-    if rc is None:
-        raise CouldNotRun('proof timed out')
-    if rc == 0:
-        raise Fail('the proof already passes before the change, so it cannot show the change worked. Sharpen it.')
-    print('red (exit %d): the proof fails before the change, as it should.\n%s' % (rc, _indent(tail)))
+    print('%s created (paths and the proof are relative to the repository root).\n'
+          'next: write the proof under a test path, make the change inside "%s", then: %s done %s'
+          % (o.rel, o.get('in'), ODD, a.slug))
 
 
 def cmd_done(a, root):
     o, cfg = Outcome.load(root, a.slug), load_config(root)
-    if o.status in ('parked', 'aborted'):
-        o.f['status'] = 'open'
-        o.f.pop('reason', None)
-    base = gate_base(root, cfg)
+    base = find_base(root, cfg)
     changed = changed_files(root, base)
-    inplay = [o] + [x for x in all_outcomes(root) if x.slug != o.slug and x.rel in changed]
-
-    def stay_inside():  # checked before the proof (fail fast) and after it (a proof can write files too)
-        now_changed = changed_files(root, base)
-        strays = [p for p in now_changed if not matches(p, cfg['exempt']) and not any(covers(x, cfg, p) for x in inplay)]
-        n = sum(changed_lines(root, base, p) for p in strays)
-        if n > cfg['trivial_lines']:
-            raise Fail('%d changed line(s) are outside every outcome\'s boundary: %s%s. If they belong to this outcome: '
-                       'odd widen %s <glob> "<reason>". If they are separate work, they need their own outcome.'
-                       % (n, ', '.join(strays[:8]), ', ...' if len(strays) > 8 else '', o.slug) + _untracked_hint(root, strays))
-
     try:
-        stay_inside()
-        res = verify(root, cfg, o, base, changed)
-        stay_inside()
+        res = verify(root, cfg, o, base, changed, print)
     except Fail as e:
-        record(root, a.slug, 'done', ok=False, why=str(e)[:300])
+        record(root, a.slug, ok=False, why=str(e)[:300])
         raise
-    o.f['status'] = 'done'
-    o.save()
-    record(root, a.slug, 'done', ok=True, hash=content_hash(root, cfg, o, changed_files(root, base)),
-           lines=sum(changed_lines(root, base, p) for p in changed if covers(o, cfg, p) and not p.startswith('.odd/')), **res)
-    word = 'PROVEN on the real system' if o.get('real') == 'yes' else 'DONE (the proof is a simulation; not yet proven on the real system)'
-    cf = 'counterfactual skipped: ' + o.skip if o.skip else (
-        'fails with the change taken out (%d file(s)); there it said: %s' % (len(res['out']), res['red_says'] or '(no output)'))
-    print('%s: %s\n  proof passes; %s; %ss' % (a.slug, word, cf, res['seconds']))
-    still = [x.slug for x in inplay[1:] if x.status == 'open']
-    if still:
-        print('  still open in this change: ' + ', '.join(still))
+    if o.parked:
+        del o.f['parked']
+        o.save()
+        changed = changed_files(root, base)
+    record(root, a.slug, ok=True, hash=content_hash(root, cfg, o, changed), **res)
+    print('%s: verified. %s' % (a.slug, _describe(o, res)))
+    code, lines = gate(root)
+    print('\n'.join(['', 'the change as a whole:'] + lines))
 
 
 def cmd_gate(a, root):
-    code, lines = gate(root, a.base, a.recompute)
+    code, lines = gate(root, a.base, a.recompute, print)
     print('\n'.join(lines))
     return code
 
 
-def _exit(a, root, status):
+def cmd_park(a, root):
     if len(a.reason.strip()) < 10:
         raise Fail('give a reason someone else can act on')
     o = Outcome.load(root, a.slug)
-    o.f['status'], o.f['reason'] = status, ' '.join(a.reason.split())
+    o.f['parked'] = ' '.join(a.reason.split())
     o.save()
-    record(root, a.slug, status, reason=o.f['reason'])
-    print('%s: %s. This is a valid result; say so plainly in your report.' % (a.slug, status))
-
-
-def cmd_park(a, root):
-    _exit(a, root, 'parked')
-
-
-def cmd_abort(a, root):
-    _exit(a, root, 'aborted')
-
-
-def cmd_widen(a, root):
-    if len(a.reason.strip()) < 10:
-        raise Fail('give the reason the boundary must grow')
-    o = Outcome.load(root, a.slug)
-    o.f['in'] = ', '.join(split_globs(o.get('in')) + split_globs(a.glob))
-    o.note('- widened: %s (%s) %s' % (a.glob, ' '.join(a.reason.split()), now()[:10]))
-    o.save()
-    record(root, a.slug, 'widen', glob=a.glob, reason=a.reason)
-    print('%s may now change: %s' % (a.slug, o.get('in')))
-
-
-def cmd_status(a, root):
-    cfg = load_config(root)
-    outs = all_outcomes(root)
-    changed = changed_files(root, gate_base(root, cfg)) if outs else []
-    for o in outs:
-        st = o.status
-        if st == 'done':
-            ev = [e for e in evidence(root, o.slug) if e.get('kind') == 'done' and e.get('ok')]
-            if o.rel in changed and (not ev or ev[-1].get('hash') != content_hash(root, cfg, o, changed)):
-                st = 'stale'
-        print('%-8s %-24s %s%s' % (st, o.slug, o.get('outcome')[:80], (' [%s]' % o.get('reason')) if o.get('reason') else ''))
-    if not outs:
-        print('no outcomes yet: odd new <slug> "<outcome>" --proof "<command>" --in "<globs>"')
-
-
-def cmd_escape(a, root):
-    Outcome.load(root, a.slug)
-    record(root, a.slug, 'escape', what=' '.join(a.what.split()))
-    print('recorded. Next: a new outcome whose proof reproduces this defect, so it cannot return unnoticed.')
+    print('%s: parked. This is a valid result; say so plainly in your report. A parked outcome covers no files, so '
+          'its changes must be removed or the gate fails. To resume, delete the "parked:" line.' % a.slug)
 
 
 def cmd_stats(a, root):
-    rows, tot = [], collections.Counter()
-    for o in all_outcomes(root):
+    outs = all_outcomes(root)
+    print('self-reported, from this machine only; not a measurement')
+    print('%-28s %-8s %9s %8s' % ('outcome', 'state', 'attempts', 'passed'))
+    for o in outs:
         ev = evidence(root, o.slug)
-        tries = [e for e in ev if e.get('kind') == 'done']
-        okd = [e for e in tries if e.get('ok')]
-        born = next((e['ts'] for e in ev if e.get('kind') == 'new'), None)
-        mins = None
-        if born and okd:
-            mins = round((datetime.datetime.fromisoformat(okd[0]['ts']) - datetime.datetime.fromisoformat(born)).total_seconds() / 60, 1)
-        esc = sum(1 for e in ev if e.get('kind') == 'escape')
-        tot[o.status] += 1
-        tot['escapes'] += esc
-        tot['skips'] += 1 if o.skip else 0
-        tot['real'] += 1 if o.get('real') == 'yes' and o.status == 'done' else 0
-        tot['rework'] += 1 if len(tries) > 1 and okd else 0
-        rows.append((o.slug, o.status, mins, len(tries), okd[-1].get('lines') if okd else None, esc))
-    print('%-24s %-8s %10s %9s %7s %8s' % ('outcome', 'status', 'minutes', 'attempts', 'lines', 'escapes'))
-    for r in rows:
-        print('%-24s %-8s %10s %9s %7s %8s' % tuple('-' if v is None else v for v in r))
-    done = tot['done']
-    print('\n%d done (%d proven on the real system), %d open, %d parked, %d aborted; %d needed more than one attempt; '
-          '%d skip the counterfactual check; %d escaped defect(s)' % (done, tot['real'], tot['open'], tot['parked'],
-                                                                     tot['aborted'], tot['rework'], tot['skips'], tot['escapes']))
-    if a.json:
-        print(json.dumps({'totals': dict(tot), 'outcomes': rows}))
+        state = 'parked' if o.parked else ('skip' if o.skip else '')
+        print('%-28s %-8s %9d %8d' % (o.slug, state, len(ev), sum(1 for e in ev if e.get('ok'))))
+    print('%d outcome(s): %d parked, %d skip the take-out check, %d record an escaped defect' % (
+        len(outs), sum(1 for o in outs if o.parked), sum(1 for o in outs if o.skip), sum(1 for o in outs if o.get('escaped'))))
 
 
 METHOD = '''## Outcome-driven development (odd)
 
 Work here is done when a proof says so, not when it looks finished. `odd` below means `python3 .odd/odd.py`.
 
-For any change larger than a few lines:
+For any change of more than a few lines:
 
-1. State the outcome before writing code: one sentence saying who observes what, and a command that exits 0 only
-   when that is true. If the request is unclear, ask (at most five questions) instead of guessing.
-   `odd new <slug> "<outcome>" --proof "<command>" --in "<files this may change>"`
-2. Write the proof, usually a test, and see it fail: `odd red <slug>`.
-3. Make the change, staying inside the files the outcome names. If more are needed:
-   `odd widen <slug> <glob> "<why>"`.
-4. Finish with `odd done <slug>`. It passes only when the proof passes now and fails with your change taken out.
-   Do not report the work as done until it exits 0, and report exactly what it printed.
-5. If it cannot be done as specified, say so: `odd abort <slug> "<why>"`. If you are blocked:
-   `odd park <slug> "<why>"`. Both are acceptable results. Weakening or deleting a test to get a pass is not.
+1. State the outcome before writing code: one sentence saying who observes what, a command that exits 0 only when
+   that is true, and the files the change may touch. If the request is unclear, ask (at most five questions)
+   instead of guessing.
+   `odd new <slug> "<outcome>" --proof "<command>" --in "<globs, relative to the repository root>"`
+2. Write the proof as a test in a file of its own under a test path (`tests/`). Make it the narrowest command that
+   shows the outcome, not the whole suite.
+3. Make the change, staying inside the files the outcome names. If more are needed, add them to `in:` in
+   `.odd/outcomes/<slug>.md`. Work that is not part of this outcome is a later outcome.
+4. Finish with `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change
+   taken out, and passes again. Report the work as done only when both exit 0, and report what they printed.
+5. If it cannot be done as specified, or you are blocked, say so: `odd park <slug> "<why>"`. That is an acceptable
+   result. Weakening or deleting a test to get a pass is not.
 
-Small edits (up to {trivial} changed lines) need no outcome. Work one outcome at a time; anything else you notice
-is a note for a later outcome. If a command can answer a question, run the command. Decisions only the owner can
-make (credentials, billing, deploys, releases, deleting data, relaxing a check) go to the owner; decide the rest
-yourself and note why in the outcome file. Do not edit `.odd/evidence/`, `.odd/config.json` or `.odd/odd.py`.
+Small edits (up to {trivial} changed lines) need no outcome. If a command can answer a question, run the command.
+Decisions only the owner can make (credentials, billing, deploys, releases, deleting data, relaxing a check) go to
+the owner; decide the rest yourself and note why in the outcome file. Do not edit `.odd/odd.py` or
+`.odd/config.json`.
 '''
 BEGIN, END = '<!-- odd:begin -->', '<!-- odd:end -->'
+CI_HELP = '''
+To make the gate count, add this as the last step of your existing test job (full history, not a depth-1 checkout):
 
+  git show "origin/$TARGET:.odd/odd.py" > "$TMP/odd.py" 2>/dev/null || cp .odd/odd.py "$TMP/odd.py"
+  python3 "$TMP/odd.py" gate --recompute --base "origin/$TARGET"
 
-def _section(path, body):
-    """Write `body` between the odd markers of a text file, creating the file or replacing an earlier section."""
-    old = ''
-    if os.path.isfile(path):
-        with open(path, encoding='utf-8') as f:
-            old = f.read()
-    block = BEGIN + '\n' + body.rstrip('\n') + '\n' + END
-    if BEGIN in old and END in old:
-        new = old[:old.index(BEGIN)] + block + old[old.index(END) + len(END):]
-    else:
-        new = (old.rstrip('\n') + '\n\n' if old.strip() else '') + block + '\n'
-    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(new)
-
-
-CI_YML = '''name: odd gate
-on: pull_request
-jobs:
-  gate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: {fetch-depth: 0}
-      # Install what your proofs need here (language toolchain, dependencies), as in your test job.
-      - name: Every change is covered by an outcome whose proof passes now and fails with the change taken out
-        run: |
-          # The tool and its settings come from the base branch, so a pull request cannot loosen its own gate.
-          git show "origin/${{ github.base_ref }}:.odd/odd.py" > "$RUNNER_TEMP/odd.py" 2>/dev/null || cp .odd/odd.py "$RUNNER_TEMP/odd.py"
-          python3 "$RUNNER_TEMP/odd.py" gate --recompute --base "origin/${{ github.base_ref }}"
-'''
-HOOK_MARK = '# odd gate'
+CI is the authority only when (1) that step is a required check on the target branch, (2) .odd/odd.py,
+.odd/config.json and the CI configuration cannot change without a person's review, and (3) the agent cannot merge
+or push to the target branch. Otherwise the gate is advice. Without CI, run `%s gate --recompute` before merging.'''
+HOOK = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.odd/odd.py" hook %s 2>/dev/null || true'
 
 
 def cmd_init(a, root):
-    for d in ('outcomes', 'evidence', 'tmp'):
-        os.makedirs(odd_dir(root, d), exist_ok=True)
+    os.makedirs(odd_dir(root, 'outcomes'), exist_ok=True)
     cp = odd_dir(root, 'config.json')
     if not os.path.isfile(cp):
         with open(cp, 'w') as f:
             json.dump(DEFAULTS, f, indent=1)
             f.write('\n')
-    with open(odd_dir(root, '.gitignore'), 'w') as f:
-        f.write('tmp/\n')
-    me = os.path.abspath(__file__)
-    if me != os.path.abspath(odd_dir(root, 'odd.py')):
-        shutil.copyfile(me, odd_dir(root, 'odd.py'))
+    me, mine = os.path.abspath(__file__), os.path.abspath(odd_dir(root, 'odd.py'))
+    if me != mine:
+        shutil.copyfile(me, mine)
     cfg = load_config(root)
-    body = METHOD.replace('{trivial}', str(cfg['trivial_lines']))
-    did = ['.odd/ (settings, the tool itself, outcomes, evidence)']
-    _section(os.path.join(root, 'AGENTS.md'), body)
-    did.append('AGENTS.md (the method; read by most coding agents)')
-    none = not (a.claude or a.cursor or a.copilot)
-    if a.claude or (none and (os.path.isdir(os.path.join(root, '.claude')) or os.path.isfile(os.path.join(root, 'CLAUDE.md')))):
-        p = os.path.join(root, 'CLAUDE.md')
-        text = open(p, encoding='utf-8').read() if os.path.isfile(p) else ''
-        if '@AGENTS.md' not in text:
-            with open(p, 'w', encoding='utf-8') as f:
-                f.write(text.rstrip('\n') + ('\n\n' if text.strip() else '') + '@AGENTS.md\n')
-        sp = os.path.join(root, '.claude', 'settings.json')
+    did = ['.odd/odd.py and .odd/config.json (control files: changes to them need a person\'s review)']
+    agents = os.path.join(root, 'AGENTS.md')
+    old = open(agents, encoding='utf-8').read() if os.path.isfile(agents) else ''
+    block = BEGIN + '\n' + METHOD.replace('{trivial}', str(cfg['trivial_lines'])).rstrip('\n') + '\n' + END
+    if BEGIN in old and END in old:
+        new = old[:old.index(BEGIN)] + block + old[old.index(END) + len(END):]
+    else:
+        new = block + '\n' + ('\n' + old if old.strip() else '')
+    with open(agents, 'w', encoding='utf-8') as f:
+        f.write(new)
+    did.append('AGENTS.md: the method (read by Codex, Cursor, Copilot in VS Code, Claude Code, Junie, Windsurf)')
+    for rel in ('CLAUDE.md', os.path.join('.claude', 'CLAUDE.md')):
+        p = os.path.join(root, rel)
+        if os.path.isfile(p) and os.path.realpath(p) != os.path.realpath(agents):
+            text = open(p, encoding='utf-8').read()
+            if '@AGENTS.md' not in text:
+                with open(p, 'w', encoding='utf-8') as f:
+                    f.write(text.rstrip('\n') + '\n\n@AGENTS.md\n')
+            did.append('%s imports AGENTS.md' % rel)
+    if a.claude_hooks:
+        sp = os.path.join(root, '.claude', 'settings.local.json')
         s = json.load(open(sp)) if os.path.isfile(sp) else {}
         hooks = s.setdefault('hooks', {})
-        run = 'python3 "$CLAUDE_PROJECT_DIR/.odd/odd.py" hook '
-        for event, matcher, arg in (('PreToolUse', 'Write|Edit|MultiEdit|NotebookEdit', 'pre-tool'), ('Stop', None, 'stop'),
-                                    ('SessionStart', None, 'session-start')):
-            entries = [e for e in hooks.get(event, []) if '.odd/odd.py' not in json.dumps(e)]
-            entry = {'hooks': [{'type': 'command', 'command': run + arg, 'timeout': 120}]}
-            if matcher:
-                entry['matcher'] = matcher
-            hooks[event] = entries + [entry]
+        for event, arg in (('Stop', 'stop'), ('SessionStart', 'session-start')):
+            keep = [e for e in hooks.get(event, []) if '.odd/odd.py' not in json.dumps(e)]
+            hooks[event] = keep + [{'hooks': [{'type': 'command', 'command': HOOK % arg, 'timeout': 60}]}]
         os.makedirs(os.path.dirname(sp), exist_ok=True)
         with open(sp, 'w') as f:
             json.dump(s, f, indent=2)
             f.write('\n')
-        did.append('CLAUDE.md imports AGENTS.md; .claude/settings.json hooks (boundary guard, turn-end check, session status)')
-    if a.cursor or (none and os.path.isdir(os.path.join(root, '.cursor'))):
-        p = os.path.join(root, '.cursor', 'rules', 'odd.mdc')
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, 'w', encoding='utf-8') as f:
-            f.write('---\ndescription: Outcome-driven development: work is done when its proof says so\nalwaysApply: true\n---\n\n' + body)
-        did.append('.cursor/rules/odd.mdc')
-    if a.copilot or (none and os.path.isfile(os.path.join(root, '.github', 'copilot-instructions.md'))):
-        _section(os.path.join(root, '.github', 'copilot-instructions.md'), body)
-        did.append('.github/copilot-instructions.md')
-    if a.ci:
-        p = os.path.join(root, '.github', 'workflows', 'odd.yml')
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        if not os.path.isfile(p):
-            with open(p, 'w') as f:
-                f.write(CI_YML)
-        did.append('.github/workflows/odd.yml (add the steps that install what your proofs need)')
-    if a.hook:
-        hp = os.path.join(root, git(root, 'rev-parse', '--git-path', 'hooks').strip(), a.hook)
-        old = open(hp).read() if os.path.isfile(hp) else '#!/bin/sh\n'
-        if HOOK_MARK not in old:
-            line = 'python3 "$(git rev-parse --show-toplevel)/.odd/odd.py" gate%s || exit 1  %s\n' % (
-                ' --recompute' if a.hook == 'pre-push' else '', HOOK_MARK)
-            os.makedirs(os.path.dirname(hp), exist_ok=True)
-            with open(hp, 'w') as f:
-                f.write(old.rstrip('\n') + '\n' + line)
-            os.chmod(hp, 0o755)
-        did.append('git %s hook' % a.hook)
-    print('odd %s set up:\n  ' % VERSION + '\n  '.join(did))
-    if not a.ci and not a.hook:
-        print('enforcement of record is not installed yet: add --ci (pull requests) or --hook pre-push (this machine).')
-    print('start: odd new <slug> "<outcome>" --proof "<command>" --in "<globs>"')
-
-
-def cmd_doctor(a, root):
-    cfg, bad, good = load_config(root), [], []
-    msg = recover(root, cfg['proof_timeout'])
-    if msg:
-        bad.append(msg)
-    if not os.path.isfile(odd_dir(root, 'config.json')):
-        bad.append('.odd/ is not set up: run odd init')
-    v = odd_dir(root, 'odd.py')
-    if os.path.isfile(v):
-        same = open(v, 'rb').read() == open(os.path.abspath(__file__), 'rb').read()
-        (good if same else bad).append('vendored .odd/odd.py %s the tool you are running' % ('matches' if same else 'differs from'))
-    hooks_dir = os.path.join(root, git(root, 'rev-parse', '--git-path', 'hooks').strip())
-    hooked = [h for h in ('pre-push', 'pre-commit') if os.path.isfile(os.path.join(hooks_dir, h))
-              and HOOK_MARK in open(os.path.join(hooks_dir, h)).read()]
-    ci = os.path.isfile(os.path.join(root, '.github', 'workflows', 'odd.yml'))
-    if hooked or ci:
-        good.append('enforcement of record: %s' % ', '.join(['git ' + h for h in hooked] + (['CI workflow'] if ci else [])))
-    else:
-        bad.append('no enforcement of record: nothing recomputes the gate (odd init --ci, or --hook pre-push)')
-    sp = os.path.join(root, '.claude', 'settings.json')
-    if os.path.isfile(sp) and '.odd/odd.py' in open(sp).read():
-        good.append('Claude Code hooks installed (early feedback)')
+        ex = os.path.join(root, git(root, 'rev-parse', '--git-path', 'info/exclude').strip())
+        have = open(ex).read() if os.path.isfile(ex) else ''
+        if '.claude/settings.local.json' not in have:
+            os.makedirs(os.path.dirname(ex), exist_ok=True)
+            with open(ex, 'a') as f:
+                f.write(('' if have.endswith('\n') or not have else '\n') + '.claude/settings.local.json\n')
+        did.append('.claude/settings.local.json: two Claude Code hooks for this machine only (not committed)')
     log = state_dir(root, 'hook-errors.log')
     if os.path.isfile(log) and os.path.getsize(log):
-        bad.append('editor hooks have failed open %d time(s): see .odd/tmp/hook-errors.log' % sum(1 for _ in open(log)))
-    for line in good:
-        print('ok   ' + line)
-    for line in bad:
-        print('WARN ' + line)
-    return 1 if bad else 0
+        did.append('WARNING: the editor hooks failed %d time(s): see %s' % (sum(1 for _ in open(log)), log))
+    print('odd %s is set up:\n  ' % VERSION + '\n  '.join(did))
+    print(CI_HELP % ODD)
+    print('\nstart: %s new <slug> "<outcome>" --proof "<command>" --in "<globs>"' % ODD)
 
 
-# ---------------------------------------------------------------- editor hooks (optional early feedback)
+# ---------------------------------------------------------------- opt-in Claude Code hooks (internal)
 
 def _fingerprint(root):
-    h = hashlib.sha256(git(root, 'status', '--porcelain').encode())
+    h = hashlib.sha256(git(root, 'status', '--porcelain', '-z').encode())
     h.update(sh(['git', 'diff', 'HEAD'], root).stdout.encode())
     return h.hexdigest()
 
 
 def cmd_hook(a, root):
-    """Claude Code hook events on stdin. Any error fails open and is logged for `odd doctor`."""
     try:
         ev = json.load(sys.stdin)
     except ValueError:
         ev = {}
-    cfg = load_config(root)
-    fp_path = state_dir(root, 'turn-%s.fp' % re.sub(r'[^A-Za-z0-9_-]', '', str(ev.get('session_id', 'x')))[:64])
+    sid = re.sub(r'[^A-Za-z0-9_-]', '', str(ev.get('session_id') or ev.get('conversation_id') or 'x'))[:64]
     os.makedirs(state_dir(root), exist_ok=True)
-    msg = recover(root, cfg['proof_timeout'])
-    if msg:  # say it once, at the next thing the agent does, instead of letting it rediscover the tree by itself
-        if a.event == 'pre-tool':
-            print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny',
-                                                     'permissionDecisionReason': 'odd: ' + msg + '. Check the working tree, then retry.'}}))
-        elif a.event == 'stop':
-            print(json.dumps({'decision': 'block', 'reason': 'odd: ' + msg + '. Check the working tree before ending the turn.'}))
-        else:
-            print('odd: ' + msg)
-        return 0
+    fp_path = state_dir(root, 'turn-%s.fp' % sid)
+    msg = recover(root, load_config(root)['proof_timeout'])
     if a.event == 'session-start':
-        with open(fp_path, 'w') as f:
-            f.write(_fingerprint(root))
-        outs = collections.Counter(o.status for o in all_outcomes(root))
-        if outs:
-            print('odd: %s. `python3 .odd/odd.py status` for detail.' % ', '.join('%d %s' % (n, s) for s, n in sorted(outs.items())))
-        return 0
-    if a.event == 'pre-tool':
-        target = (ev.get('tool_input') or {}).get('file_path') or (ev.get('tool_input') or {}).get('notebook_path') or ''
-        if not target:
-            return 0
-        full = os.path.realpath(target if os.path.isabs(target) else os.path.join(ev.get('cwd') or root, target))
-        relp = os.path.relpath(full, os.path.realpath(root)).replace(os.sep, '/')
-        why = None
-        if relp in CONTROL or relp.startswith('.odd/evidence/'):
-            why = '%s is written only by the odd tool (settings changes are for a person to make and review).' % relp
-        elif cfg.get('guard') == 'boundary' and not relp.startswith('..') and not matches(relp, cfg['exempt']):
-            open_ = [o for o in all_outcomes(root) if o.status == 'open']
-            if open_ and not any(covers(o, cfg, relp) for o in open_):
-                why = ('%s is outside the open outcome%s (%s). Stay inside the boundary, or record why it must grow: '
-                       'python3 .odd/odd.py widen %s "%s" "<reason>". Unrelated work is a later outcome.'
-                       % (relp, 's' if len(open_) > 1 else '', '; '.join('%s: %s' % (o.slug, o.get('in')) for o in open_),
-                          open_[0].slug, relp))
-        if why:
-            print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny',
-                                                     'permissionDecisionReason': 'odd: ' + why}}))
-        return 0
-    if a.event == 'stop':
-        if ev.get('stop_hook_active') or not cfg.get('stop_gate'):
-            return 0
-        fp = _fingerprint(root)
-        before = open(fp_path).read() if os.path.isfile(fp_path) else None
-        with open(fp_path, 'w') as f:
-            f.write(fp)
-        if before == fp:
-            return 0  # this turn changed no files: a question or a discussion is never blocked
-        code, lines = gate(root, mode='stop')
-        if code == 1:
-            print(json.dumps({'decision': 'block', 'reason': 'odd: this turn changed files and the work is not proven yet.\n'
-                              + '\n'.join(lines[-6:]) + '\nFinish with `python3 .odd/odd.py done <slug>`, or end honestly '
-                              'with `odd park <slug> "<why>"` or `odd abort <slug> "<why>"`.'}))
-        return 0
-    return 0
+        if ev.get('source') != 'compact':
+            with open(fp_path, 'w') as f:
+                f.write(_fingerprint(root))
+        try:
+            inplay = survey(root)['inplay']
+        except CouldNotRun:
+            inplay = []  # no target branch to measure from: nothing to say
+        if msg or inplay:
+            print('odd: ' + (msg + '. ' if msg else '') + '; '.join(
+                '%s %s' % (o.slug, 'parked' if o.parked else 'in this change') for o in inplay))
+        return
+    if ev.get('stop_hook_active') or (ev.get('loop_count') or 0) >= 1:
+        return
+    if msg:
+        print(json.dumps({'decision': 'block', 'reason': 'odd: ' + msg + '. Check the working tree before ending the turn.'}))
+        return
+    fp = _fingerprint(root)
+    before = open(fp_path).read() if os.path.isfile(fp_path) else None
+    with open(fp_path, 'w') as f:
+        f.write(fp)
+    if before == fp:
+        return  # this turn changed no files: a question or a discussion is never blocked
+    try:
+        s = survey(root)
+    except CouldNotRun:
+        return
+    cfg, base, changed = s['cfg'], s['base'], s['changed']
+    stale = [o.slug for o in s['active'] if last_ok(root, o.slug)
+             and last_ok(root, o.slug).get('hash') != content_hash(root, cfg, o, changed)]
+    stray = [p for p in s['product'] if not any(matches(p, o.ins) for o in s['active'])]
+    n = sum(changed_lines(root, base, p) for p in stray)
+    run = 'python3 .odd/odd.py'
+    if stale:
+        print(json.dumps({'decision': 'block', 'reason': 'odd: %s was verified and its files have changed since. Run `%s '
+                          'done %s` again, or park it with a reason.' % (', '.join(stale), run, stale[0])}))
+    elif not s['active'] and n > cfg['trivial_lines']:
+        print(json.dumps({'decision': 'block', 'reason': 'odd: this turn left %d changed line(s) with no outcome. State '
+                          'the outcome (`%s new <slug> "<outcome>" --proof "<command>" --in "<globs>"`) and verify it '
+                          '(`%s done <slug>`), or say why it cannot be done (`%s park <slug> "<why>"`).' % (n, run, run, run)}))
+    else:
+        open_ = [o.slug for o in s['active'] if not last_ok(root, o.slug)]
+        if open_:
+            print(json.dumps({'systemMessage': 'odd: not verified yet: ' + ', '.join(open_)}))
 
 
 def main(argv=None):
+    global ODD
     p = argparse.ArgumentParser(prog='odd', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--version', action='version', version='odd ' + VERSION)
     sub = p.add_subparsers(dest='cmd', required=True)
-    s = sub.add_parser('init')
-    for flag in ('claude', 'cursor', 'copilot', 'ci'):
-        s.add_argument('--' + flag, action='store_true')
-    s.add_argument('--hook', choices=['pre-push', 'pre-commit'])
+    sub.add_parser('init').add_argument('--claude-hooks', action='store_true')
     s = sub.add_parser('new')
     s.add_argument('slug')
     s.add_argument('outcome')
     s.add_argument('--proof', required=True)
     s.add_argument('--in', dest='in_', required=True)
-    s.add_argument('--tests', default='')
-    s.add_argument('--after')
-    s.add_argument('--real', action='store_true')
-    s.add_argument('--skip-counterfactual', metavar='REASON')
-    for name in ('red', 'done'):
-        sub.add_parser(name).add_argument('slug')
+    sub.add_parser('done').add_argument('slug')
     s = sub.add_parser('gate')
     s.add_argument('--base')
     s.add_argument('--recompute', action='store_true')
-    for name in ('park', 'abort'):
-        s = sub.add_parser(name)
-        s.add_argument('slug')
-        s.add_argument('reason')
-    s = sub.add_parser('widen')
+    s = sub.add_parser('park')
     s.add_argument('slug')
-    s.add_argument('glob')
     s.add_argument('reason')
-    sub.add_parser('status')
-    sub.add_parser('stats').add_argument('--json', action='store_true')
-    sub.add_parser('doctor')
-    s = sub.add_parser('escape')
-    s.add_argument('slug')
-    s.add_argument('what')
-    sub.add_parser('hook').add_argument('event', choices=['pre-tool', 'stop', 'session-start'])
+    sub.add_parser('stats')
+    sub.add_parser('hook').add_argument('event', choices=['stop', 'session-start'])
     a = p.parse_args(argv)
-    if a.cmd == 'hook':  # an editor hook must never strand a session: any error passes, and doctor reports it
+    if os.path.basename(sys.argv[0]) == 'odd.py':
+        rel = os.path.relpath(os.path.abspath(sys.argv[0]))
+        ODD = 'python3 ' + (rel if not rel.startswith('..') else sys.argv[0])
+    if a.cmd == 'hook':  # a hook must never strand a session: any error passes, and `odd init` reports it
         root = None
         try:
             root = find_root()
-            return cmd_hook(a, root) or 0
+            cmd_hook(a, root)
         except Exception as e:
             try:
                 os.makedirs(state_dir(root), exist_ok=True)
                 with open(state_dir(root, 'hook-errors.log'), 'a') as f:
                     f.write('%s %s %r\n' % (now(), a.event, e))
-            except Exception:  # nowhere to log (not a repository): still pass
+            except Exception:
                 pass
-            return 0
+        return 0
     for name in ('SIGTERM', 'SIGHUP'):  # so an interrupted check still puts the change back before exiting
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), lambda *_: sys.exit(143))
     try:
         root = find_root()
         msg = recover(root, load_config(root)['proof_timeout'])
-        if msg and a.cmd != 'doctor':
+        if msg:
             raise CouldNotRun(msg + '. Look at your working tree, then run the command again.')
         return globals()['cmd_' + a.cmd](a, root) or 0
     except Fail as e:

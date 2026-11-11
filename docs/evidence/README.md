@@ -15,6 +15,7 @@ documents behind it.
 | 07 | [Validation, comparison and verdict](07-validation-and-verdict.md) | Is the toolkit worth building, how does it compare with Spec Kit, BMAD, Superpowers and Claude Code alone, and what is the lean design? | A 31-agent run: validators, a skeptic per area, a comparison, three independent critics, one decision. |
 | 08 | [The refined method](08-refined-method.md) | What is left when only the supported rules are kept? | Composed from the surviving rules, each principle traced to its rulings. |
 | 09 | [The rulings](09-rulings.md) | What happened to each of the 1,856 instructions? | 224 rule clusters with verdict, evidence grade and durability; drops and overturned rulings explained. |
+| 10 | [Design review](10-design-review.md) | What was wrong with the first design of the lean tool, and what changed? | Four critics (tamper, correctness, friction, portability) and one ruling: 23 required changes. |
 
 ## Data and tools
 
@@ -24,10 +25,11 @@ documents behind it.
   `DL-`, `SA-`), the instruction, its recorded outcome, the owner's words where recorded, its enforcement point and
   its sources.
 - `data/research/*.json`: the research and audit results as returned, before rendering.
+- `data/design-review.json`: the four critiques and the ruling on the tool's design, as returned.
 - `data/validation/*.json`: every ruling with the instruction ids it covers, the method, the comparison, the three
   critiques and the decision, as returned.
 - `tools/measure_method.py`: the measurement. `tools/group_catalog.py`: groups the raw catalog and merges exact
-  duplicates. `tools/render_evidence.py`: renders documents 02 to 09 from the data.
+  duplicates. `tools/render_evidence.py`: renders documents 02 to 10 from the data.
 
 ## How to read it
 

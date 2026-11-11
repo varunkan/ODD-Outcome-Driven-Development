@@ -121,11 +121,12 @@ The same evidence is plain about where the method, as practised, cost more than 
 
 ## What follows
 
-The lean design the decision calls for is in [07](docs/evidence/07-validation-and-verdict.md): one outcome block
-(outcome, proof command, boundary), the proof seen red, then green, then red again when the change is broken, recorded
-on a content hash in a ledger only the tool writes; one gate; an honest park or cannot-be-done exit. Everything else is
-opt-in and carries an off-switch. The first draft was removed; the tool in this repository is the lean version
-([DESIGN.md](DESIGN.md)).
+The tool in this repository is the lean version the decision called for, after a design review cut it further
+([DESIGN.md](DESIGN.md), [the review](docs/evidence/10-design-review.md)): a three-line outcome file (outcome, proof
+command, boundary); a check that the proof passes, fails with the change taken out, and passes again; one gate that
+CI recomputes from the repository; and one honest exit for work that is blocked or cannot be done as specified.
+Research, review and unattended running are left to the agent and its harness.
 
-The toolkit measures itself: tokens read, tool calls, wall clock, rework and escaped defects per outcome, and the same
-tasks run with each component switched off. A component stays only while switching it off makes results worse.
+Published results will come only from the comparison harness in [`bench/`](bench/SPEC.md): the same tasks, with
+hidden acceptance tests, run through plain Claude Code, this tool, Spec Kit, BMAD and Superpowers. Until it has run,
+nothing here is a measured advantage.

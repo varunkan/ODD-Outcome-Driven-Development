@@ -5,7 +5,7 @@ usage: render_evidence.py            (run from anywhere; paths resolve from this
 Reads  ../data/research/*.json, ../data/catalog/*.json, ../data/validation/*.json
 Writes ../02-pos-evidence-ledger.md, ../03-instruction-catalog.md, ../04-spec-kit-bmad-superpowers.md,
        ../05-practice-and-model-trends.md, ../06-first-draft-audit.md, ../07-validation-and-verdict.md,
-       ../08-refined-method.md, ../09-rulings.md
+       ../08-refined-method.md, ../09-rulings.md, ../10-design-review.md
 (01-method-measured.md is written by hand from tools/measure_method.py output; README.md and ../../WHY.md by hand.)
 """
 import collections
@@ -213,3 +213,29 @@ for a in areas:
         t += ['', '### First-pass rulings the skeptic overturned', '', bullets(a['overturned'])]
     t.append('')
 write('09-rulings.md', '\n'.join(t))
+
+
+# 10 - the design review of the lean, portable tool
+dr = load('design-review.json')
+r = dr['ruling']
+t = ['# Design review of the lean, portable tool', '',
+     '*Produced 2026-11-11 by four independent critics (Claude Fable 5.2) attacking the first design and the first '
+     'version of the tool: tamper resistance, the correctness of the take-out check, day-to-day friction, and how each '
+     'coding tool actually reads instruction files (checked against the tools\' own documentation). One judge then '
+     'ruled which changes were required. Rendered from `data/design-review.json`. Several critics ran probes; those '
+     'findings say "measured". DESIGN.md version 2 and the current tool implement the ruling.*', '',
+     '## Ruling: %s' % r['verdict'], '', '### Required changes (%d)' % len(r['required_changes']), '']
+for n, c in enumerate(r['required_changes'], 1):
+    t += ['%d. %s' % (n, c['change'].strip()), '', '   Why: ' + c['why'].strip() + ((' (from: %s)' % c['from']) if c.get('from') else ''), '']
+t += ['### The command list', '', bullets(r['final_command_list']), '', '### What ships for each tool in this version', '',
+      bullets(r['adapter_set_v1']), '', '### Limits to state plainly instead of engineering around', '', bullets(r['stated_limits']), '',
+      '### Suggestions not adopted, and why', '', bullets(r['rejected_suggestions']), '', '## The four critiques', '']
+for c in dr['critics']:
+    t += ['### %s (%d findings)' % (c['lens'].capitalize(), len(c['findings'])), '']
+    for f in c['findings']:
+        t += ['- **[%s] %s.** %s *Fix:* %s' % (f['severity'], f['section'].strip().rstrip('.'), f['scenario'].strip().replace('\n', ' '),
+                                              f['fix'].strip().replace('\n', ' '))]
+    t += ['', '**Keep:** ' + ' '.join('(%d) %s' % (i, k) for i, k in enumerate(c['keep'], 1)), '']
+    if c.get('verified_facts'):
+        t += ['**Facts checked, with sources:**', '', bullets(c['verified_facts']), '']
+write('10-design-review.md', '\n'.join(t))
