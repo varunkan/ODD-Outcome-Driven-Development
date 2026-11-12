@@ -257,13 +257,21 @@ def outcome_field(path, key):
 
 
 def stated_outcomes():
-    """The outcome files this session added (not on main), in name order."""
+    """The outcome files this session added (not on main): first in the build order of the chain files it wrote
+    (.odd/chains/*.md, one slug per line, as odd chain reads them), then any others in name order."""
     folder = os.path.join('.odd', 'outcomes')
     on_main = subprocess.run(['git', 'ls-tree', '-r', '--name-only', 'main', '--', folder], stdout=subprocess.PIPE,
                              encoding='utf-8').stdout.split()
     here = sorted(os.path.join(folder, n) for n in os.listdir(folder) if n.endswith('.md')) \
         if os.path.isdir(folder) else []
-    return [p for p in here if p not in on_main]
+    new = [p for p in here if p not in on_main]
+    chains = os.path.join('.odd', 'chains')
+    order = []
+    for n in sorted(os.listdir(chains)) if os.path.isdir(chains) else []:
+        with open(os.path.join(chains, n), encoding='utf-8', errors='replace') as f:
+            order += [re.sub(r'^[-*]\s+', '', x.strip()) for x in f if x.strip() and not x.strip().startswith('#')]
+    first = [os.path.join(folder, x + '.md') for x in dict.fromkeys(order)]
+    return [p for p in first if p in new] + [p for p in new if p not in first]
 
 
 def commit(message):

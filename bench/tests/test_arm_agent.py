@@ -293,5 +293,24 @@ class ArmFilesTest(unittest.TestCase):
                 '  m.py is inside the boundary of one and two: within one change a file belongs to one outcome.\n')
         self.assertTrue(module('arm_agent').why(gate).startswith('m.py is inside the boundary of one and two'))
 
+    def test_stated_outcomes_follow_the_build_order_of_a_chain_file_the_session_wrote(self):
+        helper, repo = module('arm_agent'), tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, repo, True)
+        git = lambda *a: subprocess.run(['git', '-C', repo] + list(a), check=True, capture_output=True)  # noqa: E731
+        git('init', '-q', '-b', 'main')
+        write(os.path.join(repo, 'README.md'), 'x\n')
+        git('add', '-A')
+        git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'init')
+        for slug in ('a', 'b', 'c'):
+            write(os.path.join(repo, '.odd', 'outcomes', slug + '.md'), '---\n')
+        here = os.getcwd()
+        os.chdir(repo)
+        try:
+            self.assertEqual([os.path.basename(p) for p in helper.stated_outcomes()], ['a.md', 'b.md', 'c.md'])
+            write(os.path.join(repo, '.odd', 'chains', 'T-1.md'), '# build order\nc\n- a\n')
+            self.assertEqual([os.path.basename(p) for p in helper.stated_outcomes()], ['c.md', 'a.md', 'b.md'])
+        finally:
+            os.chdir(here)
+
 if __name__ == '__main__':
     unittest.main()
