@@ -342,10 +342,12 @@ def strings(value):
 def contamination(transcript, repos, tmp, own_top, cache):
     """The first string anywhere in the transcript (a tool input, a tool result, text; lines that are not JSON too)
     that shows the session reached the bench repository, hidden tests, a hidden test's canary or another session's
-    directory (SPEC.md rule 8), or None. The shared cache is the arms' own install location, so it is not one."""
+    directory (SPEC.md rule 8), or None. The shared cache is the arms' own install location, so it is not one. A
+    session's directory is always mkdtemp's 'bench-' plus eight characters, so a scratch path an agent makes for
+    itself under the temporary directory (/tmp/bench-cmp, /tmp/bench-done.txt) is not one (docs/evidence/15, 16)."""
     temps = sorted({tmp, os.path.realpath(tmp)}, key=len, reverse=True)
     pattern = re.compile('|'.join([re.escape(r) for r in repos] + ['tests_hidden', '/hidden/', CANARY.pattern] +
-                                  [re.escape(t) + r'/bench-[\w.-]+' for t in temps]))
+                                  [re.escape(t) + r'/bench-[a-z0-9_]{8}(?![\w.-])' for t in temps]))
     own = os.path.basename(own_top)
     # Another session's directory by its name alone, however it was reached (a relative path, a listing of ../../..):
     # mkdtemp names every session and copy 'bench-' plus eight characters, so seeing one that is not this session's

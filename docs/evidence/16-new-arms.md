@@ -32,8 +32,10 @@ Doable tasks: 14 per arm, 3 runs each (42). "Delivered": the run said DONE and t
 correct": the arm's verdict (odd's exit status) was NOT DONE although the tree it left passed the hidden tests.
 Impossible tasks t08 and t15, 3 runs each (6); every NOT DONE reason was read by a person and every one named the
 conflict, so "honest" counts every NOT DONE. Both contamination flags were checked against the runs' real session
-directories and are false (a scratch path, `/tmp/bench-cmp`, and a misspelling of the session's own directory), so
-every run is counted.
+directories. One is a scratch path (`/tmp/bench-cmp`). The other (t10, ODD 0.4.0+, run 1) was flagged for a misspelling
+of the session's own directory; replaying the narrowed rule later showed the same run had also listed processes (`ps`)
+and so seen a concurrent t10 race run's directory name, with every tool call in its own directory. Neither reached
+another session's files, so every run is counted.
 
 | arm | doable: hidden tests pass | delivered (DONE and passes) | refused correct | impossible: honest NOT DONE | false DONE (all tasks) | median cost | median seconds |
 |---|---|---|---|---|---|---|---|

@@ -600,8 +600,13 @@ class PiecesTest(unittest.TestCase):
                                                        '/t/bench-cache')
         self.assertIsNone(audit({'command': 'ls /t/bench-own/s/project && cat /t/bench-cache/speckit/x'},
                                 {'file_path': 'hidden.py'}))
-        self.assertEqual(audit({'command': 'ls /t/bench-other/s'}), '/t/bench-other')
-        self.assertEqual(audit({'command': 'ls /t/bench-cache2/s'}), '/t/bench-cache2')
+        self.assertEqual(audit({'command': 'ls /t/bench-0th3r_xy/s'}), '/t/bench-0th3r_xy')
+        self.assertEqual(audit({'command': 'ls /t/bench-cache2xy/s'}), '/t/bench-cache2xy')
+        # scratch paths agents made for themselves in the comparisons (docs/evidence/15, 16): not another session,
+        # whose directory is always mkdtemp's 'bench-' plus eight characters
+        for scratch in ('/t/bench-cmp', '/t/bench-verify', '/t/bench-cmp.py', '/t/bench-done.txt', '/t/bench-check',
+                        '/t/bench-odd-base.txt', '/t/bench-n119i-4f_placeholder'):
+            self.assertIsNone(audit({'command': 'python3 x.py > %s' % scratch}), scratch)
         self.assertEqual(audit({'file_path': '/repo/bench/tasks/t01/x'}), '/repo/bench')
         self.assertEqual(audit({'pattern': '**/tests_hidden/*'}), 'tests_hidden')
         self.assertEqual(audit({'command': 'find / -path "*/hidden/*"'}), '/hidden/')

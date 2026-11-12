@@ -556,6 +556,14 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   Sonnet's delivery at a third of its cost; neither beat plain Haiku, which delivered all 42 at the lowest cost with
   two false DONE.
 
+### 21b. A contamination rule that flags only other sessions
+- **Done** in the commit "bench: the contamination rule flags only other sessions' directories" (`git log --grep
+  'contamination rule flags only'`): the temporary-directory pattern matched any `/tmp/bench-*` path, so every
+  comparison flagged scratch files agents made for themselves (16 runs in [15](docs/evidence/15-comparison.md), 4 in
+  [16](docs/evidence/16-new-arms.md)), each cleared by hand. It now matches only mkdtemp's `bench-` plus eight
+  characters, the form of every session directory. Replayed on the 7 flagged runs of 16: the 4 scratch flags clear,
+  the 3 real peer sightings (process listings of a concurrent run) stay flagged.
+
 ### 22. Other models and agents
 - **Outcome:** the comparison is run with at least one agent that is not Claude Code and one model that is not
   Claude (for example Codex CLI, Gemini CLI or aider with an open model), as a plain arm and as a race or cascade
