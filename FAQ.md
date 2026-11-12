@@ -235,6 +235,15 @@ prints it, and `"off"` turns the check off. Outcomes without `covers:` behave as
 list is the whole ticket or whether a proof tests the requirement it claims to cover; a reviewer reads both. Whether
 this lowers missed requirements is not measured yet.
 
+**What stops a later change from breaking something proven earlier?**
+The regression guard (a tool newer than 0.4.0). Every merged outcome file stays in the repository, and `odd gate`,
+local and `--recompute`, runs the proof of each earlier outcome whose `in:` holds a file the change touches; when one
+fails, the gate fails with `<slug> (proven in <commit>) now fails: <last line>`. Only the earlier proof's green run is
+repeated, one run per guard, so a change touching many proven files costs that many proof runs; `"guard": "report"`
+prints instead of failing and `"off"` turns it off. Parked, asked and skipped outcomes are not guards. It sees a break
+only through files inside the earlier `in:`, and deleting an earlier outcome file removes its guard (the deletion is
+in the diff). Whether it lowers regressions is not measured yet.
+
 **For a bug fix, how do I know the test reproduces the bug and does not just pass?**
 Create the outcome with `odd new ... --kind bug` (a tool newer than 0.4.0). `odd seal` and `odd done` then run the
 proof on the unfixed code, the outcome's changed files put back to the base, require it to fail there, and print

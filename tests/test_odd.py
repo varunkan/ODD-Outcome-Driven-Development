@@ -2821,5 +2821,82 @@ class AttemptFeedback(Agents):
         self.no_worktrees_left()
 
 
+class RegressionGuard(Repo):
+    """Backlog item 9: the proofs of earlier, merged outcomes whose boundary holds a file this change touches run
+    again at the gate (green only); one that now fails fails the gate and is named."""
+
+    def merged(self, config=None):
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add')
+        self.commit('add')
+        self.git('checkout', '-q', 'main')
+        self.git('merge', '-q', 'feat')
+        if config:
+            self.write('.odd/config.json', json.dumps(config))
+            self.commit('settings')
+        self.git('checkout', '-q', '-b', 'later')
+        return self.git('log', '-1', '--format=%h', 'main', '--', '.odd/outcomes/add.md').strip()
+
+    def test_a_later_change_breaking_an_earlier_proof_fails_the_gate_and_names_it(self):
+        sha = self.merged()
+        self.write('calc.py', 'def add(a, b):\n    return a - b\n')  # one line: the small-change lane passes it
+        out = self.no('gate')
+        self.assertRegex(out, r'add \(proven in %s\) now fails: \S' % sha)
+        self.commit('break')
+        js = self.path('.git/s.json')
+        out = self.no('gate', '--recompute', '--json', js)
+        self.assertRegex(out, r'add \(proven in %s\) now fails: ' % sha)
+        g = json.loads(self.read('.git/s.json'))['guards']
+        self.assertEqual([(x['slug'], x['commit'], x['state']) for x in g], [('add', sha, 'fail')])
+
+    def test_a_change_touching_other_files_runs_no_guard(self):
+        self.merged()
+        self.write('other.py', 'X = 1\n')
+        js = self.path('.git/s.json')
+        out = self.ok('gate', '--json', js)
+        self.assertNotIn('guard', out)
+        self.assertEqual(json.loads(self.read('.git/s.json')).get('guards', []), [])
+
+    def test_off_disables_and_report_reports_without_failing(self):
+        self.merged({'guard': 'off'})
+        self.write('calc.py', 'def add(a, b):\n    return a - b\n')
+        out = self.ok('gate')
+        self.assertNotIn('now fails', out)
+        self.commit('break')
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/config.json', json.dumps({'guard': 'report'}))
+        self.commit('report')
+        self.git('checkout', '-q', 'later')
+        self.git('merge', '-q', 'main')
+        out = self.ok('gate')
+        self.assertIn('add (proven in', out)
+        self.assertIn('now fails', out)
+        self.write('.odd/config.json', json.dumps({'guard': 'sometimes'}))
+        self.no('gate', code=2)
+
+    def test_the_summary_lists_the_guards_run(self):
+        sha = self.merged()
+        self.write('calc.py', FIXED + '\n\ndef mul(a, b):\n    return a * b\n')
+        md = self.path('.git/s.md')
+        out = self.ok('gate', '--summary', md)
+        self.assertIn('add (proven in %s)' % sha, out)
+        text = self.read('.git/s.md')
+        self.assertIn('**Guards**', text)
+        self.assertRegex(text, r'- \*\*add\*\* \(proven in `%s`\): passes' % sha)
+
+    def test_parked_asked_and_skipped_earlier_outcomes_are_not_guards(self):
+        self.git('checkout', '-q', 'main')
+        for slug, extra in (('p1', 'parked: blocked on a decision'), ('a1', 'asked: which rounding?'),
+                            ('s1', 'counterfactual: skip - a refactor')):
+            self.write('.odd/outcomes/%s.md' % slug, '---\noutcome: %s holds.\nproof: exit 1\nin: calc.py\n%s\n---\n'
+                       % (slug, extra))
+        self.commit('earlier')
+        self.git('checkout', '-q', '-b', 'later')
+        self.write('calc.py', FIXED)
+        out = self.ok('gate')
+        self.assertNotIn('guard', out)
+
+
 if __name__ == '__main__':
     unittest.main()

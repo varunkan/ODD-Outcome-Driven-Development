@@ -459,6 +459,33 @@ in the change is printed but not refused (review reads the list). Requirements f
 default `**/*.md` exemption; a custom `"exempt"` list without it makes them product files. Not measured: requirements
 missed per task with and without the check (BACKLOG item 4).
 
+### 5b. Regression guard: earlier proofs run again
+
+A merged outcome keeps its outcome file, and so its proof, in the repository. `odd gate` (local and `--recompute`)
+then also runs the proof of every **earlier outcome** whose boundary (`in:`) holds a file this change touches (a
+product or test file). An earlier outcome is one whose file is tracked at the base (the commit it last changed in at
+the base is its "proven in" commit) and is not in play in this change; parked, asked and skipped (`counterfactual:
+skip`) ones are not guards. Each guard's proof runs once on the tree as it is: green only, no take-out run, no
+strength check, so the cost is one proof run per guard. The gate prints `guard   <slug> (proven in <commit>): still
+passes, <s>s` per guard, `--json` has a `guards` list and the `--summary` a **Guards** list. `odd done` prints the
+gate for the whole change afterwards, so it runs the guards too (its own exit code is unchanged). The setting
+`"guard"` decides what a failing guard does:
+
+- `"enforce"` (the default): it fails the gate with `<slug> (proven in <commit>) now fails: <last line of its output>`
+  and the proof command. A guard that times out fails the same way.
+- `"report"`: the same line is printed, the gate does not fail on it.
+- `"off"`: no earlier proof runs.
+
+Setting `guard` needs a tool newer than 0.4.0. A repository that vendors the new tool gets `"enforce"`: a later
+change that touches an earlier outcome's files now costs one proof run per such outcome and fails when that proof
+fails; set `"off"` for the earlier behaviour. In CI the setting is read from the target branch, like every setting.
+
+Limits: overlap is by path, so a change that breaks an earlier outcome through a file outside its `in:` (an import, a
+config read at run time) runs no guard; widen `in:` to what the proof depends on. An earlier outcome whose file this
+change edits is in play and must pass `done` again; one whose file this change deletes is no guard, and the deletion
+shows only in the diff. A flaky earlier proof fails the gate. Not measured: earlier outcomes broken by later changes
+on a multi-step task sequence, with and without the guard (BACKLOG item 9).
+
 ### 4a. Reproduce first: `kind: bug`
 
 An outcome may carry `kind: bug` (`odd new ... --kind bug`; needs a tool newer than 0.4.0; the kinds are `bug`,
@@ -687,6 +714,8 @@ line still loads, and is now counted as one escape against the outcome that carr
 - A proof that needs a real device, account or secret cannot be recomputed in CI. The tool has no "proven on the real
   system" label.
 - Within one change a file belongs to one outcome.
+- The regression guard (section 5b) runs an earlier proof only when the change touches a file inside its `in:`; a
+  break through any other file is not seen, and deleting the earlier outcome file removes its guard.
 - Changes are measured against the target branch. Work committed directly on it is not seen. A shallow clone is
   "could not run". Editing a merged outcome file puts it back in play.
 - Windows, Git LFS and `autocrlf` are untested. A submodule change needs a skip.

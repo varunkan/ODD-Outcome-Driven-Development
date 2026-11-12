@@ -62,6 +62,7 @@ DEFAULTS = {
     'proof_tries': 3,      # odd spec: tries for the proof author to write a proof that fails before the code
     'coverage': 'report',  # requirements no outcome in the change covers: off, report, or enforce (an uncovered one fails)
     'ambiguity_stop': True,  # odd new refuses an outcome sentence with no observable (an English word list)
+    'guard': 'enforce',    # earlier merged outcomes whose in: holds a touched file: proofs run again (off, report, enforce)
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
 FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked')
@@ -195,7 +196,8 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'race_seal': lambda v: type(v) is bool,
             'proof_tries': lambda v: type(v) is int and 1 <= v <= 32,
             'coverage': lambda v: v in ('off', 'report', 'enforce'),
-            'ambiguity_stop': lambda v: type(v) is bool}
+            'ambiguity_stop': lambda v: type(v) is bool,
+            'guard': lambda v: v in ('off', 'report', 'enforce')}
 
 
 def load_config(root, at=None):
@@ -1525,6 +1527,26 @@ def _describe(o, res):
 
 # ---------------------------------------------------------------- the gate
 
+def guards(root, s, say=lambda s: None):
+    """Backlog item 9, the regression guard: [(outcome, commit, exit code, last line, seconds)] for every earlier
+    outcome, merged at the base and not in play in this change, not parked, asked or skipped, whose boundary holds a
+    file this change touches. Each proof runs once on the tree as it is (green only: no take-out run)."""
+    if s['cfg']['guard'] == 'off' or not s['base']:
+        return []
+    touched, out = s['product'] + s['tests'], []
+    for o in all_outcomes(root):
+        if o.rel in s['changed'] or o.parked or o.asked or o.skip or not any(o.covers(p) for p in touched):
+            continue
+        commit = git(root, 'log', '-1', '--format=%h', s['base'], '--', o.rel).strip()
+        if not commit:
+            continue  # not merged: an outcome file git does not track is no earlier outcome
+        say('guard %s: %s' % (o.slug, o.get('proof')))
+        rc, tail, secs = run_proof(root, o.get('proof'), s['cfg']['proof_timeout'])
+        out.append((o, commit, rc, last_line(tail), secs))
+    return out
+
+
+
 def survey(root, base_arg=None, recompute=False):
     """Everything the gate and the hooks need to know about the change, computed once."""
     cfg = load_config(root)
@@ -1591,6 +1613,19 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
         except Fail as e:
             problems.append('%s: %s' % (o.slug, e))
             fact(o, 'fail', why=str(e))
+    ran_guards = facts['guards'] = []
+    for o, commit, rc, last, secs in guards(root, s, say):
+        name = '%s (proven in %s)' % (o.slug, commit)
+        ran_guards.append(dict(slug=o.slug, commit=commit, proof=o.get('proof'), seconds=secs,
+                               state='ok' if rc == 0 else 'fail', **({} if rc == 0 else {'why': last})))
+        if rc == 0:
+            lines.append('  guard   %s: still passes, %ss' % (name, secs))
+        elif cfg['guard'] == 'enforce':
+            lines.append('  guard   %s now fails' % name)
+            problems.append('%s now fails: %s\n    an earlier proven outcome whose files this change touches; its '
+                            'proof: %s' % (name, last, o.get('proof')))
+        else:
+            lines.append('  guard   %s now fails: %s (reported only; "guard": "enforce" fails the gate)' % (name, last))
     for o in s['inplay']:
         if o.parked:
             lines.append('  parked  %s: %s (a parked outcome covers no files)' % (o.slug, o.parked))
@@ -2498,6 +2533,10 @@ def markdown(f):
                                                                len(r['text']))]
         md += ['- %s: %s, covered by %s' % (k, _cell(v, table=False), ', '.join(r['covered'][k])) if k in r['covered'] else
                '- %s: %s, **not covered**' % (k, _cell(v, table=False)) for k, v in r['text'].items()]
+    if f.get('guards'):
+        md += ['', '**Guards** (earlier outcomes whose files this change touches; each proof ran again):']
+        md += ['- **%s** (proven in %s): %s' % (g['slug'], _cell(g['commit'], True, False), 'passes' if g['state'] == 'ok'
+               else '**now fails**: ' + _cell(g.get('why', ''), True, False)) for g in f['guards']]
     if f.get('exemptions'):
         md += ['', '**Exemptions** (passed without verification):'] + ['- ' + _cell(e, table=False) for e in f['exemptions']]
     if f.get('control'):

@@ -285,6 +285,18 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   again on later changes, so an agent cannot silently break earlier proven work.
 - **How:** the guard set derived from merged outcome files; `odd gate` runs the guards whose files the change touches.
 - **Measure:** earlier outcomes broken by later changes, on a multi-step task sequence.
+- **Done** in the commit "B9: regression guard ..." (`git log --grep '^B9:'`): `guards()` picks every earlier
+  outcome (tracked at the base, not in play, not parked, asked or skipped) whose `in:` holds a touched product or test
+  file and runs its proof once through `run_proof` (green only, no take-out); `odd gate` local and `--recompute` fail
+  with `<slug> (proven in <commit>) now fails: <last line>` under the setting `"guard"` (`enforce` default, `report`,
+  `off`; a tool newer than 0.4.0); `--json` `guards`, `--summary` **Guards** list. DESIGN.md section 5b. Measured with
+  `tests/test_odd.py` class `RegressionGuard` (5 tests; the 3 positive ones seen RED for want of the guard and the
+  setting before the code, the 2 negative ones passed vacuously before it and are pinned by mutants). Mutants: 9 of
+  the new code (off ignored, no overlap filter, parked, asked and skipped kept as guards, report acting as enforce, no
+  problem raised, no summary list, a fail recorded as ok), each turned a `RegressionGuard` test red. Suites: 214
+  tests and 75 bench tests green. Not measured: earlier outcomes broken by later changes on a multi-step task
+  sequence, with and without the guard (no agent run); the guard's cost on a real repository (one proof run per
+  guard by construction).
 
 ### 10. Long tasks as a chain of proven outcomes
 - **Outcome:** a large ticket is done as a sequence of small outcomes, each proven and checkpointed before the next,

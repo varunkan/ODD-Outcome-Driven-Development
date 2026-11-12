@@ -128,6 +128,14 @@ newer than 0.4.0). It catches "works, but not what was asked" only as far as the
 what its outcome says; odd checks neither. Not measured: requirements missed with and without it (BACKLOG item 4).
 Details: [DESIGN.md](DESIGN.md) section 5a.
 
+**Earlier proven work stays proven.** A merged outcome keeps its file, so its proof stays in the repository. When a
+later change touches a file inside an earlier outcome's `in:`, `odd gate` (local and `--recompute`) runs that proof
+again (green only) and fails with `<slug> (proven in <commit>) now fails: <last line>` when it no longer passes; the
+pull-request summary lists every guard run. Parked, asked and skipped outcomes are not guards. The cost is one proof
+run per guard. `"guard": "report"` only prints, `"off"` turns it off (the default `"enforce"`; a tool newer than
+0.4.0). Overlap is by path: a break through a file outside the earlier `in:` is not seen. Not measured: earlier
+outcomes broken with and without it (BACKLOG item 9). Details: [DESIGN.md](DESIGN.md) section 5b.
+
 **Bugs are reproduced first.** `odd new <slug> ... --kind bug` marks a bug fix. Then `odd seal` and `odd done` require
 the proof to fail on the unfixed code (the outcome's changed files put back to the base) and print
 `reproduced: <last line of the failure>`; a proof that passes there is refused ("the proof does not reproduce the
