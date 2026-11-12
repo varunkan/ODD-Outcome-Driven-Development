@@ -12,6 +12,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd done <slug> [--base REF]                            exit 0 verified, 1 not shown, 2 could not run
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
+  odd escaped <slug> "<what went wrong, where found>"     a defect got past this outcome; record it
   odd stats                                               counts (self-reported)
 
 Needs a POSIX system, git 2.23+ and Python 3.8+. One file, standard library only, so a project vendors it as
@@ -362,6 +363,23 @@ class Outcome:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, 'w', encoding='utf-8') as f:
             f.write('---\n' + ''.join('%s: %s\n' % kv for kv in self.f.items()) + '---\n' + self.notes)
+
+
+ESCAPE = re.compile(r'(?:^|; )\d{4}-\d{2}-\d{2}: ')  # one entry of the escaped: line, as odd escaped writes it
+
+
+def escapes(o):
+    """How many defects the outcome records as having got past it; a free-text "escaped:" line counts as one."""
+    v = o.get('escaped')
+    return len(ESCAPE.findall(v)) or (1 if v else 0)
+
+
+def escape_only(root, base, o):
+    """True when the outcome file differs from the base only in its escaped: line. Recording a defect against a
+    merged outcome does not put that outcome back in play."""
+    r = sh(['git', 'show', '%s:%s' % (base, o.rel)], root) if base else None
+    drop = lambda t: re.sub(r'(?m)^escaped:.*\n(?:[ \t]+\S.*\n)*', '', t)  # noqa: E731
+    return bool(r) and r.returncode == 0 and drop(r.stdout) == drop(read_text(o.path))
 
 
 def all_outcomes(root):
@@ -947,7 +965,7 @@ def survey(root, base_arg=None, recompute=False):
         base, _ = find_base(root, cfg, base_arg)
     changed = changed_files(root, base)
     control, exempt, tests, product = classify(changed, cfg)
-    inplay = [o for o in all_outcomes(root) if o.rel in changed]
+    inplay = [o for o in all_outcomes(root) if o.rel in changed and not escape_only(root, base, o)]
     active = [o for o in inplay if not o.parked]
     stray = [p for p in product if not any(o.covers(p) for o in active)]
     return dict(cfg=cfg, base=base, changed=changed, control=control, exempt=exempt, tests=tests, product=product,
@@ -1173,16 +1191,46 @@ def cmd_park(a, root):
           'line.' % (a.slug, load_config(root)['trivial_lines']))
 
 
+def cmd_escaped(a, root):
+    what = ' '.join(a.what.split())
+    if len(what) < 10:
+        raise Fail('say what went wrong and where it was found, so someone else can reproduce it')
+    o = Outcome.load(root, a.slug)
+    entry = '%s: %s' % (now()[:10], what)
+    o.f['escaped'] = o.get('escaped') + '; ' + entry if o.get('escaped') else entry
+    o.save()
+    print('%s: escaped defect recorded (%d on this outcome) in %s. Its proof passed and the defect got through.\n'
+          'next: prove it. Write a proof that fails on the escaped behaviour now, as a new outcome:\n'
+          '  %s new <slug> "<who observes the correct behaviour>" --proof "<command>" --in "<globs>"\n'
+          'then %s seal <slug>, fix it, and %s done <slug>. %s stats shows which kinds of proof let defects through.'
+          % (a.slug, escapes(o), o.rel, ODD, ODD, ODD, ODD))
+
+
 def cmd_stats(a, root):
     outs = all_outcomes(root)
     print('self-reported, from this machine only; not a measurement')
-    print('%-28s %-8s %9s %8s' % ('outcome', 'state', 'attempts', 'passed'))
+    print('%-28s %-8s %9s %8s %8s %-7s %s' % ('outcome', 'state', 'attempts', 'passed', 'escaped', 'sealed', 'strength'))
+    kind = {}  # slug -> how strong the latest verification recorded here said the proof was
     for o in outs:
         ev = evidence(root, o.slug)
+        st = ([e['strength'] for e in ev if e.get('ok') and e.get('strength')] or [None])[-1]
+        n = st and st['killed'] + len(st['survivors'])
+        kind[o.slug] = 'survived' if n and st['survivors'] else ('caught' if n else '')
         state = 'parked' if o.parked else ('skip' if o.skip else '')
-        print('%-28s %-8s %9d %8d' % (o.slug, state, len(ev), sum(1 for e in ev if e.get('ok'))))
+        print('%-28s %-8s %9d %8d %8d %-7s %s' % (o.slug, state, len(ev), sum(1 for e in ev if e.get('ok')), escapes(o),
+                                               'sealed' if o.get('sealed') else '-', '%d/%d' % (st['killed'], n) if n else '-'))
     print('%d outcome(s): %d parked, %d skip the take-out check, %d record an escaped defect' % (
         len(outs), sum(1 for o in outs if o.parked), sum(1 for o in outs if o.skip), sum(1 for o in outs if o.get('escaped'))))
+    split = lambda name, pick: '%s: %d in %d of %d' % (  # noqa: E731
+        name, sum(escapes(o) for o in outs if pick(o)), sum(1 for o in outs if pick(o) and escapes(o)),
+        sum(1 for o in outs if pick(o)))
+    print('escaped defects (self-reported): %d against %d of %d outcome(s)' % (
+        sum(escapes(o) for o in outs), sum(1 for o in outs if escapes(o)), len(outs)))
+    print('  ' + '; '.join([split('sealed', lambda o: o.get('sealed')), split('not sealed', lambda o: not o.get('sealed'))]))
+    print('  ' + '; '.join([split('skipped the take-out check', lambda o: o.skip), split('checked', lambda o: not o.skip)]))
+    print('  ' + '; '.join([split('strength, every mutant caught', lambda o: kind[o.slug] == 'caught'),
+                            split('a mutant survived', lambda o: kind[o.slug] == 'survived'),
+                            split('not measured here', lambda o: not kind[o.slug])]))
 
 
 METHOD = '''## Outcome-driven development (odd)
@@ -1395,6 +1443,9 @@ def main(argv=None):
     s = sub.add_parser('park')
     s.add_argument('slug')
     s.add_argument('reason')
+    s = sub.add_parser('escaped')
+    s.add_argument('slug')
+    s.add_argument('what', help='what went wrong, and where it was found')
     sub.add_parser('stats')
     sub.add_parser('hook').add_argument('event', choices=[arg for _, arg in HOOKS])
     a = p.parse_args(argv)

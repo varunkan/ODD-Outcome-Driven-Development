@@ -90,7 +90,8 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd gate [--recompute]` | is every changed file inside a verified outcome? (`--recompute` for CI) |
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
-| `odd stats` | counts, self-reported |
+| `odd escaped <slug> "<what, where found>"` | a defect got past a verified outcome: record it on that outcome |
+| `odd stats` | counts, self-reported, including escaped defects by kind of proof |
 
 ## What it checks, and what it does not
 
@@ -116,6 +117,13 @@ already passes, and writes `sealed: proof@<hash>, tests/test_x.py@<hash>` into t
 or a sealed test file changes afterwards, `odd done` and the gate fail until it is resealed, and a reseal changes the
 outcome file, so it shows in the diff. It makes fitting the test to the code visible; it does not stop it. A reseal
 needs the proof red again, so take the product change out first. Unsealed outcomes work as before.
+
+**Escaped defects.** When a defect gets past a verified outcome, run `odd escaped <slug> "<what went wrong, where it
+was found>"`. It appends a dated entry to that outcome's `escaped:` line and tells you the next step: a new outcome
+whose proof fails on the escaped behaviour. `odd stats` then counts escapes against outcomes that were sealed or not,
+that skipped the take-out check or not, and whose proof caught every small break or not (when that was measured on
+this machine). Over time that shows which kinds of proof let defects through. It counts only what people record, so
+it is self-reported, not a measurement.
 
 ## In CI
 

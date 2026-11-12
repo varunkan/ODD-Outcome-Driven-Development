@@ -1140,6 +1140,75 @@ class SealedProof(Repo):
         self.assertNotIn('sealed', self.read('.odd/outcomes/add.md'))
 
 
+class EscapedDefects(Repo):
+    """`odd escaped <slug> "<what>"`: a defect that got past a verified outcome is recorded on that outcome, and
+    `odd stats` splits escapes by the kind of proof that let them through (sealed, take-out skipped, strength)."""
+    WHAT = 'add(2, -3) returned 5; found by a customer in the checkout total'
+
+    def merged(self):
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add')
+        self.commit('work')
+        self.git('checkout', '-q', 'main')
+        self.git('merge', '-q', 'feat')
+        self.git('checkout', '-q', '-b', 'later')
+
+    def test_escaped_appends_dated_one_line_entries_and_says_what_next(self):
+        self.merged()
+        out = self.ok('escaped', 'add', self.WHAT)
+        self.assertIn('new outcome', out)
+        self.assertIn('fails', out)
+        self.ok('escaped', 'add', 'sub was missing;\n found in review of release 2')
+        lines = [l for l in self.read('.odd/outcomes/add.md').split('\n') if l.startswith('escaped')]
+        self.assertEqual(len(lines), 1, 'one escaped: line, however many entries')
+        self.assertRegex(lines[0], r'^escaped: \d{4}-\d{2}-\d{2}: add\(2, -3\) returned 5; found by a customer in the '
+                                   r'checkout total; \d{4}-\d{2}-\d{2}: sub was missing; found in review of release 2$')
+        o = oddmod.Outcome.load(self.dir, 'add')
+        self.assertEqual(o.get('escaped'), lines[0][len('escaped: '):])
+        self.assertEqual(oddmod.escapes(o), 2)
+        before = self.read('.odd/outcomes/add.md')
+        o.save()
+        self.assertEqual(self.read('.odd/outcomes/add.md'), before, 'load then save round-trips the file')
+
+    def test_escaped_refuses_a_vague_report_or_an_unknown_outcome(self):
+        self.outcome()
+        self.assertIn('what went wrong', self.no('escaped', 'add', 'broken'))
+        self.no('escaped', 'nope', self.WHAT)
+        self.assertNotIn('escaped', self.read('.odd/outcomes/add.md'))
+
+    def test_recording_an_escape_does_not_put_a_merged_outcome_back_in_play(self):
+        self.merged()
+        self.ok('escaped', 'add', self.WHAT)
+        self.assertIn('0 outcome(s) in this change', self.ok('gate'))
+        self.commit('escape')
+        self.assertIn('PASS', self.ok('gate', '--recompute'))
+        self.add_line('add', 'counterfactual: skip - an edit beside the escape line')
+        self.assertIn('1 outcome(s) in this change', self.no('gate'), 'any other edit still puts it in play')
+
+    def test_stats_split_escapes_by_seal_take_out_and_strength(self):
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)
+        self.ok('seal', 'add')
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+        self.outcome('other', in_='other.py')
+        self.add_line('other', 'counterfactual: skip - removes code')
+        self.outcome('legacy', in_='legacy.py')
+        self.add_line('legacy', 'escaped: add')   # the older free-text form counts as one
+        self.ok('escaped', 'add', self.WHAT)
+        self.ok('escaped', 'add', self.WHAT)
+        self.ok('escaped', 'other', self.WHAT)
+        out = self.ok('stats')
+        self.assertRegex(out, r'add\s+1\s+1\s+2\s+sealed\s+1/1')
+        self.assertRegex(out, r'other\s+skip\s+0\s+0\s+1\s+-\s+-')
+        self.assertIn('escaped defects (self-reported): 4 against 3 of 3 outcome(s)', out)
+        self.assertIn('sealed: 2 in 1 of 1; not sealed: 2 in 2 of 2', out)
+        self.assertIn('skipped the take-out check: 1 in 1 of 1; checked: 3 in 2 of 2', out)
+        self.assertIn('strength, every mutant caught: 2 in 1 of 1; a mutant survived: 0 in 0 of 0; not measured '
+                      'here: 2 in 2 of 2', out)
+
+
 class ReviewSummary(Repo):
     """`odd gate --summary FILE` (Markdown) and `--json FILE`: what a reviewer reads instead of the diff."""
     TWO = ProofStrength.TWO

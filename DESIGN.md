@@ -33,8 +33,8 @@ Free notes: questions asked and answered, decisions and why.
   never the whole suite. It asserts results or counts, not wall-clock time.
 - `in`: globs of the product files this outcome may change (its boundary).
 - Paths, globs and the proof are relative to the repository root.
-- Optional lines: `counterfactual: skip - <reason>`, `parked: <reason>`, `escaped: <slug>`, `sealed: ...` (written
-  by `odd seal`, section 4).
+- Optional lines: `counterfactual: skip - <reason>`, `parked: <reason>`, `escaped: ...` (written by `odd escaped`,
+  section 9), `sealed: ...` (written by `odd seal`, section 4).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -49,7 +49,8 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
-| `odd stats` | counts, labelled self-reported | 0 |
+| `odd escaped <slug> "<what, where found>"` | records a defect that got past this outcome (section 9) | 0, 1 vague report or no such outcome |
+| `odd stats` | counts, labelled self-reported, with escaped defects split by kind of proof | 0 |
 
 `odd hook stop|session-start` is an internal entry point called only by the opt-in Claude Code hooks.
 
@@ -200,8 +201,8 @@ The hook commands cannot exit non-zero.
 
 ## 8. Measurement
 
-`odd stats` counts outcome files (total, skipped, parked, escaped) and local verification attempts. It is
-self-reported and is never published as a result.
+`odd stats` counts outcome files (total, skipped, parked, escaped) and local verification attempts, and splits
+recorded escaped defects by kind of proof (section 9). It is self-reported and is never published as a result.
 
 Published figures come only from the comparison harness in `bench/`: hidden acceptance tests, the harness's clock and
 the token counts the agent CLI reports. It reports "gate passed, hidden tests failed" as its own figure: that is the
@@ -209,8 +210,22 @@ size of what this design does not catch.
 
 ## 9. Learning
 
-A defect that escaped becomes a new outcome whose proof reproduces it; the file may carry `escaped: <slug>`. There is
-no lessons database.
+A defect that escaped is recorded on the outcome it got past: `odd escaped <slug> "<what went wrong, where it was
+found>"` appends `YYYY-MM-DD: <text>` (UTC date, whitespace collapsed) to that outcome's `escaped:` line, entries
+joined by `; `, so the field stays one line. Then it becomes a new outcome whose proof fails on the escaped behaviour.
+Changing only the `escaped:` line of a merged outcome does not put it back in play; any other edit to the file does.
+
+`odd stats` prints, per outcome, the escape count, whether it is sealed, and the strength (caught/mutants) of the
+latest passing verification recorded on this machine; then, in total, escapes against outcomes split three ways:
+sealed or not, take-out skipped or checked, and every mutant caught, a mutant survived, or not measured here. Each
+split reads `N in K of M`: N escapes in K of the M outcomes of that kind. There is no lessons database.
+
+Limits: only recorded escapes are counted, so the figures are self-reported. Strength comes from local evidence, so
+on another machine, or for an outcome verified before strength existed, it is "not measured here". Seal and skip are
+read from the outcome file as it is now, not as it was when the defect escaped. An entry is counted by its
+`YYYY-MM-DD: ` prefix after `; `; a free-text `escaped:` value written by hand counts as one, and text that itself
+contains `; 2026-01-02: ` is counted twice. Before `odd escaped` existed this document suggested `escaped: <slug>` on the *new* outcome; such a
+line still loads, and is now counted as one escape against the outcome that carries it.
 
 ## 10. Limits
 
