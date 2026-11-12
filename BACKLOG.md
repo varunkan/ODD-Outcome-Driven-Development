@@ -524,3 +524,29 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 
 ### 19. New arms for the comparison
 - Haiku x 3 race, Haiku-then-Sonnet cascade, and strong-spec / cheap-code, against plain Sonnet and plain Haiku.
+- **Run** 2026-11-12 ([16](docs/evidence/16-new-arms.md)): 288 runs, $21.81. As built and driven, the new arms
+  delivered less than plain Haiku (race 23, cascade 18, spec 22 of 42 doable tasks delivered, plain Haiku 41, plain
+  Sonnet 42) at three to thirteen times its cost; they gave an honest NOT DONE on all 6 impossible runs each (plain
+  Haiku 4). Two causes, both read from every failure: items 20 and 21.
+
+### 20. Successive outcomes on one branch
+- **Outcome:** outcomes proven one after another on one branch (`odd chain`'s checkpoints) may share a file; the gate
+  verifies each as its own change and refuses one that a later change broke.
+- **Evidence:** 34 runs in [16](docs/evidence/16-new-arms.md) proved every outcome and were then refused by the gate
+  ("within one change a file belongs to one outcome"), though their work passed the hidden tests.
+- **Done** in the commit "B20: successive outcomes on one branch" (`git log --grep '^B20:'`), a tool newer than
+  0.4.0 ([DESIGN 5](DESIGN.md)). Tests: `Successive` (a chain of two outcomes on one file passes; a hollow later
+  outcome, a forged checkpoint, a later change that breaks an earlier outcome and an outcome edited after its
+  checkpoint are refused; each refusal shown to fail with the fix broken). The harness's reason line now quotes a
+  failed gate's first problem.
+
+### 21. Dependency order, and the rerun
+- **Outcome:** a ticket split into outcomes is built in an order where each outcome's proof can pass from its own
+  boundary; then the new arms are run again.
+- **Evidence:** about 23 runs in [16](docs/evidence/16-new-arms.md) ended with no attempt verified, because the
+  harness ran outcomes in name order and an outcome's proof needed a file inside a later outcome's boundary (t12,
+  t11).
+- **Plan:** the first session writes the order as a chain file (`.odd/chains/<ticket>.md`) and the arms run `odd
+  chain`, so the harness exercises odd's own path; then rerun race, cascade and spec on Haiku (about $16, measured
+  in 16).
+- **Measure:** delivered doable tasks and cost against plain Haiku and plain Sonnet, as in 16.

@@ -202,15 +202,18 @@ so the tools can never disagree with the command line. Only the test suite has d
 
 **Can it run several agents at once and keep the best attempt?**
 `odd race <slug>` (a tool newer than 0.4.0) runs the outcome as N attempts, each by an agent command you configure
-in `"agents"` in `.odd/config.json`, each in its own git worktree under `.git/`, never in your working tree. Every
+in `"agents"` in `.odd/config.json`, each in its own clone outside the repository (a temporary folder), never in your working tree. Every
 attempt is checked as `odd done` would check it, and an attempt that edits the proof's test files or the outcome
 is discarded. The winner is the verified attempt whose proof caught the most small breaks, then the smallest, then
 the first to finish; it is applied to your tree only if you have no changes inside the boundary, otherwise it is
 written as a patch. Seal the proof first (`odd seal`; `"race_seal": true` makes the race refuse an unsealed one).
-odd calls no model itself. On fake agents the correct attempt won 10 races of 10; real agents are not measured yet.
+odd calls no model itself. On fake agents the correct attempt won 10 races of 10. On real agents (three Haiku
+attempts per outcome, [16](docs/evidence/16-new-arms.md)) race never claimed DONE falsely, but delivered fewer tasks
+than one plain Haiku session at about five times the cost, for two reasons since found (one fixed in odd, one in how
+the ticket was split): it is not shown to help yet.
 
 **Can an attempt leave something behind on my machine?**
-Less than in B1 and B2. Each attempt's tree is a `git clone --shared` under `.git/`, so a `git config`, a
+Less than in B1 and B2. Each attempt's tree is a `git clone --shared` in a temporary folder outside the repository, so a `git config`, a
 hook, an exclude rule or a branch it makes stays in its own clone and is deleted with it (earlier builds used linked
 worktrees, which share your `.git/config` and hooks). Before the check odd puts the clone's config, hooks and index
 back, so these cannot hide a change from the check either. On Linux, a process the agent detached (`setsid`, a daemon)
@@ -225,7 +228,9 @@ applied and the dearer agents never run; a refused attempt's full finding (the f
 its line, the line the proof never ran) goes into the next agent's prompt; after the last level the outcome is parked
 with every reason. You put the agents in order; odd does not know prices. Costs appear only when your agent command
 prints a line `odd-cost: <usd>` at the end. Under `"strength": "report"` an attempt with a surviving break still counts
-as verified and stops the cascade; use `"enforce"` to escalate on it. Real agents are not measured yet.
+as verified and stops the cascade; use `"enforce"` to escalate on it. On real agents (Haiku, then Sonnet,
+[16](docs/evidence/16-new-arms.md)) cascade was cheaper than plain Sonnet but delivered less than plain Haiku, for the
+same two reasons as race: not shown to help yet.
 
 **What does a proven outcome cost me?**
 With a tool newer than 0.4.0, `odd stats` ends with a table of what race, cascade and chain attempts cost: per outcome

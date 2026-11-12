@@ -208,8 +208,9 @@ code is refused and the reason goes to the next try; after 3 tries (`"proof_trie
 `odd race` or `odd cascade` with cheaper agents works against that sealed proof, and an attempt that edits it is
 refused. Why: in one study, tests from a stronger model raised a fixed repair agent's resolution from 61.2% to 65.3%,
 while tests from the weak model itself lowered it to 57.3% (arXiv 2609.09133, see
-[docs/evidence/14-research.md](docs/evidence/14-research.md)). Whether that holds on odd's harness is not measured yet
-(BACKLOG item 3). Details: [DESIGN.md](DESIGN.md) section 3d.
+[docs/evidence/14-research.md](docs/evidence/14-research.md)). On odd's harness, as first run
+([16](docs/evidence/16-new-arms.md)), it did not: with Sonnet's proofs, Haiku delivered fewer tasks than plain Haiku,
+for two reasons since found, one now fixed in odd (BACKLOG items 20 and 21). Details: [DESIGN.md](DESIGN.md) section 3d.
 
 **An attempt budget per outcome.** `"max_attempts": N` (default 0, off; a tool newer than 0.4.0) parks an outcome
 after N failed attempts at it, counted on this machine from odd's local evidence: failed `odd done` runs and refused
