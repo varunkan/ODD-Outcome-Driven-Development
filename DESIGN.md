@@ -256,8 +256,10 @@ continues at the first one without it. A parked outcome in the chain is attempte
 its `parked:` line goes when it is proven. To skip an outcome, take it out of the chain file.
 
 **The user's work is never at risk**: the chain refuses to start (exit 2) when the tree or index differs from HEAD
-anywhere but the chain file, the chain's outcome files and test files, and it never resets: the only write it undoes
-is the patch it applied. New command and MCP tool `chain`; no new setting (it uses `agents`, `race_timeout`,
+anywhere but the chain file, the chain's outcome files and test files (both are checked: `git diff HEAD` and `git
+diff --cached HEAD`), and it never resets: the only write it undoes is the patch it applied, and what the failed step
+staged is unstaged again, so the index and the tree are both at the last checkpoint. An uncommitted edit of yours to a
+test file the proof names goes into that outcome's checkpoint commit with the rest. New command and MCP tool `chain`; no new setting (it uses `agents`, `race_timeout`,
 `race_seal`), so it needs a tool newer than 0.4.0.
 
 Limits: a kill with SIGKILL between applying a winner and committing its checkpoint leaves the winner's files
@@ -523,10 +525,18 @@ Setting `guard` needs a tool newer than 0.4.0. A repository that vendors the new
 change that touches an earlier outcome's files now costs one proof run per such outcome and fails when that proof
 fails; set `"off"` for the earlier behaviour. In CI the setting is read from the target branch, like every setting.
 
+Three cases run a guard that is **reported and never fails the gate** (a tool newer than 0.4.0 after this fix), each
+with the outcome as it is at the base: a merged outcome this change parks or asks (`guard   <slug> (proven in
+<commit>), parked in this change, now fails: ...`), and a merged outcome whose file this change deletes (`..., its
+outcome file is deleted in this change, ...`); the gate also prints `deleted <slug> (merged in <commit>)`, `--json`
+has a `deleted` list and the `--summary` a **Deleted outcomes** list, and the auto lane (5c) goes to review. An edit
+to only the `escaped:` line keeps an earlier outcome out of play (section 9), so it stays a guard.
+
 Limits: overlap is by path, so a change that breaks an earlier outcome through a file outside its `in:` (an import, a
 config read at run time) runs no guard; widen `in:` to what the proof depends on. An earlier outcome whose file this
-change edits is in play and must pass `done` again; one whose file this change deletes is no guard, and the deletion
-shows only in the diff. A flaky earlier proof fails the gate. Not measured: earlier outcomes broken by later changes
+change edits otherwise is in play and must pass `done` again. Deleting a merged outcome, or parking it, does not fail
+the gate even when its proof now fails: it is reported, and a reviewer decides (deleting a feature with its outcome is
+legitimate). A flaky earlier proof fails the gate. Not measured: earlier outcomes broken by later changes
 on a multi-step task sequence, with and without the guard (BACKLOG item 9).
 
 ### 5c. Auto-merge lane: a flag the repository's merge rules may use
@@ -554,7 +564,8 @@ The conditions (each one failing is a reason, in the words shown):
   count), and no line outside every outcome (the small-change lane is unverified, so it disqualifies);
 - no control file changed, no existing test changed under a `test-change:` reason;
 - the regression guard (5b) is on and every guard passed (a guard failing under `"report"` disqualifies;
-  `"guard": "off"` disqualifies).
+  `"guard": "off"` disqualifies), and no merged outcome's file is deleted (`outcome <slug> (merged in <commit>) is
+  deleted in this change`).
 
 Wiring it (a sketch; not run by any test here, and `uses:` must pin the odd version you vendor): a branch-protection
 rule (or ruleset) on the target requires the `odd` check, and the repository allows auto-merge. Then:
@@ -818,7 +829,8 @@ line still loads, and is now counted as one escape against the outcome that carr
   system" label.
 - Within one change a file belongs to one outcome.
 - The regression guard (section 5b) runs an earlier proof only when the change touches a file inside its `in:`; a
-  break through any other file is not seen, and deleting the earlier outcome file removes its guard.
+  break through any other file is not seen. Deleting or parking a merged outcome reports its proof and never fails
+  the gate (the auto lane goes to review).
 - `odd chain` (section 3e) knows a proven outcome by its checkpoint commit's subject only; a SIGKILL between applying
   a winner and committing it leaves the winner's files uncommitted (the next run refuses and names them).
 - Changes are measured against the target branch. Work committed directly on it is not seen. A shallow clone is

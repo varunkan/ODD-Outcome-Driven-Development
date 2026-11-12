@@ -353,14 +353,20 @@ class Outcome:
 
     @classmethod
     def load(cls, root, slug):
-        o = cls(root, slug)
-        if not os.path.isfile(o.path):
+        path = odd_dir(root, 'outcomes', slug + '.md')
+        if not os.path.isfile(path):
             raise Fail('no outcome %r in .odd/outcomes/ (%s new creates one)' % (slug, ODD))
         try:
-            with open(o.path, encoding='utf-8') as f:
-                lines = f.read().split('\n')
+            with open(path, encoding='utf-8') as f:
+                text = f.read()
         except ValueError:
-            raise Fail('%s is not UTF-8 text' % o.rel)
+            raise Fail('.odd/outcomes/%s.md is not UTF-8 text' % slug)
+        return cls.parse(root, slug, text)
+
+    @classmethod
+    def parse(cls, root, slug, text):
+        """The outcome from its file's text: the working tree's (load) or another commit's (at)."""
+        o, lines = cls(root, slug), text.split('\n')
         if not lines or lines[0].strip() != '---':
             raise Fail('%s: must start with a --- line' % o.rel)
         key, n = None, 1
@@ -438,6 +444,15 @@ def escape_only(root, base, o):
     r = sh(['git', 'show', '%s:%s' % (base, o.rel)], root) if base else None
     drop = lambda t: re.sub(r'(?m)^escaped:.*\n(?:[ \t]+\S.*\n)*', '', t)  # noqa: E731
     return bool(r) and r.returncode == 0 and drop(r.stdout) == drop(read_text(o.path))
+
+
+def outcome_at(root, ref, rel):
+    """The outcome file rel as it is in the commit ref, or None when it is not there or does not parse."""
+    r = sh(['git', 'show', '%s:%s' % (ref, rel)], root) if ref else None
+    try:
+        return Outcome.parse(root, os.path.basename(rel)[:-3], r.stdout) if r and r.returncode == 0 else None
+    except Fail:
+        return None
 
 
 def all_outcomes(root):
@@ -1535,23 +1550,33 @@ def _describe(o, res):
 # ---------------------------------------------------------------- the gate
 
 def guards(root, s, say=lambda s: None):
-    """Backlog item 9, the regression guard: [(outcome, commit, exit code, last line, seconds)] for every earlier
-    outcome, merged at the base and not in play in this change, not parked, asked or skipped, whose boundary holds a
-    file this change touches. Each proof runs once on the tree as it is (green only: no take-out run)."""
+    """Backlog item 9, the regression guard: [(outcome, commit, exit code, last line, seconds, note)] for every
+    earlier outcome, merged at the base and not in play in this change (an edit to its escaped: line alone keeps it
+    out of play), not parked, asked or skipped, whose boundary holds a file this change touches. Each proof runs once
+    on the tree as it is (green only: no take-out run). Two more run with a note, reported and never failing the gate:
+    a merged outcome this change parks or asks, and one whose file this change deletes; both run as at the base."""
     if s['cfg']['guard'] == 'off' or not s['base']:
         return []
-    touched, out = s['product'] + s['tests'], []
+    touched, play, todo, out = s['product'] + s['tests'], {o.rel: o for o in s['inplay']}, [], []
     for o in all_outcomes(root):
-        if o.rel in s['changed'] or o.parked or o.asked or o.skip or not any(o.covers(p) for p in touched):
+        if o.rel not in play:
+            todo.append((o, ''))
+        elif o.parked or o.asked:
+            b = outcome_at(root, s['base'], o.rel)
+            if b and not (b.parked or b.asked):
+                todo.append((b, '%s in this change' % ('parked' if o.parked else 'asked')))
+    todo += [(b, 'its outcome file is deleted in this change') for b in
+             (outcome_at(root, s['base'], rel) for rel, _ in s['deleted']) if b]
+    for o, note in todo:
+        if o.parked or o.asked or o.skip or not any(o.covers(p) for p in touched):
             continue
         commit = git(root, 'log', '-1', '--format=%h', s['base'], '--', o.rel).strip()
         if not commit:
             continue  # not merged: an outcome file git does not track is no earlier outcome
         say('guard %s: %s' % (o.slug, o.get('proof')))
         rc, tail, secs = run_proof(root, o.get('proof'), s['cfg']['proof_timeout'])
-        out.append((o, commit, rc, last_line(tail), secs))
+        out.append((o, commit, rc, last_line(tail), secs, note))
     return out
-
 
 
 def _strong(cfg, o):
@@ -1597,11 +1622,16 @@ def lane(root, s, facts, skips, allowed):
         why.append('control file(s) changed: ' + ', '.join(s['control']))
     if allowed:
         why.append('an existing test changed: ' + allowed)
+    why += ['outcome %s (merged in %s) is deleted in this change' % (os.path.basename(rel)[:-3], commit)
+            for rel, commit in s['deleted']]
     if cfg['guard'] == 'off':
         why.append('the regression guard is off')
     why += ['the regression guard failed: %s (proven in %s)' % (g['slug'], g['commit'])
             for g in facts.get('guards', []) if g['state'] != 'ok']
     return why
+
+
+OUTCOME_FILE = re.compile(r'^\.odd/outcomes/[^/]+\.md$')
 
 
 def survey(root, base_arg=None, recompute=False):
@@ -1625,10 +1655,12 @@ def survey(root, base_arg=None, recompute=False):
     changed = changed_files(root, base)
     control, exempt, tests, product = classify(changed, cfg)
     inplay = [o for o in all_outcomes(root) if o.rel in changed and not escape_only(root, base, o)]
+    deleted = [(p, git(root, 'log', '-1', '--format=%h', base, '--', p).strip()) for p in changed
+               if base and OUTCOME_FILE.match(p) and not os.path.lexists(os.path.join(root, p))]
     active = [o for o in inplay if not o.parked and not o.asked]
     stray = [p for p in product if not any(o.covers(p) for o in active)]
     return dict(cfg=cfg, base=base, changed=changed, control=control, exempt=exempt, tests=tests, product=product,
-                inplay=inplay, active=active, stray=stray,
+                inplay=inplay, active=active, stray=stray, deleted=[d for d in deleted if d[1]],
                 stray_lines=sum(sizes(root, base, stray, cfg['trivial_lines']).values()))
 
 
@@ -1673,18 +1705,25 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
             problems.append('%s: %s' % (o.slug, e))
             fact(o, 'fail', why=str(e))
     ran_guards = facts['guards'] = []
-    for o, commit, rc, last, secs in guards(root, s, say):
-        name = '%s (proven in %s)' % (o.slug, commit)
+    for o, commit, rc, last, secs, note in guards(root, s, say):
+        name = '%s (proven in %s)%s' % (o.slug, commit, ', ' + note + ',' if note else '')
         ran_guards.append(dict(slug=o.slug, commit=commit, proof=o.get('proof'), seconds=secs,
-                               state='ok' if rc == 0 else 'fail', **({} if rc == 0 else {'why': last})))
+                               state='ok' if rc == 0 else 'fail', **dict({} if rc == 0 else {'why': last},
+                                                                         **({'note': note} if note else {}))))
         if rc == 0:
-            lines.append('  guard   %s: still passes, %ss' % (name, secs))
+            lines.append('  guard   %s still passes, %ss' % (name, secs) if note else
+                         '  guard   %s: still passes, %ss' % (name, secs))
+        elif note:
+            lines.append('  guard   %s now fails: %s (reported only; it never fails the gate)' % (name, last))
         elif cfg['guard'] == 'enforce':
             lines.append('  guard   %s now fails' % name)
             problems.append('%s now fails: %s\n    an earlier proven outcome whose files this change touches; its '
                             'proof: %s' % (name, last, o.get('proof')))
         else:
             lines.append('  guard   %s now fails: %s (reported only; "guard": "enforce" fails the gate)' % (name, last))
+    facts['deleted'] = [dict(slug=os.path.basename(rel)[:-3], commit=c) for rel, c in s['deleted']]
+    lines += ['  deleted %s (merged in %s): this change deletes its outcome file, so its proof is no longer enforced'
+              % (os.path.basename(rel)[:-3], c) for rel, c in s['deleted']]
     for o in s['inplay']:
         if o.parked:
             lines.append('  parked  %s: %s (a parked outcome covers no files)' % (o.slug, o.parked))
@@ -2458,7 +2497,8 @@ def _checkpoint(root, slug):
 
 def _dirty(root):
     """Every path that differs from HEAD in the working tree or the index, plus untracked files."""
-    return set(zlist(root, *DIFF, '--name-only', 'HEAD')) | set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z'))
+    return (set(zlist(root, *DIFF, '--name-only', 'HEAD')) | set(zlist(root, *DIFF, '--cached', '--name-only', 'HEAD')) |
+            set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z')))
 
 
 def _chain_step(root, cfg, a, slug, agents, n, rel):
@@ -2474,7 +2514,7 @@ def _chain_step(root, cfg, a, slug, agents, n, rel):
         e = _none_verified('no attempt at %s was verified' % slug, attempts, a)
         e.why = '; '.join('attempt %s: %s' % (at['name'], at['why']) for at in attempts)
         raise e
-    path = _apply(root, o, head, ranked[0], patch, keep, hint=False)
+    path, paths = _apply(root, o, head, ranked[0], patch, keep, hint=False), []
     try:
         s = survey(root, a.base)
         res = prove(root, o, s)
@@ -2487,6 +2527,8 @@ def _chain_step(root, cfg, a, slug, agents, n, rel):
             git(root, 'add', '--', *paths)
         git(root, 'commit', '-q', '--only', '--allow-empty', '-m', CHECKPOINT % slug, '--', *paths)
     except BaseException:
+        if paths:  # a refused commit leaves what this step staged in the index: put the index back too
+            sh(['git', 'reset', '-q', '--'] + paths, root)
         err = _patch(root, patch, path, reverse=True)
         if err:
             print('odd: the rollback failed (git apply -R: %s); the winner\'s patch is %s' % (err, path), file=sys.stderr)
@@ -2754,8 +2796,12 @@ def markdown(f):
                '- %s: %s, **not covered**' % (k, _cell(v, table=False)) for k, v in r['text'].items()]
     if f.get('guards'):
         md += ['', '**Guards** (earlier outcomes whose files this change touches; each proof ran again):']
-        md += ['- **%s** (proven in %s): %s' % (g['slug'], _cell(g['commit'], True, False), 'passes' if g['state'] == 'ok'
+        md += ['- **%s** (proven in %s)%s: %s' % (g['slug'], _cell(g['commit'], True, False),
+               ', %s, reported only' % _cell(g['note'], table=False) if g.get('note') else '', 'passes' if g['state'] == 'ok'
                else '**now fails**: ' + _cell(g.get('why', ''), True, False)) for g in f['guards']]
+    md += ['', '**Deleted outcomes** (merged earlier; this change deletes the file, so nothing checks them):'] + [
+        '- **%s** (merged in %s)' % (_cell(d['slug'], table=False), _cell(d['commit'], True, False))
+        for d in f['deleted']] if f.get('deleted') else []
     if f.get('lane'):
         md += ['', 'Auto-merge lane: ' + ('yes' if f['lane'] == 'auto' else 'no, because ' + '; '.join(
             _cell(r, table=False) for r in f.get('lane_reasons') or ['(no reason recorded)']))]

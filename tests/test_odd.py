@@ -2885,6 +2885,38 @@ class RegressionGuard(Repo):
         self.assertIn('**Guards**', text)
         self.assertRegex(text, r'- \*\*add\*\* \(proven in `%s`\): passes' % sha)
 
+    def test_an_edit_to_only_the_escaped_line_keeps_the_guard(self):
+        sha = self.merged()
+        self.write('calc.py', 'def add(a, b):\n    return a - b\n')
+        self.ok('escaped', 'add', 'add(2, -3) returned 5')
+        out = self.no('gate')
+        self.assertRegex(out, r'add \(proven in %s\) now fails: \S' % sha)
+        self.commit('break')
+        self.assertRegex(self.no('gate', '--recompute'), r'add \(proven in %s\) now fails: ' % sha)
+
+    def test_deleting_a_merged_outcome_reports_its_proof_and_sends_the_lane_to_review(self):
+        sha = self.merged({'auto_lane': True})
+        os.remove(self.path('.odd/outcomes/add.md'))
+        self.write('calc.py', 'def add(a, b):\n    return a - b\n')
+        js, md = self.path('.git/s.json'), self.path('.git/s.md')
+        out = self.ok('gate', '--json', js, '--summary', md)
+        self.assertIn('deleted add (merged in %s)' % sha, ' '.join(out.split()))
+        self.assertIn('- **add** (merged in `%s`)' % sha, self.read('.git/s.md'))
+        self.assertIn('its outcome file is deleted in this change, reported only: **now fails**', self.read('.git/s.md'))
+        self.assertRegex(out, r'add \(proven in %s\), its outcome file is deleted in this change, now fails' % sha)
+        f = json.loads(self.read('.git/s.json'))
+        self.assertEqual(f['lane'], 'review')
+        self.assertIn('outcome add (merged in %s) is deleted in this change' % sha, f['lane_reasons'])
+        self.commit('delete')
+        self.assertIn('deleted add (merged in %s)' % sha, ' '.join(self.ok('gate', '--recompute').split()))
+
+    def test_parking_a_merged_outcome_while_breaking_it_reports_the_failure(self):
+        sha = self.merged()
+        self.add_line('add', 'parked: later')
+        self.write('calc.py', 'def add(a, b):\n    return a - b\n')
+        out = self.ok('gate')
+        self.assertRegex(out, r'add \(proven in %s\), parked in this change, now fails: \S.*reported only' % sha)
+
     def test_parked_asked_and_skipped_earlier_outcomes_are_not_guards(self):
         self.git('checkout', '-q', 'main')
         for slug, extra in (('p1', 'parked: blocked on a decision'), ('a1', 'asked: which rounding?'),
@@ -3193,6 +3225,8 @@ class Chain(Agents):
         self.assertTrue(os.path.exists(hook))
         self.assertEqual(self.subjects()[0], 'odd: one proven', out)
         self.assertEqual(self.read('two.py'), 'def f():\n    return 0\n', 'not rolled back to the last checkpoint')
+        self.assertEqual(self.git('show', ':two.py'), 'def f():\n    return 0\n', 'the index was not rolled back')
+        self.assertEqual(self.git('diff', '--cached', '--name-only'), '', 'the step left paths staged')
         self.assertEqual(self.read('tests/test_two.py').count('assertEqual'), 1, 'the proof was lost')
         self.assertNotIn('parked', self.read('.odd/outcomes/two.md'))
         self.assertFalse(self.ran('good', 'three'))
@@ -3206,6 +3240,17 @@ class Chain(Agents):
         self.assertFalse(self.ran('good', 'one'))
         self.assertEqual(self.read('README.md'), 'my unsaved work\n')
         self.assertEqual(self.subjects()[0], 'config')
+
+    def test_it_refuses_a_staged_change_the_working_tree_hides(self):
+        self.use([self.solver('good')])
+        self.write('notes.txt', 'mine\n')
+        self.commit('notes')
+        self.write('notes.txt', 'staged edit\n')
+        self.git('add', 'notes.txt')
+        self.write('notes.txt', 'mine\n')
+        out = self.no('chain', 'T-1', code=2)
+        self.assertIn('notes.txt', out)
+        self.assertFalse(self.ran('good', 'one'))
 
     def test_a_missing_chain_or_outcome_cannot_run(self):
         self.use([self.solver('good')])

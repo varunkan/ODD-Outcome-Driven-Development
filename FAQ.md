@@ -222,7 +222,8 @@ Each one not yet proven is attempted by your agents in their own git worktrees (
 outcome that cannot be proven stops the chain: it is parked with every attempt's reason, the tree stays at the last
 checkpoint (a winner already applied is reversed), later outcomes are not started, and the status says which are
 proven, parked or not started. Running it again continues at the first outcome without a checkpoint. It refuses to
-start when your tree has changes other than the chain's outcome files and tests, and it never resets your tree. What
+start when your tree or index has changes other than the chain's outcome files and tests (an uncommitted edit to a
+test the proof names is committed with that checkpoint), and it never resets your tree. What
 it does not do: run outcomes of one chain in parallel, re-prove an outcome whose proof changed after its checkpoint,
 or survive a SIGKILL between applying and committing without leaving those files for you to look at. Measured only on
 fake agents (DESIGN.md section 3e, BACKLOG item 10).
@@ -253,16 +254,17 @@ local and `--recompute`, runs the proof of each earlier outcome whose `in:` hold
 fails, the gate fails with `<slug> (proven in <commit>) now fails: <last line>`. Only the earlier proof's green run is
 repeated, one run per guard, so a change touching many proven files costs that many proof runs; `"guard": "report"`
 prints instead of failing and `"off"` turns it off. Parked, asked and skipped outcomes are not guards. It sees a break
-only through files inside the earlier `in:`, and deleting an earlier outcome file removes its guard (the deletion is
-in the diff). Whether it lowers regressions is not measured yet.
+only through files inside the earlier `in:`. An edit to only the `escaped:` line keeps an outcome a guard. Deleting or
+parking a merged outcome runs its base proof and reports the result without failing the gate, prints `deleted <slug>
+(merged in <commit>)` for a deletion, and sends the auto lane to review. Whether it lowers regressions is not measured yet.
 
 **Can a proven change merge without a human review?**
 odd can say it qualifies; it never merges. With `"auto_lane": true` in `.odd/config.json` (a tool newer than 0.4.0)
 the gate reports `"lane": "auto"` only when the gate passed, every outcome is verified, each proof caught every small
 break (`"auto_min_strength"`, default 1.0) and ran every changed line (Python only; elsewhere not measured), the
 change is at most `"auto_max_lines"` product lines (default 120) inside its outcomes, and nothing else needs a
-person: no control file, no `test-change:`, no skipped take-out check, no parked or asked outcome, no failing or
-disabled regression guard. Otherwise `"review"` with each reason. The Action sets the output `odd_lane`; a workflow
+person: no control file, no `test-change:`, no skipped take-out check, no parked or asked outcome, no deleted merged outcome
+file, no failing or disabled regression guard. Otherwise `"review"` with each reason. The Action sets the output `odd_lane`; a workflow
 can enable GitHub's auto-merge when it is `auto` while branch protection keeps the odd check required. The risk is
 real: nobody reads that code, and a strong proof of a wrong outcome sentence merges. Use the Action's `--recompute`
 result, never a local gate, and start with a small `"auto_max_lines"`. Whether it saves review time without

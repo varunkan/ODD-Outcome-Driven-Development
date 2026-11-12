@@ -348,6 +348,17 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   tested: review minutes per merged change and escaped defects (no repository uses the lane); the wiring sketch in
   DESIGN.md 5c (no GitHub run); the lines-run condition outside Python (not measured there, so the lane relies on
   k of n alone); the `value:` line of the Action output (only the output's declaration is asserted).
+- **Review fixes** in the commit "B9-B11 review fixes: ..." (`git log --grep '^B9-B11 review fixes'`): `guards()` now
+  skips only outcomes in play, so an edit to only the `escaped:` line no longer turns a guard off (blocker); a
+  merged outcome file deleted in the change is listed by `survey()` (`deleted`), printed `deleted <slug> (merged in
+  <commit>)`, in `--json` and the summary, is a lane reason, and its base proof runs as a reported guard (blocker);
+  a merged outcome parked or asked in the change runs its base proof as a reported guard (minor); the chain unstages
+  what a failed step staged and `_dirty()` also reads `git diff --cached HEAD` (minor, two). `Outcome.parse()` and
+  `outcome_at()` were factored out of `Outcome.load()` so the base text parses the same way. 4 new tests and 1
+  strengthened (`RegressionGuard` 3, `Chain` 1 new and the hook test now asserts the index), all 5 seen RED for the
+  intended reason before the fix; 6 mutants of the fix each turned one red. Suites: 241 tests and 89 bench tests
+  green. Not done: a deleted or parked outcome's failing proof does not fail the gate (reported only, by choice:
+  deleting a feature with its outcome is legitimate); the reviewer repro scripts r1, r3 and r6 were rerun and show the fixed behaviour; r4 and r5 were not rerun.
 
 ## Speed and cost
 

@@ -125,8 +125,9 @@ order in `.odd/chains/<ticket>.md`, and run `odd chain <ticket>` (`--race N`, or
 levels). Each outcome is attempted in worktrees as race or cascade would, verified again in your tree, and committed
 as its own checkpoint `odd: <slug> proven`; the next one starts from that commit. When one cannot be proven the chain
 stops, the tree is at the last checkpoint, the outcome is parked with the reasons, and the status lists every outcome
-as proven, parked or not started. Run it again to continue. It refuses to start if your tree has changes outside the
-chain's outcomes and their tests, and it only ever reverses the patch it applied itself. On fake agents, three
+as proven, parked or not started. Run it again to continue. It refuses to start if your tree or index has changes outside the
+chain's outcomes and their tests, and it only ever reverses the patch it applied itself (and unstages what it staged);
+an uncommitted edit to a test the proof names goes into that outcome's checkpoint. On fake agents, three
 outcomes took 3.9-4.2 s with three checkpoint commits; a chain stopping at the second took 1.7-1.9 s and its resume
 2.8-3.1 s (5 runs each, a repository of six small files). Not measured: real agents, and how much longer an unattended task gets
 with chains than without (BACKLOG item 10). Details: [DESIGN.md](DESIGN.md) section 3e.
@@ -145,15 +146,17 @@ later change touches a file inside an earlier outcome's `in:`, `odd gate` (local
 again (green only) and fails with `<slug> (proven in <commit>) now fails: <last line>` when it no longer passes; the
 pull-request summary lists every guard run. Parked, asked and skipped outcomes are not guards. The cost is one proof
 run per guard. `"guard": "report"` only prints, `"off"` turns it off (the default `"enforce"`; a tool newer than
-0.4.0). Overlap is by path: a break through a file outside the earlier `in:` is not seen. Not measured: earlier
+0.4.0). Editing only an outcome's `escaped:` line keeps it a guard. Deleting or parking a merged outcome runs its
+base proof as a reported guard that never fails the gate, prints `deleted <slug> (merged in <commit>)` for a deletion,
+and sends the auto lane to review. Overlap is by path: a break through a file outside the earlier `in:` is not seen. Not measured: earlier
 outcomes broken with and without it (BACKLOG item 9). Details: [DESIGN.md](DESIGN.md) section 5b.
 
 **An auto-merge lane, off by default.** With `"auto_lane": true` (a tool newer than 0.4.0) the gate also says
 `"lane": "auto"` or `"lane": "review"` with its reasons: auto only when the gate passed, every outcome in the change
 is verified with every small break caught (`"auto_min_strength"`, default 1.0) and no changed line its proof never
 runs, the change is at most `"auto_max_lines"` product lines (default 120) all inside outcomes, and there is no
-control file, no `test-change:`, no skipped take-out check, no parked or asked outcome, and every regression guard
-passed. It shows in `--json`, in the pull-request summary (`Auto-merge lane: yes` or `no, because ...`) and as the
+control file, no `test-change:`, no skipped take-out check, no parked or asked outcome, no deleted merged outcome file, and every
+regression guard passed. It shows in `--json`, in the pull-request summary (`Auto-merge lane: yes` or `no, because ...`) and as the
 Action output `odd_lane`. odd never merges: a repository wires its own auto-merge job on `odd_lane == 'auto'`, and a
 change that takes it merges with nobody reading its code, so the outcome sentence and the proof are all that is
 checked. Not measured: review minutes saved or defects escaping through it (BACKLOG item 11). Details:
