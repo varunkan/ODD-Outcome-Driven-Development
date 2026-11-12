@@ -135,14 +135,14 @@ Superpowers, three times each, on two models. It measures whether the work is re
 | "Isn't this just TDD?" | TDD's red-first is the idea. ODD makes it the agent's definition of done, checks it automatically and enforces it at merge. |
 | "Another framework to learn?" | Six commands (two more, `seal` and `escaped`, are optional) and about twenty lines of method, which your agent reads itself. |
 | "My tests are fine." | Then `odd done` passes in seconds. If it does not, you have learned something. |
-| "It will slow us down." | The proof runs three times, plus once per small break (at most eight), so make it the narrowest test that shows the outcome, usually seconds. Rework after a fake "done" costs more. |
+| "It will slow us down." | The proof runs three times, plus once per small break (at most eight; by default it stops once the breaks took about as long as the three runs), so make it the narrowest test that shows the outcome, usually seconds. Rework after a fake "done" costs more. |
 | "My agent could cheat it." | On a laptop an agent with a shell can bypass any local check, so CI is the authority: a required check, its own pinned copy of the tool, settings from the target branch. |
 | "We already use Spec Kit or BMAD." | Keep them. They plan; ODD checks the result. |
 | "Does it make agents better?" | Not proven. The comparison will say, and it will be published either way. |
 | "What if the work cannot be done?" | `odd park <slug> "<why>"`. An honest "blocked" is a valid result. |
 | "Can the agent just rewrite the test to fit its code?" | Only visibly, if the outcome is sealed. `odd seal <slug>` before the code checks the proof fails and fingerprints the test files in the outcome file; editing them later fails `done` and the gate until a reseal, which changes the outcome file in the diff. Optional; a reviewer still has to look. |
 | "What happens when a bug gets through anyway?" | `odd escaped <slug> "<what, where found>"` records it on the outcome it got past, and you write a new outcome whose proof fails on that bug. `odd stats` splits recorded escapes by sealed, take-out skipped and proof strength, so a team sees which kinds of proof leak. Only what someone records is counted, and strength only where it was measured locally. |
-| "Does it check that my test is thorough?" | Partly. It checks that the proof depends on the change, then makes up to eight small breaks in the changed lines and names each one the proof misses (`"strength": "enforce"` fails on them). No survivor is not proof of thoroughness; a person should still read the outcome sentence and the proof. |
+| "Does it check that my test is thorough?" | Partly. It checks that the proof depends on the change, then makes up to eight small breaks in the changed lines and names each one the proof misses (`"strength": "enforce"` fails on them). Under enforce a break whose run did not complete (exit 126, 127, 129-192, a timeout) fails too. No survivor is not proof of thoroughness; a person should still read the outcome sentence and the proof. |
 
 Full limits: [DESIGN.md](DESIGN.md#10-limits).
 
@@ -159,9 +159,14 @@ It is one file with no account and no service. To remove it, delete `.odd/` and 
 **How do I make it count in CI?**
 On GitHub Actions, one step at the end of your test job, made a required check:
 ```yaml
-- uses: varunkan/ODD-Outcome-Driven-Development@v0.3.0
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.4.0
 ```
-Other CI systems use the two lines `odd init` prints.
+Other CI systems use the two lines `odd init` prints. The `strength`/`mutants` settings and `sealed:` need 0.4.0 or later.
+
+**Can a pull request's code get the comment token or forge odd's comment?** Not through the environment: the gate
+step, which runs the proofs, gets no token; a later step posts the comment. Only a comment by the bot (input
+`author`) starting with the marker is updated, and text from the change is escaped. A proof runs as the same user,
+so a process it leaves behind could still alter the summary file before it is posted.
 
 **What does the reviewer see?**
 One pull-request comment, updated on every run: the verdict, then per outcome its sentence, its proof, what the proof

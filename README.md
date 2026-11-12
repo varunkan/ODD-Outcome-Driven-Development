@@ -31,7 +31,7 @@ ODD keeps the one part that does not depend on the model agreeing: "done" is dec
 It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
 the model. Questions and objections: [FAQ](FAQ.md).
 
-> **Status: early (0.3.0).** The tool passes its own tests (82), including the ways an agent could fake "done". It
+> **Status: early (0.4.0).** The tool passes its own tests (120), including the ways an agent could fake "done". It
 > has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
 >
 > **Does it work better? Not claimed yet.** A same-task comparison is running: 16 tasks with hidden acceptance tests,
@@ -131,12 +131,13 @@ On GitHub Actions the gate is one step at the end of your test job:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: varunkan/ODD-Outcome-Driven-Development@v0.3.0
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.4.0
 ```
 
 It fetches the history it needs, judges the change with the action's own pinned copy of the tool (never the copy the
 pull request carries) and reads the settings at the tip of the target branch. Pin a tag or a commit, and make the step
-a required check. Other CI systems use the two lines `odd init` prints; they do the same.
+a required check. Other CI systems use the two lines `odd init` prints; they do the same. The `strength` and
+`mutants` settings and the `sealed:` field need the Action at 0.4.0 or later: an older pinned Action refuses them.
 
 The result is written for the reviewer: per outcome its sentence, its proof, what the proof said with the change
 taken out and its strength score, then the exemptions and any control files changed. It goes to the job's step
@@ -149,7 +150,9 @@ permissions:
 ```
 
 Without it (or on a pull request from a fork, whose token is read-only) the log says the comment could not be posted
-and the check's result is unchanged. `with: comment: false` turns the comment off. Elsewhere, `odd gate --summary
+and the check's result is unchanged. `with: comment: false` turns the comment off. The step that runs the proofs
+is never given the token, only the comment step after it; only odd's own comment (by `github-actions[bot]`, or
+`with: author:` for a personal token) is updated, and text from the change is rendered inert. Elsewhere, `odd gate --summary
 FILE` writes the same Markdown and `--json FILE` the same result as data. Whether it saves review time is not yet
 measured ([protocol](docs/review-time.md)).
 
@@ -192,8 +195,9 @@ given over three months, each measured and ruled on. Most were dropped.
 
 - Evidence so far is one project, measured by itself. The comparison harness is in [`bench/`](bench/SPEC.md); its
   results will be published with their spread, whatever they show.
-- The check costs three runs of the proof, plus one per small break (at most eight by default), so the proof
-  should be the narrowest command that shows the outcome.
+- The check costs three runs of the proof, plus one per small break (at most eight by default; under `report` it
+  stops once the breaks took about as long as the core runs), so the proof should be the narrowest command that
+  shows the outcome. With a 0.8 s jest proof that is about 2.4 s for the core and about as much again for strength.
 - While the change is taken out, files are rewritten in place. They are put back on interruption and an edit made
   meanwhile is never overwritten, but a dev server or file watcher will see the revert.
 - State outside tracked files (installed dependencies, caches) is not reverted; a dependency bump or a pure refactor

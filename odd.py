@@ -39,7 +39,7 @@ try:
 except ImportError:  # not a POSIX system
     fcntl = None
 
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 DEFAULTS = {
     'trivial_lines': 25,   # product lines that may change outside any outcome (a per-change budget)
     'exempt': ['.odd/outcomes/**', '**/*.md', 'LICENSE*', '.gitignore', '.gitattributes', '**/*.lock',
@@ -461,8 +461,7 @@ def check_seal(root, o):
 
 def standing(root, cfg, o, changed):
     """The latest attempt at this outcome, when it passed on exactly the content that is here now; else None."""
-    ev = evidence(root, o.slug)
-    e = ev[-1] if ev else None
+    e = ([x for x in evidence(root, o.slug) if 'ok' in x] or [None])[-1]  # a seal event is not an attempt
     return e if e and e.get('ok') and e.get('hash') == content_hash(root, cfg, o, changed, e.get('tests'))[0] else None
 
 
@@ -805,10 +804,12 @@ def changed_lines(root, base, path):
     return out
 
 
-def strength(root, cfg, o, base, targets, say=lambda s: None):
+def strength(root, cfg, o, base, targets, say=lambda s: None, core=None):
     """Small breaks ("mutants") in the changed lines of this outcome's product files, put in one at a time through
     in_place, each run against the proof. A mutant the proof does not notice survives: a changed line the proof
-    does not depend on. One whose run could not run counts as neither."""
+    does not depend on. One whose run could not run counts as neither (under "enforce" it fails, see weak). Under
+    "report", given `core` (the seconds of the three core runs), sampling stops once the breaks have taken about
+    that long (at least 2 s), so a slow runner pays about twice the core check, not up to eight times."""
     cands = []
     for p in targets:
         full = os.path.join(root, p)
@@ -824,9 +825,16 @@ def strength(root, cfg, o, base, targets, say=lambda s: None):
             cands += [(p, data, text) + m for m in mutations(text, changed_lines(root, base, p))]
     picked = pick(cands, cfg['mutants'])
     res = {'mutants': len(picked), 'of': len(cands), 'killed': 0, 'survivors': [], 'unrun': [], 'seconds': 0.0}
+    budget = max(sum(core), 2.0) if core and cfg['strength'] == 'report' else None
     if picked:
-        say('  proof strength: %d small break(s) in the changed lines, one proof run each' % len(picked))
-    for p, data, text, line, col, old, new in picked:
+        say('  proof strength: %d small break(s) in the changed lines, one proof run each, about %s s%s; '
+            '"mutants": N in .odd/config.json sets how many' % (len(picked), round(len(picked) * core[0], 1) if core else '?',
+                                                                ' (stops after about %s s)' % round(budget, 1) if budget else ''))
+    for i, (p, data, text, line, col, old, new) in enumerate(picked):
+        if budget is not None and res['seconds'] >= budget:
+            res.update(mutants=i, stopped='stopped after %d of %d: the breaks had taken about as long as the core check'
+                                          % (i, len(picked)))
+            break
         lines = text.split('\n')
         was = lines[line - 1]
         lines[line - 1] = was[:col] + new + was[col + len(old):]
@@ -868,6 +876,11 @@ def weak(cfg, o, res):
     st = res.get('strength')
     if st is None:
         raise Fail('verified before the proof\'s strength was measured; run: %s done %s' % (ODD, o.slug))
+    if st['unrun']:
+        raise Fail('%d of %d small break(s) in the changed lines did not run to completion ("strength": "enforce"), so '
+                   'they show nothing about the proof; a proof that exits 126, 127, 129-192 or times out under a break '
+                   'is not evidence of strength:\n%s\n  make the proof fail with an ordinary exit code (1) when what it '
+                   'checks is wrong.' % (len(st['unrun']), st['mutants'], '\n'.join('    ' + w for w in st['unrun'])))
     if st['survivors']:
         raise Fail('the proof does not notice %d of %d small break(s) in the changed lines ("strength": "enforce"); '
                    'each is a changed line the proof does not depend on:\n%s\n  make the proof assert what those '
@@ -886,7 +899,10 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
     if rc is None:
         raise CouldNotRun('the proof timed out (%ss): %s' % (cfg['proof_timeout'], o.get('proof')))
     if rc != 0:
-        raise Fail('the proof fails (exit %d): %s\n%s' % (rc, o.get('proof'), _indent(tail)))
+        raise Fail('the proof fails (exit %d): %s\n%s%s' % (rc, o.get('proof'), _indent(tail), (
+            '\n  it ran no tests: the runner may be wrong for these tests (pytest exits 5 when it collects none; '
+            'unittest finds only unittest.TestCase classes); pick the runner in the proof yourself.')
+            if rc == 5 or re.search(r'NO TESTS RAN|no tests ran|collected 0 items|Ran 0 tests', tail or '') else ''))
     res = {'files': len(targets), 'lines': lines, 'seconds': [s1], 'red_says': '', 'skip': o.skip}
     if o.skip:
         return res
@@ -916,11 +932,23 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
         raise Fail('the proof passed, failed without the change, and then did not pass again with the change put back '
                    '(%s). A proof must give the same answer each time it runs; this one may leave state behind.\n%s'
                    % ('timeout' if rc3 is None else 'exit %d' % rc3, _indent(tail3)))
-    res.update(seconds=[s1, s2, s3], red_says=(ctail.strip().splitlines() or ['(no output)'])[-1][:160])
+    res.update(seconds=[s1, s2, s3], red_says=says(ctail))
     if cfg['strength'] != 'off':
-        res['strength'] = strength(root, cfg, o, base, targets, say)
+        res['strength'] = strength(root, cfg, o, base, targets, say, [s1, s2, s3])
         weak(cfg, o, res)
     return res
+
+
+WHY = re.compile(r'Error\b|Exception\b|[Cc]annot |[Aa]ssert|[Ee]xpected|\u2715|\u2717|^not ok|panicked|No such file')
+
+
+def says(tail):
+    """What a failing proof said, in one line: the last line that names a reason (an error, a failed assertion), then
+    the runner's last line when that is a different one (so a footer such as jest's "Ran all test suites" never
+    stands alone)."""
+    lines = [l.strip() for l in (tail or '').splitlines() if l.strip()] or ['(no output)']
+    why = [l for l in lines if WHY.search(l)]
+    return (why[-1][:120] + ' / ' if why and why[-1] != lines[-1] else '') + lines[-1][:120]
 
 
 def _indent(text):
@@ -939,8 +967,12 @@ def _describe(o, res):
             st['killed'], st['killed'] + len(st['survivors']),
             ' (%d of %d sampled)' % (st['mutants'], st['of']) if st['of'] > st['mutants'] else '',
             '; %d could not run' % len(st['unrun']) if st['unrun'] else '', st['seconds'])
+        text += '\n          ' + st['stopped'] if st.get('stopped') else ''
         text += ''.join('\n          survived: ' + w for w in st['survivors'])
         text += ''.join('\n          could not run: ' + w for w in st['unrun'])
+        if st['survivors']:
+            text += ('\n          next: add a proof case that tells %s apart from the break, or leave it (reported '
+                     'only, unless "strength": "enforce")' % st['survivors'][0].split(' ', 1)[0])
     return text
 
 
@@ -1055,13 +1087,15 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
 PROOFS = (('pytest', 'python3 -m pytest -q {test}', 'tests/test_{name}.py'),
           ('jest', 'npx jest {test}', 'test/{slug}.test.js'),
           ('vitest', 'npx vitest run {test}', 'test/{slug}.test.js'),
+          ('node', 'node --test {test}', 'test/{slug}.test.js'),
           ('mocha', 'npx mocha {test}', 'test/{slug}.test.js'),
           ('go', 'go test {dir}', '{name}_test.go'),
           ('cargo', 'cargo test --test {stem}', 'tests/{name}.rs'),
           ('unittest', 'python3 -m unittest -q {test}', 'tests/test_{name}.py'),
           ('make', 'make test', ''))
-NO_RUNNER = ('no test runner detected (looked for pytest settings, *.py files, a package.json test script running jest, '
-             'vitest or mocha, go.mod, Cargo.toml, a Makefile test target)')
+NO_RUNNER = ('no test runner detected (looked for pytest settings, a conftest.py, pytest in requirements*.txt, *.py '
+             'files, a package.json test script running jest, vitest, mocha or node --test, go.mod, Cargo.toml, a '
+             'Makefile test target)')
 
 
 def runners(root):
@@ -1071,16 +1105,20 @@ def runners(root):
         script = str(((json.loads(text('package.json') or '{}').get('scripts') or {}).get('test')) or '')
     except (ValueError, AttributeError):
         script = ''
-    py = any(p.endswith('.py') and not p.startswith('.odd/') for p in zlist(root, 'ls-files', '-z', '-co', '--exclude-standard'))
-    seen = {'pytest': [r for r, mark in (('pytest.ini', ''), ('conftest.py', ''), ('pyproject.toml', '[tool.pytest'),
-                                          ('tox.ini', '[pytest]'), ('setup.cfg', '[tool:pytest]'))
-                       if os.path.isfile(os.path.join(root, r)) and mark in text(r)][:1],
+    files = [p for p in zlist(root, 'ls-files', '-z', '-co', '--exclude-standard') if not p.startswith('.odd/')]
+    py = any(p.endswith('.py') for p in files)
+    deps = [p for p in files if re.match(r'requirements[^/]*\.txt$', p) and re.search(r'(?im)^pytest\b', text(p))]
+    seen = {'pytest': ([r for r, mark in (('pytest.ini', ''), ('pyproject.toml', '[tool.pytest'),
+                                           ('tox.ini', '[pytest]'), ('setup.cfg', '[tool:pytest]'))
+                        if os.path.isfile(os.path.join(root, r)) and mark in text(r)] +
+                       sorted((p for p in files if os.path.basename(p) == 'conftest.py'), key=len) + deps)[:1],
             'go': ['go.mod'] if os.path.isfile(os.path.join(root, 'go.mod')) else [],
             'cargo': ['Cargo.toml'] if os.path.isfile(os.path.join(root, 'Cargo.toml')) else [],
             'unittest': ['*.py files'] if py else [],
             'make': ['Makefile test target'] if any(re.search(r'(?m)^test\s*:', text(m)) for m in ('Makefile', 'makefile', 'GNUmakefile')) else []}
     for js in ('jest', 'vitest', 'mocha'):
         seen[js] = ['package.json test script'] if re.search(r'\b%s\b' % js, script) else []
+    seen['node'] = ['package.json test script'] if re.search(r'\bnode\s+--test\b', script) else []
     return [(name, seen[name][0]) for name, _, _ in PROOFS if seen[name]]
 
 
@@ -1163,8 +1201,9 @@ def cmd_seal(a, root):
                    'take the change out first.' % o.get('proof'))
     o.f['sealed'] = fingerprint(root, o, tests)
     o.save()
+    record(root, a.slug, seal=o.f['sealed'], base=base, red=says(tail))  # what stats counts as sealed
     print('%s: sealed; the proof fails now (%s). Sealed: %s. Now write the code; a later edit to these files fails '
-          '%s done and the gate until it is resealed.' % (a.slug, (tail.strip().splitlines() or ['no output'])[-1][:120],
+          '%s done and the gate until it is resealed.' % (a.slug, says(tail),
                                                         ', '.join(tests), ODD))
 
 
@@ -1192,10 +1231,17 @@ def report(a, facts):
 
 
 def _cell(text, code=False, table=True):
-    """One line of Markdown text; in a table cell a pipe would end the cell, a newline the row."""
+    """One line of text from the change as inert Markdown: never a link, image, tag or emphasis. In a table cell a
+    pipe would end the cell, a newline the row. A code span's fence is one backtick longer than any run inside it."""
     t = ' '.join(str(text).split())
+    if not code:
+        t = t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        t = re.sub(r'([\\`*_\[\]])', r'\\\1', t)
     t = t.replace('|', '\\|') if table else t
-    return ('`` %s ``' if '`' in t else '`%s`') % t if code and t else t
+    if not code or not t:
+        return t
+    fence = '`' * (max([len(r) for r in re.findall('`+', t)] or [0]) + 1)
+    return '%s %s %s' % (fence, t, fence) if '`' in t else '`%s`' % t
 
 
 def markdown(f):
@@ -1269,12 +1315,15 @@ def cmd_stats(a, root):
     kind = {}  # slug -> how strong the latest verification recorded here said the proof was
     for o in outs:
         ev = evidence(root, o.slug)
+        seals = [e['seal'] for e in ev if e.get('seal')]
+        o.sealed_here = 'sealed' if o.get('sealed') and o.get('sealed') in seals else ('unseen' if o.get('sealed') else '-')
+        ev = [e for e in ev if 'ok' in e]  # attempts are done runs; a seal is not one
         st = ([e['strength'] for e in ev if e.get('ok') and e.get('strength')] or [None])[-1]
         n = st and st['killed'] + len(st['survivors'])
         kind[o.slug] = 'survived' if n and st['survivors'] else ('caught' if n else '')
         state = 'parked' if o.parked else ('skip' if o.skip else '')
         print('%-28s %-8s %9d %8d %8d %-7s %s' % (o.slug, state, len(ev), sum(1 for e in ev if e.get('ok')), escapes(o),
-                                               'sealed' if o.get('sealed') else '-', '%d/%d' % (st['killed'], n) if n else '-'))
+                                               o.sealed_here, '%d/%d' % (st['killed'], n) if n else '-'))
     print('%d outcome(s): %d parked, %d skip the take-out check, %d record an escaped defect' % (
         len(outs), sum(1 for o in outs if o.parked), sum(1 for o in outs if o.skip), sum(1 for o in outs if o.get('escaped'))))
     split = lambda name, pick: '%s: %d in %d of %d' % (  # noqa: E731
@@ -1282,7 +1331,8 @@ def cmd_stats(a, root):
         sum(1 for o in outs if pick(o)))
     print('escaped defects (self-reported): %d against %d of %d outcome(s)' % (
         sum(escapes(o) for o in outs), sum(1 for o in outs if escapes(o)), len(outs)))
-    print('  ' + '; '.join([split('sealed', lambda o: o.get('sealed')), split('not sealed', lambda o: not o.get('sealed'))]))
+    print('  ' + '; '.join([split('sealed', lambda o: o.sealed_here == 'sealed'),
+                            split('not sealed', lambda o: o.sealed_here != 'sealed')]))
     print('  ' + '; '.join([split('skipped the take-out check', lambda o: o.skip), split('checked', lambda o: not o.skip)]))
     print('  ' + '; '.join([split('strength, every mutant caught', lambda o: kind[o.slug] == 'caught'),
                             split('a mutant survived', lambda o: kind[o.slug] == 'survived'),

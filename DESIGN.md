@@ -63,8 +63,8 @@ the same suggestion with `<slug>` in place of a name. Detection, most specific f
 
 | runner | shown by | proof (default test path) |
 |---|---|---|
-| pytest | `pytest.ini`, `conftest.py`, `[tool.pytest` in `pyproject.toml`, `[pytest]` in `tox.ini`, `[tool:pytest]` in `setup.cfg` | `python3 -m pytest -q tests/test_<name>.py` |
-| jest, vitest, mocha | the word in `package.json`'s `scripts.test` | `npx jest` / `npx vitest run` / `npx mocha test/<slug>.test.js` |
+| pytest | `pytest.ini`, `[tool.pytest` in `pyproject.toml`, `[pytest]` in `tox.ini`, `[tool:pytest]` in `setup.cfg`, a `conftest.py` at any depth, `pytest` in a root `requirements*.txt` | `python3 -m pytest -q tests/test_<name>.py` |
+| jest, vitest, node, mocha | the word (`node --test`) in `package.json`'s `scripts.test` | `npx jest` / `npx vitest run` / `node --test` / `npx mocha test/<slug>.test.js` |
 | go | `go.mod` | `go test .` (`<name>_test.go`; `go test ./<dir>` for a test path in a directory) |
 | cargo | `Cargo.toml` | `cargo test --test <name>` (`tests/<name>.rs`) |
 | unittest | any `*.py` file outside `.odd/` | `python3 -m unittest -q tests/test_<name>.py` |
@@ -74,7 +74,8 @@ the same suggestion with `<slug>` in place of a name. Detection, most specific f
 shell) and goes with `--proof auto` only. Limits: detection reads file names and a few settings, not how the
 project really runs its tests (a virtualenv, `npm test` flags, a workspace, a Go package that is not the root); the
 command is a starting point for a person or agent to read, and `make test` is not narrow. A proof literally `auto`
-can no longer be written with `--proof` (edit the file).
+can no longer be written with `--proof` (edit the file). A proof that exits 5 or prints that it ran no tests gets the
+hint that the runner may be wrong; unittest is still picked for a repository whose only sign is a `.py` file.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
@@ -128,6 +129,11 @@ a line no test reaches, without any language's coverage tool.
 - Each mutant goes in and comes out through the same journal as the take-out: a kill puts it back, an edit made
   meanwhile stays.
 - A mutant whose run times out, exits 126 or 127, or dies by a signal is neither caught nor survived; it is listed.
+  Under `"enforce"` any such mutant is a failure: the proof controls its own exit code, so a run that did not
+  complete is never evidence of strength.
+- Under `"report"` sampling stops once the breaks have taken about as long as the three core runs (at least 2 s),
+  and says so; the estimate is printed before the first break. `"enforce"` always runs all `mutants`. A survivor
+  line ends with a `next:` step.
 - The setting `strength`: `"report"` (default) prints the score and each survivor (file:line, the swap, the line) in
   `odd done` and the gate; `"enforce"` makes a survivor a failure; `"off"` makes no mutant. `--recompute` measures
   it again with the settings of the target branch.
@@ -142,7 +148,10 @@ again; it needs the proof red again (take the product change out first) and it c
 visible in review. Limits: the seal is written by the party being checked, so it proves nothing about what the test
 was before `seal` ran, and a reseal is allowed; it covers only the files named, not helpers or fixtures added after;
 a malformed `sealed:` line fails. Outcomes without it behave exactly as before. Seal runs no in-place edit, so it
-needs no journal.
+needs no journal. `odd seal` also records a seal event (fingerprint, base, what the red proof said) in local
+evidence; `odd stats` counts an outcome as sealed only when that event matches its `sealed:` line, and shows
+`unseen` otherwise (a hand-written line, or a seal made on another machine). CI cannot check that the seal came
+first; what it does check, with the sealed test files in place, is the take-out: the proof fails over the base.
 
 **A skip is an exemption with a reason, not a verification.** `counterfactual: skip - <reason>` is for a change
 where nothing can fail first: a pure refactor, a dependency bump, a removal, a submodule pointer. The proof must
@@ -178,14 +187,20 @@ python3 "$TMP/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET"
 ```
 
 **The review comment.** `odd gate --summary FILE` writes the same result as Markdown for the person who reviews
-the change, and `--json FILE` as data: the verdict first, then per outcome its sentence, its proof, the last line the
-proof printed with the change taken out, the strength score and each survivor, then every exemption, the control
+the change, and `--json FILE` as data: the verdict first, then per outcome its sentence, its proof, what the proof
+printed with the change taken out (the last line naming a reason, such as an error or an assertion, then its last line), the strength score and each survivor, then every exemption, the control
 files changed and why it did not pass. A result of "could not run" is written too, never left blank. The Action
 appends it to the job's step summary always and, on `pull_request` events (input `comment`: `auto`, `true`,
-`false`), creates or updates one pull-request comment, found again by the hidden line `<!-- odd-gate -->`. That needs
+`false`), creates or updates one pull-request comment: the comment by the input `author` (default
+`github-actions[bot]`) whose body starts with the hidden line `<!-- odd-gate -->`, searched over every page; a
+marker in anyone else's comment is ignored. Text from the change (outcome, proof, output, reasons, paths) is
+escaped: entities for `& < >`, a backslash before Markdown punctuation, a code fence longer than any backtick run.
+The gate runs in one step with no token; the token is given only to a second step (`if: always()`) that posts the
+comment from the summary file. Limit: a proof runs as the same user, so a process it leaves behind could still
+rewrite that file before the comment step reads it; it never sees the token in its environment. That needs
 `permissions: pull-requests: write`; a refused or failed comment is logged and never changes the exit code. A pull
-request from a fork gets a read-only token, so it gets the step summary and no comment. Only the first 100 comments
-are searched for the marker; the comment is cut at 60,000 characters. Whether the comment saves review time is not
+request from a fork gets a read-only token, so it gets the step summary and no comment. At most 50 pages of
+comments are searched; the comment is cut at 60,000 characters. Whether the comment saves review time is not
 measured; the protocol is [`docs/review-time.md`](docs/review-time.md).
 
 It needs full history (not a depth-1 checkout) and the toolchain the proofs use, so it belongs at the end of the

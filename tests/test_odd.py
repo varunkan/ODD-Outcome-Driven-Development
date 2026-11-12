@@ -107,7 +107,7 @@ class HappyPath(Repo):
                          ['---', 'outcome: ' + SENTENCE, 'proof: ' + PROOF, 'in: calc.py', '---'])
         self.solve()
         out = self.ok('done', 'add')
-        self.assertIn('add: verified. took out 1 file(s), 2 line(s); without them the proof said: FAILED', out)
+        self.assertIn('add: verified. took out 1 file(s), 2 line(s); without them the proof said: AssertionError: 0 != 5 / FAILED (failures=1)', out)
         self.assertIn('PASS', out)
         self.assertEqual(self.read('calc.py'), FIXED, 'the change is put back')
         self.assertNotIn('done', self.read('.odd/outcomes/add.md'), '"done" is never written to a committed file')
@@ -399,6 +399,7 @@ class ProofStrength(Repo):
         out = self.ok('done', 'add')
         self.assertIn('strength: the proof caught 1 of 2 mutant(s)', out)
         self.assertIn('survived: calc.py:6 - -> +: return a - b', out)
+        self.assertIn('next: add a proof case that tells calc.py:6 apart', out, 'a survivor says what to do next')
         self.assertEqual(self.read('calc.py'), self.TWO, 'every mutant is put back')
         self.assertIn('survived: calc.py:6', self.ok('gate'), 'the local gate reports what done measured')
 
@@ -425,6 +426,23 @@ class ProofStrength(Repo):
         self.write('calc.py', FIXED)
         self.commit('only what the proof checks')
         self.assertIn('PASS', self.ok('gate', '--recompute', '--base', 'main'))
+
+    def test_enforce_never_counts_a_mutant_run_that_did_not_complete_as_strength(self):
+        self.write('.odd/config.json', json.dumps({'strength': 'enforce'}))
+        self.outcome('add', PROOF + " || { grep -q 'return 0' calc.py && exit 1; exit 130; }")
+        self.solve()
+        out = self.no('done', 'add')
+        self.assertIn('did not run to completion', out)
+        self.assertIn('calc.py:2 + -> -', out)
+
+    def test_report_stops_sampling_once_mutants_took_about_the_time_of_the_core_check(self):
+        self.outcome('add', "grep -q 'a - b' calc.py && sleep 2.5; " + PROOF)
+        self.write('tests/test_calc.py', TEST)
+        self.write('calc.py', 'def add(a, b):\n    return a + b\n\n\ndef inc(a):\n    return a + 1\n')
+        out = self.ok('done', 'add')
+        self.assertRegex(out, r'proof strength: 3 small break\(s\).*about [\d.]+ s')
+        self.assertIn('"mutants": N in .odd/config.json', out)
+        self.assertIn('stopped after 1 of 3: the breaks had taken about as long as the core check', out)
 
     def test_off_runs_no_mutant_and_a_wrong_value_stops(self):
         self.write('.odd/config.json', json.dumps({'strength': 'off'}))
@@ -1196,6 +1214,16 @@ class EscapedDefects(Repo):
         self.add_line('add', 'counterfactual: skip - an edit beside the escape line')
         self.assertIn('1 outcome(s) in this change', self.no('gate'), 'any other edit still puts it in play')
 
+    def test_a_hand_written_seal_is_not_counted_as_sealed(self):
+        self.outcome()
+        self.solve()
+        o = oddmod.Outcome.load(self.dir, 'add')
+        self.add_line('add', 'sealed: ' + oddmod.fingerprint(self.dir, o, ['tests/test_calc.py']))
+        self.ok('done', 'add')
+        out = self.ok('stats')
+        self.assertRegex(out, r'add\s+1\s+1\s+0\s+unseen\s')
+        self.assertIn('sealed: 0 in 0 of 0', out, 'only a seal recorded red here counts as sealed')
+
     def test_stats_split_escapes_by_seal_take_out_and_strength(self):
         self.outcome()
         self.write('tests/test_calc.py', TEST)
@@ -1248,6 +1276,29 @@ class ReviewSummary(Repo):
         self.assertEqual((o['slug'], o['state'], o['proof']), ('add', 'ok', PROOF + ' || false'))
         self.assertEqual(o['strength']['killed'], 1)
 
+    def test_text_from_the_change_renders_as_inert_text(self):
+        f = {'verdict': 'PASS', 'recompute': True, 'base': 'abc', 'changed': 1, 'in_play': 1,
+             'exemptions': ['<img src=y> [x](https://evil.example)'],
+             'outcomes': [{'slug': 'x', 'state': 'ok', 'files': 1, 'lines': 1, 'red_says': '`` </code><script>s</script>',
+                           'outcome': '<a href="https://evil.example/">merge now</a><img src=x> [link](https://e.x) *b* & _i_',
+                           'proof': 'python3 t.py # `` <b>BROKEN</b> ```'}]}
+        md = oddmod.markdown(f)
+        for live in ('<a ', '<img', '[link]', '[x]', ' *b*', ' _i_', '& '):
+            self.assertNotIn(live, md.replace('<!-- odd-gate -->', ''))
+        self.assertIn('&lt;a href="https://evil.example/"&gt;', md)
+        self.assertIn('```` python3 t.py # `` <b>BROKEN</b> ``` ````', md, 'the fence is longer than any run inside')
+        self.assertIn('``` `` </code><script>s</script> ```', md)
+
+    def test_red_says_is_the_line_that_says_why_not_a_runner_footer(self):
+        jest = ("printf 'FAIL test/x.test.js\\n  \\342\\227\\217 Test suite failed to run\\n    Cannot find module "
+                "x from test/x.test.js\\n      at Resolver (r.js:1:2)\\nTest Suites: 1 failed, 1 total\\nRan all test "
+                "suites matching /x/i.\\n' >&2; exit 1")
+        self.outcome('add', "grep -q 'a + b' calc.py || { %s; }" % jest)
+        self.write('calc.py', FIXED)
+        self.assertIn('without them the proof said: Cannot find module x from test/x.test.js', self.ok('done', 'add'))
+        out, md, js = self.gate_files()
+        self.assertIn('Cannot find module x', md)
+
     def test_a_failing_change_lists_its_problems_exemptions_and_control_files(self):
         self.outcome()
         self.solve()
@@ -1287,6 +1338,11 @@ class Adoption(Repo):
         ({'go.mod': 'module x\n'}, 'go (go.mod)', 'go test .'),
         ({'Cargo.toml': '[package]\n'}, 'cargo (Cargo.toml)', 'cargo test --test add_up'),
         ({'Makefile': 'build:\n\ttrue\ntest: build\n\ttrue\n'}, 'make (Makefile test target)', 'make test'),
+        ({'tests/conftest.py': '', 'avg.py': ''}, 'pytest (tests/conftest.py)', 'python3 -m pytest -q tests/test_add_up.py'),
+        ({'requirements-dev.txt': 'black\npytest>=7\n', 'avg.py': ''}, 'pytest (requirements-dev.txt)',
+         'python3 -m pytest -q tests/test_add_up.py'),
+        ({'package.json': '{"scripts": {"test": "node --test"}}', 'scripts/release.py': ''},
+         'node (package.json test script)', 'node --test test/add-up.test.js'),
     ]
 
     def fresh(self, files):
@@ -1320,6 +1376,11 @@ class Adoption(Repo):
         self.assertFalse(os.path.exists(self.path('.odd/outcomes/two.md')))
         out = self.no('new', 'two', SENTENCE, '--proof', 'pytest -q', '--in', 'calc.py', '--test', 'tests/test_two.py')
         self.assertIn('--test', out, 'a test path goes with --proof auto only')
+
+    def test_a_proof_that_ran_no_tests_says_the_runner_may_be_wrong(self):
+        self.outcome('add', '%s -c "print(\'NO TESTS RAN\'); raise SystemExit(5)"' % sys.executable)
+        self.write('calc.py', FIXED)
+        self.assertIn('ran no tests: the runner may be wrong', self.no('done', 'add'))
 
     def test_init_suggests_a_proof_or_says_none_was_detected(self):
         out = self.ok('init')
@@ -1430,25 +1491,43 @@ class Distribution(Repo):
         self.assertIn('split: verified', r.stdout)
         self.assertEqual(r.stdout.count('\nPASS'), 2)
 
-    def action_step(self):
-        """The shell the Action runs, read out of action.yml (stdlib only, so no YAML parser)."""
+    STEP_INPUTS = ('TARGET', 'ODD_COMMENT', 'ODD_TOKEN', 'ODD_AUTHOR')  # set only for a step whose env names them
+
+    def action_steps(self):
+        """Each step the Action runs, read out of action.yml (stdlib only, so no YAML parser): (env names, shell)."""
         with open(os.path.join(self.REPO, 'action.yml')) as f:
             text = f.read()
-        body = text.split('      run: |\n', 1)[1]
-        return '\n'.join(l[8:] for l in body.split('\n') if l.startswith('        ') or not l.strip())
+        steps = []
+        for chunk in text.split('\n    - name: ')[1:]:
+            head, body = chunk.split('      run: |\n', 1)
+            names = re.findall(r'^        ([A-Z_]+): ', head, re.M)
+            lines = []
+            for l in body.split('\n'):
+                if l.strip() and not l.startswith('        '):
+                    break
+                lines.append(l[8:])
+            steps.append((names, '\n'.join(lines)))
+        return steps
 
     def ci(self, target='main', **more):
-        """A pull request's checkout as CI sees it: a depth-1 clone of the feature branch, then the Action's step."""
+        """A pull request's checkout as CI sees it: a depth-1 clone of the feature branch, then the Action's steps,
+        each given only the inputs its own env names; a later step runs even when an earlier one failed (always())."""
         d = tempfile.mkdtemp(prefix='odd-ci-')
         self.addCleanup(shutil.rmtree, d, True)
         subprocess.run(['git', 'clone', '-q', '--depth', '1', '--branch', 'feat', 'file://' + self.dir, d], check=True,
                        capture_output=True)
-        env = dict(os.environ, TARGET=target, GITHUB_ACTION_PATH=self.REPO, **more)
+        tmp = tempfile.mkdtemp(prefix='odd-runner-')
+        self.addCleanup(shutil.rmtree, tmp, True)
+        env = dict(os.environ, TARGET=target, GITHUB_ACTION_PATH=self.REPO, RUNNER_TEMP=tmp, **more)
         for k in ('ODD_BASE', 'GITHUB_STEP_SUMMARY', 'GITHUB_EVENT_NAME', 'ODD_COMMENT'):
             if k not in more:
                 env.pop(k, None)
-        r = subprocess.run(['bash', '-c', self.action_step()], cwd=d, env=env, capture_output=True, text=True)
-        return r.returncode, r.stdout + r.stderr
+        rc, out = 0, ''
+        for names, script in self.action_steps():
+            step_env = {k: v for k, v in env.items() if k not in self.STEP_INPUTS or k in names}
+            r = subprocess.run(['bash', '-c', script], cwd=d, env=step_env, capture_output=True, text=True)
+            rc, out = rc or r.returncode, out + r.stdout + r.stderr
+        return rc, out
 
     def test_the_action_passes_proven_work_and_fails_unproven_work(self):
         self.outcome()
@@ -1476,11 +1555,12 @@ class Distribution(Repo):
         self.assertEqual(rc, 1, out)
         self.assertIn('CONTROL FILES CHANGED', out)
 
-    def github(self, refuse=False):
+    def github(self, refuse=False, before=()):
         """A fake GitHub REST API for one pull request (#7 of o/r) that already carries a comment of someone else's."""
         import http.server
         import threading
-        comments, seen = [{'id': 1, 'body': 'looks good'}], []
+        import urllib.parse
+        comments, seen = [{'id': 1, 'body': 'looks good', 'user': {'login': 'someone'}}], []
 
         class H(http.server.BaseHTTPRequestHandler):
             def log_message(self, *a):
@@ -1502,9 +1582,11 @@ class Distribution(Repo):
                 if refuse and self.command != 'GET':
                     return self.reply(403, {'message': 'Resource not accessible by integration'})
                 if self.command == 'GET' and self.path.startswith('/repos/o/r/issues/7/comments'):
-                    return self.reply(200, comments)
+                    q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                    per, page = int(q.get('per_page', ['30'])[0]), int(q.get('page', ['1'])[0])
+                    return self.reply(200, comments[(page - 1) * per:page * per])
                 if self.command == 'POST' and self.path == '/repos/o/r/issues/7/comments':
-                    comments.append({'id': len(comments) + 1, 'body': self.body()})
+                    comments.append({'id': len(comments) + 1, 'body': self.body(), 'user': {'login': 'github-actions[bot]'}})
                     return self.reply(201, comments[-1])
                 m = re.match(r'/repos/o/r/issues/comments/(\d+)$', self.path)
                 if self.command == 'PATCH' and m:
@@ -1514,6 +1596,8 @@ class Distribution(Repo):
                 self.reply(404, {'message': 'Not Found'})
             do_GET = do_POST = do_PATCH = handle_one
 
+        for login, body in before:
+            comments.append({'id': len(comments) + 1, 'body': body, 'user': {'login': login}})
         srv = http.server.HTTPServer(('127.0.0.1', 0), H)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         self.addCleanup(srv.server_close)
@@ -1547,6 +1631,46 @@ class Distribution(Repo):
         self.assertIn('PATCH', [c for c, _, _ in seen])
         with open(summary) as f:
             self.assertEqual(f.read().count(oddmod.MARKER), 2, 'each run appends its summary to the step summary')
+
+    def test_the_proof_never_sees_the_comment_token(self):
+        comments, seen, env, summary = self.github()
+        self.outcome(proof='test -z "${ODD_TOKEN:-}" && ' + PROOF)
+        self.solve()
+        self.commit('proven by a proof that refuses to run with a credential in reach')
+        rc, out = self.ci(**env)
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(comments[-1]['body'].startswith(oddmod.MARKER) and 'odd gate: PASS' in comments[-1]['body'])
+        self.assertTrue(all(a == 'Bearer t0ken' for _, _, a in seen), 'the comment step still has the token')
+        gate_env = self.action_steps()[0][0]
+        self.assertNotIn('ODD_TOKEN', gate_env, 'the step that runs the proofs is never given the token')
+
+    def test_a_marker_comment_by_someone_else_is_never_taken_as_odds(self):
+        filler = [('someone', 'note %d' % i) for i in range(120)]  # odd's own comment ends up past the first page
+        comments, seen, env, summary = self.github(before=filler + [('pr-author', 'Gate looks fine ' + oddmod.MARKER),
+                                                                    ('pr-author', oddmod.MARKER + ' fake verdict')])
+        self.outcome()
+        self.solve()
+        self.commit('proven')
+        rc, out = self.ci(**env)
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn('PATCH', [c for c, _, _ in seen], 'a comment the author wrote is never updated')
+        mine = [c for c in comments if c['user']['login'] == 'github-actions[bot]']
+        self.assertEqual(len(mine), 1, out)
+        self.assertEqual(comments[121]['body'], 'Gate looks fine ' + oddmod.MARKER)
+        rc, out = self.ci(**env)
+        self.assertEqual(len([c for c in comments if c['user']['login'] == 'github-actions[bot]']), 1,
+                         'its own comment on page 2 is found and updated: ' + out)
+        self.assertEqual(('PATCH', '/repos/o/r/issues/comments/%d' % mine[0]['id']), seen[-1][:2])
+
+    def test_the_version_is_newer_than_the_release_without_seal_and_strength_and_the_docs_pin_it(self):
+        self.assertIn('sealed', oddmod.FIELDS)
+        self.assertGreater(tuple(int(x) for x in oddmod.VERSION.split('.')), (0, 3, 0),
+                           'the 0.3.0 release rejects "sealed:", "strength" and "mutants"')
+        for doc in ('README.md', 'FAQ.md'):
+            with open(os.path.join(self.REPO, doc)) as f:
+                pins = re.findall(r'ODD-Outcome-Driven-Development@v([\d.]+)', f.read())
+            self.assertEqual(set(pins), {oddmod.VERSION}, doc)
+        self.assertIn('@v' + oddmod.VERSION, oddmod.CI_HELP % (oddmod.VERSION, 'odd'))
 
     def test_a_comment_that_cannot_be_posted_never_changes_the_verdict(self):
         comments, seen, env, summary = self.github(refuse=True)
