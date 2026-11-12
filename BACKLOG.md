@@ -139,6 +139,16 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   the first proven attempt or parks after the last.
 - **Measure:** cost per proven outcome and accuracy for Haiku-then-Sonnet against plain Sonnet. The Haiku half of the
   comparison already shows how often a cheap first attempt is proven, which bounds the saving.
+- **Done** in the commit "B2: odd cascade ..." (`git log --grep '^B2:'`): `odd cascade <slug> [--agents C1,C2,...]
+  [--race N] [--base REF]`, reading `agents` as ordered levels, the MCP tool `cascade`; DESIGN.md section 3c. Each
+  level is one call of race's attempt machinery (`_attempts()`, `_judge()`, `prove()`, `_apply()`, factored out of
+  `cmd_race`, which now uses them too). A refused attempt's whole finding goes into the next level's prompt; after the
+  last level the outcome is parked with every reason and `.git/odd/cascade/<slug>/cascade.json`; cost is the agent's
+  own final `odd-cost: <usd>` line, else "not reported". Measured with fake agents (`tests/test_odd.py` class
+  `Cascade`, 6 tests seen RED on the missing command, then green; 12 hand-made mutants of the new code, each turned its
+  test red): 5 runs each on a three-file repository, 0.65-0.71 s wall when level 1 is verified (level 2 never ran),
+  0.74-0.87 s when level 1 is refused and level 2 verified, 0.42-0.49 s to park after two refused levels (nothing
+  applied in 5 of 5). Not measured: real agents, the bench arm (Haiku-then-Sonnet against Sonnet), the real saving.
 
 ### 3. Strong model writes the spec, cheap model writes the code
 - **Outcome:** the outcome sentence and the proof are written by the strongest model and sealed; the implementation is

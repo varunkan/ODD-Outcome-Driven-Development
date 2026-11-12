@@ -11,6 +11,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd seal <slug> [--base REF]                            optional: the proof fails now; fingerprint its tests
   odd done <slug> [--base REF]                            exit 0 verified, 1 not shown, 2 could not run
   odd race <slug> [--n N] [--agent CMD] [--base REF]      N agent attempts in worktrees; the proof picks the winner
+  odd cascade <slug> [--agents C1,C2] [--race N]          agents in order, cheapest first; escalate until one is proven
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
   odd escaped <slug> "<what went wrong, where found>"     a defect got past this outcome; record it
@@ -1642,6 +1643,7 @@ def _judge(cfg, o, base, at, fixed):
     try:
         at['res'] = prove(wt, Outcome.load(wt, o.slug), survey(wt, base))
     except (Fail, CouldNotRun) as e:
+        at['detail'] = str(e).strip()[:3000]  # the whole finding: what failed, which break survived, which line did not run
         first = str(e).strip().split('\n')[0][:160]
         return first if isinstance(e, Fail) else 'could not verify: ' + first
     return ''
@@ -1663,25 +1665,17 @@ def _why_won(ranked):
         return 'the only verified attempt'
     w, r = ranked[0], ranked[1]
     if _rank(w)[0] != _rank(r)[0]:
-        return 'won on proof strength (%d of %d against %d of %d for attempt %d)' % (_score(w) + _score(r) + (r['n'],))
+        return 'won on proof strength (%d of %d against %d of %d for attempt %s)' % (_score(w) + _score(r) + (r['name'],))
     if w['lines'] != r['lines']:
-        return 'won on fewer changed lines (%d against %d for attempt %d)' % (w['lines'], r['lines'], r['n'])
-    return 'won on the earlier finish (%ss against %ss for attempt %d)' % (w['agent_s'], r['agent_s'], r['n'])
+        return 'won on fewer changed lines (%d against %d for attempt %s)' % (w['lines'], r['lines'], r['name'])
+    return 'won on the earlier finish (%ss against %ss for attempt %s)' % (w['agent_s'], r['agent_s'], r['name'])
 
 
-def cmd_race(a, root):
-    t0 = time.time()
-    cfg = load_config(root)
-    agents = [a.agent] if a.agent else cfg['agents']
-    if not agents or not all(c.strip() for c in agents):
-        raise CouldNotRun('no agent to race: set "agents": ["<command>", ...] in .odd/config.json (each command runs in '
-                          'an attempt\'s worktree; {prompt_file} in it becomes the prompt\'s path, else the prompt is on '
-                          'stdin), or pass --agent "<command>"')
-    n = a.n if a.n is not None else (len(agents) if len(agents) > 1 else 3)
-    if not 1 <= n <= 32:
-        raise CouldNotRun('--n must be between 1 and 32')
+def _race_start(root, cfg, slug, base_arg):
+    """What race and cascade establish before any attempt: the outcome (and its seal), the commit every attempt starts
+    from, the base, and the files an attempt must leave alone. Returns (o, head, base, fixed)."""
     try:
-        o = Outcome.load(root, a.slug)
+        o = Outcome.load(root, slug)
         check_seal(root, o)
     except Fail as e:
         raise CouldNotRun(str(e))
@@ -1691,23 +1685,40 @@ def cmd_race(a, root):
     head = rev(root, 'HEAD')
     if not head:
         raise CouldNotRun('each attempt starts from a commit and there is none yet: commit first')
-    base, _ = find_base(root, cfg, a.base)
+    base, _ = find_base(root, cfg, base_arg)
     tests = classify(changed_files(root, base), cfg)[2]
     fixed = [o.rel] + [p for p in tests if os.path.isfile(os.path.join(root, p)) and not os.path.islink(os.path.join(root, p))]
     fixed += ['.odd/config.json'] if os.path.isfile(odd_dir(root, 'config.json')) else []
-    keep = state_dir(root, 'race', o.slug)  # prompts, agent logs and the winner's patch; replaced by the next race
+    return o, head, base, fixed
+
+
+def _keep(root, cmd, slug):
+    """The directory for one command's prompts, agent logs and patch, replaced by the next run; also removes the
+    worktrees of a run that was killed outright."""
+    keep = state_dir(root, cmd, slug)
     shutil.rmtree(keep, ignore_errors=True)
     os.makedirs(keep)
-    for name in os.listdir(state_dir(root, 'race')):  # runs left by a race that was killed outright
+    os.makedirs(state_dir(root, 'race'), exist_ok=True)
+    for name in os.listdir(state_dir(root, 'race')):
         if name.startswith('run-') and name[4:].isdigit() and not _alive(int(name[4:])):
             _drop_run(root, state_dir(root, 'race', name))
-    run, attempts, procs, done = state_dir(root, 'race', 'run-%d' % os.getpid()), [], [], queue.Queue()
-    text = RACE_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), fixed=', '.join(fixed),
+    return keep
+
+
+def _prompt(o, cfg, fixed):
+    return RACE_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), fixed=', '.join(fixed),
                               slug=o.slug) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
-    print('%s race %s: %d attempt(s) from %s, agents in parallel; each verified as %s done would, in its own worktree'
-          % (ODD, o.slug, n, head[:10], ODD))
+
+
+def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
+    """One attempt per command in `cmds`, the agents in parallel, each in a detached worktree of `head` under the git
+    directory with `fixed` copied in as the start; each checked by _judge when its agent ends. Returns (attempts,
+    ranked verified attempts, the best one's patch, seconds of setup and clean-up). The worktrees are removed before
+    it returns, also on an exception or a signal; the user's working tree is not touched."""
+    t0 = time.time()
+    run, attempts, procs, done = state_dir(root, 'race', 'run-%d' % os.getpid()), [], [], queue.Queue()
     try:
-        for i in range(1, n + 1):
+        for i, (cmd, name) in enumerate(zip(cmds, names), 1):
             wt = os.path.join(run, str(i))
             git(root, 'worktree', 'add', '--detach', '--quiet', wt, head)
             for p in fixed:  # the outcome and its proof, as they are in the user's tree, committed as the start
@@ -1716,8 +1727,8 @@ def cmd_race(a, root):
             git(wt, 'add', '-f', '--', *fixed)
             git(wt, '-c', 'user.name=odd', '-c', 'user.email=odd@localhost', '-c', 'commit.gpgsign=false', 'commit',
                 '--quiet', '--no-verify', '--allow-empty', '-m', 'odd race: the outcome and its proof')
-            at = dict(n=i, wt=wt, start=rev(wt, 'HEAD'), cmd=agents[(i - 1) % len(agents)], lines=0, res=None,
-                      prompt=os.path.join(keep, 'prompt-%d.md' % i), log=os.path.join(keep, 'agent-%d.log' % i))
+            at = dict(n=i, name=name, wt=wt, start=rev(wt, 'HEAD'), cmd=cmd, lines=0, res=None,
+                      prompt=os.path.join(keep, 'prompt-%s.md' % name), log=os.path.join(keep, 'agent-%s.log' % name))
             with open(at['prompt'], 'w', encoding='utf-8') as f:
                 f.write(text)
             attempts.append(at)
@@ -1738,8 +1749,8 @@ def cmd_race(a, root):
                     break
                 except queue.Empty:
                     pass
-            print('  attempt %d: the agent ended after %ss (%s); verifying' % (
-                at['n'], at['agent_s'], 'killed at the timeout' if at['rc'] is None else 'exit %d' % at['rc']))
+            print('  attempt %s: the agent ended after %ss (%s); verifying' % (
+                at['name'], at['agent_s'], 'killed at the timeout' if at['rc'] is None else 'exit %d' % at['rc']))
             v0 = time.time()
             at['why'] = _judge(cfg, o, base, at, fixed)
             at['verify_s'] = round(time.time() - v0, 1)
@@ -1755,22 +1766,28 @@ def cmd_race(a, root):
         for p in procs:
             _killpg(p)
         _drop_run(root, run)
-    clean = time.time() - t1
-    rows = [('#', 'strength', 'lines', 'seconds', 'result')]  # seconds: the agent's, then the verification's
+    return attempts, ranked, patch, setup + time.time() - t1
+
+
+def _table(attempts, ranked, more=()):
+    """One row per attempt: name, any `more` columns (header, function of the attempt), strength, lines, seconds (the
+    agent's, then the verification's), and the result."""
+    rows = [('#',) + tuple(h for h, _ in more) + ('strength', 'lines', 'seconds', 'result')]
     for at in attempts:
         k, m = _score(at)
-        rows.append((str(at['n']), '%d of %d' % (k, m) if m else '-', str(at['lines']), '%s+%s' % (at['agent_s'], at['verify_s']),
-                     ('verified' + (', winner' if ranked and at is ranked[0] else '')) if not at['why']
-                     else 'not verified: ' + at['why']))
-    wide = [max(len(r[c]) for r in rows) for c in range(4)]
+        rows.append((at['name'],) + tuple(f(at) for _, f in more) + (
+            '%d of %d' % (k, m) if m else '-', str(at['lines']), '%s+%s' % (at['agent_s'], at['verify_s']),
+            ('verified' + (', winner' if ranked and at is ranked[0] else '')) if not at['why']
+            else 'not verified: ' + at['why']))
+    cols = len(rows[0]) - 1
+    wide = [max(len(r[c]) for r in rows) for c in range(cols)]
     for r in rows:
-        print('  ' + '  '.join(r[c].ljust(wide[c]) for c in range(4)) + '  ' + r[4])
-    print('setup and clean-up: %s s per attempt (worktree, copies, start commit, removal); prompts and agent logs: %s'
-          % (round((setup + clean) / n, 2), keep))
-    if not ranked:
-        raise Fail('no attempt was verified; each one\'s reason is in the table above')
-    w = ranked[0]
-    print('winner: attempt %d, %s' % (w['n'], _why_won(ranked)))
+        print('  ' + '  '.join(r[c].ljust(wide[c]) for c in range(cols)) + '  ' + r[cols])
+
+
+def _apply(root, o, head, w, patch, keep):
+    """Apply the verified winner's patch to the user's working tree, only when nothing inside the boundary changed
+    there; otherwise leave it as a patch (Fail)."""
     path = os.path.join(keep, 'winner.patch')
     with open(path, 'w', encoding='utf-8', errors='surrogateescape') as f:
         f.write(patch)
@@ -1785,6 +1802,106 @@ def cmd_race(a, root):
                    % ((r.stderr or r.stdout).strip()[:300], path))
     print('applied to your working tree: %s\nnext: %s done %s, then %s gate (the attempt was verified in its worktree; '
           'done records it here)' % (', '.join(w['delta'][:8]) or 'nothing', ODD, o.slug, ODD))
+
+
+def _agents(cfg, given, what):
+    if not given or not all(c.strip() for c in given):
+        raise CouldNotRun('no agent to %s: set "agents": ["<command>", ...] in .odd/config.json (each command runs in '
+                          'an attempt\'s worktree; {prompt_file} in it becomes the prompt\'s path, else the prompt is on '
+                          'stdin), or pass %s' % (what, '--agent "<command>"' if what == 'race' else '--agents "<cmd1>,<cmd2>"'))
+    return given
+
+
+def cmd_race(a, root):
+    cfg = load_config(root)
+    agents = _agents(cfg, [a.agent] if a.agent else cfg['agents'], 'race')
+    n = a.n if a.n is not None else (len(agents) if len(agents) > 1 else 3)
+    if not 1 <= n <= 32:
+        raise CouldNotRun('--n must be between 1 and 32')
+    o, head, base, fixed = _race_start(root, cfg, a.slug, a.base)
+    keep = _keep(root, 'race', o.slug)
+    print('%s race %s: %d attempt(s) from %s, agents in parallel; each verified as %s done would, in its own worktree'
+          % (ODD, o.slug, n, head[:10], ODD))
+    attempts, ranked, patch, overhead = _attempts(root, cfg, o, base, head, fixed,
+                                                  [agents[i % len(agents)] for i in range(n)], keep,
+                                                  _prompt(o, cfg, fixed), [str(i) for i in range(1, n + 1)])
+    _table(attempts, ranked)
+    print('setup and clean-up: %s s per attempt (worktree, copies, start commit, removal); prompts and agent logs: %s'
+          % (round(overhead / n, 2), keep))
+    if not ranked:
+        raise Fail('no attempt was verified; each one\'s reason is in the table above')
+    print('winner: attempt %s, %s' % (ranked[0]['name'], _why_won(ranked)))
+    _apply(root, o, head, ranked[0], patch, keep)
+
+
+# ---------------------------------------------------------------- cascade: the cheapest agent first, escalate on proof
+
+COST = re.compile(r'(?m)^odd-cost:\s*\$?(\d+(?:\.\d+)?)\s*$')
+CASCADE_BEFORE = """
+Earlier attempts at this outcome, by other agents, were NOT verified. This is what the checks found; do not repeat it:
+%s
+
+"""
+
+
+def _cost(at):
+    """The agent's own report of what the attempt cost: the last line "odd-cost: <usd>" it printed, else None."""
+    try:
+        with open(at['log'], 'rb') as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 65536))
+            found = COST.findall(f.read().decode('utf-8', 'replace'))
+    except OSError:
+        return None
+    return float(found[-1]) if found else None
+
+
+def _short(cmd, width=44):
+    cmd = ' '.join(os.path.basename(w) if '/' in w and not w.endswith('/') else w for w in cmd.split())  # paths as names
+    return cmd if len(cmd) <= width else cmd[:width // 2 - 2] + '...' + cmd[-(width // 2 - 1):]
+
+
+def cmd_cascade(a, root):
+    cfg = load_config(root)
+    levels = _agents(cfg, [c for c in a.agents.split(',') if c.strip()] if a.agents else cfg['agents'], 'cascade')
+    n = a.race if a.race is not None else 1
+    if not 1 <= n <= 32:
+        raise CouldNotRun('--race must be between 1 and 32')
+    o, head, base, fixed = _race_start(root, cfg, a.slug, a.base)
+    keep = _keep(root, 'cascade', o.slug)
+    print('%s cascade %s: %d level(s), %d attempt(s) per level from %s; the next level runs only when no attempt at this '
+          'one is verified as %s done would' % (ODD, o.slug, len(levels), n, head[:10], ODD))
+    base_text, before, history = _prompt(o, cfg, fixed), [], []
+    more = (('agent', lambda at: _short(at['cmd'])),
+            ('cost', lambda at: 'not reported' if at['cost'] is None else '$%g' % at['cost']))
+    for lv, cmd in enumerate(levels, 1):
+        text = base_text + (CASCADE_BEFORE % '\n'.join(before) if before else '')
+        print('level %d of %d: %s' % (lv, len(levels), _short(cmd, 80)))
+        attempts, ranked, patch, overhead = _attempts(root, cfg, o, base, head, fixed, [cmd] * n, keep, text,
+                                                      ['%d' % lv] if n == 1 else ['%d.%d' % (lv, i) for i in range(1, n + 1)])
+        for at in attempts:
+            at['cost'] = _cost(at)
+        history += attempts
+        if ranked:
+            break
+        for at in attempts:
+            before.append('- level %d (agent `%s`), attempt %s: %s' % (lv, cmd, at['name'], (at.get('detail') or at['why'])[:1500]))
+    _table(history, ranked, more)
+    costs = [at['cost'] for at in history if at['cost'] is not None]
+    print('cost reported by the agents: %s; prompts and agent logs: %s' % (
+        '$%g over %d of %d attempt(s)' % (round(sum(costs), 6), len(costs), len(history)) if costs else 'none', keep))
+    record_path = os.path.join(keep, 'cascade.json')
+    write_json(record_path, {'slug': o.slug, 'head': head, 'levels': levels, 'attempts': [
+        {k: at.get(k) for k in ('name', 'cmd', 'why', 'detail', 'lines', 'agent_s', 'verify_s', 'cost')} for at in history]})
+    if not ranked:
+        o.f['parked'] = ' '.join(('odd cascade: no level verified (%s): %s' % (now()[:10], '; '.join(
+            'level %s (%s): %s' % (at['name'], _short(at['cmd']), at['why']) for at in history))).split())
+        o.save()
+        raise Fail('parked %s after the last level: no attempt was verified; each one\'s reason is in the table above, '
+                   'in the "parked:" line of %s and in %s. Nothing was applied. To try again, delete the "parked:" line.'
+                   % (o.slug, o.rel, record_path))
+    print('verified at level %s: %s' % (ranked[0]['name'].split('.')[0], _why_won(ranked)))
+    _apply(root, o, head, ranked[0], patch, keep)
 
 
 def cmd_gate(a, root):
@@ -2169,6 +2286,11 @@ def main(argv=None):
     s.add_argument('slug')
     s.add_argument('--n', type=int, help='how many attempts (default: one per configured agent, or 3 for one agent)')
     s.add_argument('--agent', help='the agent command for every attempt, instead of "agents" in .odd/config.json')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('cascade')
+    s.add_argument('slug')
+    s.add_argument('--agents', help='agent commands, cheapest first, comma-separated (default: "agents" in .odd/config.json)')
+    s.add_argument('--race', type=int, help='attempts per level, in parallel (default 1)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('gate')
     s.add_argument('--base')

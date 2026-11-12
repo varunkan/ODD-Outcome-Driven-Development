@@ -197,6 +197,15 @@ the first to finish; it is applied to your tree only if you have no changes insi
 written as a patch. Seal the proof first (`odd seal`; `"race_seal": true` makes the race refuse an unsealed one).
 odd calls no model itself. On fake agents the correct attempt won 10 races of 10; real agents are not measured yet.
 
+**Can it try a cheap model first and pay for a stronger one only when needed?**
+`odd cascade <slug>` (a tool newer than 0.4.0) runs the agent commands in `"agents"` in order, cheapest first, one
+level at a time, each attempt in its own git worktree and checked as `odd done` would. The first verified attempt is
+applied and the dearer agents never run; a refused attempt's full finding (the failing output, the surviving break and
+its line, the line the proof never ran) goes into the next agent's prompt; after the last level the outcome is parked
+with every reason. You put the agents in order; odd does not know prices. Costs appear only when your agent command
+prints a line `odd-cost: <usd>` at the end. Under `"strength": "report"` an attempt with a surviving break still counts
+as verified and stops the cascade; use `"enforce"` to escalate on it. Real agents are not measured yet.
+
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).
 2. This week: `odd init` on one repository and use it on your next agent task.

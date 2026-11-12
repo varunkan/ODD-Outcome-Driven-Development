@@ -1657,7 +1657,7 @@ class Adoption(Repo):
                      tool='.odd/odd_mcp.py')
         self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
         self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
-        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['done', 'escaped', 'gate', 'new', 'park', 'race', 'seal'])
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['cascade', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal'])
         self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
         done = r[4]['result']
         self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)
@@ -1932,9 +1932,9 @@ class Distribution(Repo):
             self.assertEqual(f.read().count('odd gate: PASS'), 3, 'the step summary is written always')
 
 
-class Race(Repo):
-    """odd race: N agent attempts, each in its own git worktree under the git directory; the proof picks the winner.
-    The agents are small shell scripts (fakes): no model is called."""
+class Agents(Repo):
+    """Helpers for commands that run agents (race, cascade): the agents are small shell scripts (fakes); no model is
+    called."""
     TWO = FIXED + '\n\ndef sub(a, b):\n    return a - b\n'   # proven add, unproven sub: a weaker proof of this change
 
     def setUp(self):
@@ -1976,6 +1976,10 @@ class Race(Repo):
 
     def no_worktrees_left(self):
         self.assertEqual(len(self.git('worktree', 'list').splitlines()), 1, self.git('worktree', 'list'))
+
+
+class Race(Agents):
+    """odd race: N agent attempts, each in its own git worktree under the git directory; the proof picks the winner."""
 
     def test_the_verified_strongest_attempt_wins_and_is_applied(self):
         keep = os.path.join(self.bin, 'prompt.txt')
@@ -2073,6 +2077,82 @@ class Race(Repo):
         self.assertIn('odd seal', self.no('race', 'add', code=2).replace('odd.py seal', 'odd seal'))
         self.write('.odd/config.json', json.dumps({'agents': 'one string'}))
         self.assertIn('"agents" has the wrong kind of value', self.no('race', 'add', code=2))
+
+
+class Cascade(Agents):
+    """odd cascade: agent commands tried in order, each level's attempts verified as race verifies them; escalate only
+    when no attempt at a level is verified, passing the failure on; park after the last. Fake agents only."""
+
+    def ran(self, name):
+        return os.path.exists(os.path.join(self.bin, name + '.ran'))
+
+    def marks(self, name, body):
+        """A fake agent that leaves a mark outside its worktree when it runs, then does `body`."""
+        return self.agent(name, 'touch %s\n' % os.path.join(self.bin, name + '.ran') + body)
+
+    def test_it_stops_at_the_first_level_that_verifies_and_applies_it(self):
+        self.config([self.marks('cheap', self.writes(FIXED) + '\necho odd-cost: 0.0042'),
+                     self.marks('dear', self.writes(FIXED))])
+        out = self.ok('cascade', 'add')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertTrue(self.ran('cheap'))
+        self.assertFalse(self.ran('dear'), 'escalated past a verified level')
+        self.assertRegex(out, r'(?m)^\s*1\s.*cheap.*\bverified\b', out)
+        self.assertRegex(out, r'(?m)^\s*1\s.*\$0\.0042', out)
+        self.assertNotIn('parked', self.read('.odd/outcomes/add.md'))
+        self.no_worktrees_left()
+
+    def test_it_escalates_and_passes_the_precise_failure_on(self):
+        keep = os.path.join(self.bin, 'prompt-2.txt')
+        self.config([self.marks('cheap', self.writes(self.TWO)),
+                     self.marks('dear', 'cp "$1" %s\n' % keep + self.writes(FIXED))], strength='enforce')
+        out = self.ok('cascade', 'add')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertRegex(out, r'(?m)^\s*1\s.*cheap.*not verified', out)
+        self.assertRegex(out, r'(?m)^\s*2\s.*dear.*\bverified\b', out)
+        self.assertRegex(out, r'(?m)^\s*1\s.*not reported', out)
+        with open(keep) as f:
+            prompt = f.read()
+        self.assertIn('level 1', prompt)
+        self.assertIn('cheap.sh', prompt)
+        self.assertIn('return a - b', prompt, 'the line the proof does not depend on is named for the next agent')
+        self.assertIn(SENTENCE, prompt)
+
+    def test_it_parks_with_every_reason_after_the_last_level_and_applies_nothing(self):
+        self.config([self.marks('cheap', self.writes(BROKEN.replace('0', 'a - b'))),
+                     self.marks('dear', "printf 'import unittest\\n' > tests/test_calc.py\n" + self.writes(FIXED))])
+        out = self.no('cascade', 'add')
+        self.assertEqual(self.read('calc.py'), BROKEN, 'an unverified attempt was applied')
+        self.assertTrue(self.ran('dear'))
+        md = self.read('.odd/outcomes/add.md')
+        self.assertRegex(md, r'(?m)^parked: odd cascade: no level verified.*level 1 .*the proof fails.*level 2 .*edited')
+        self.assertIn('parked', out)
+        self.no_worktrees_left()
+
+    def test_the_agents_flag_orders_the_levels_and_race_runs_n_attempts_at_each(self):
+        self.config([self.marks('unused', self.writes(FIXED))])
+        cheap = self.marks('cheap', self.writes(BROKEN.replace('0', 'a - b')))
+        dear = self.marks('dear', self.writes(FIXED))
+        out = self.ok('cascade', 'add', '--agents', cheap + ',' + dear, '--race', '2')
+        self.assertFalse(self.ran('unused'))
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertEqual(len(re.findall(r'(?m)^\s*1\.[12]\s.*cheap.*not verified', out)), 2, out)
+        self.assertEqual(len(re.findall(r'(?m)^\s*2\.[12]\s.*dear.*verified', out)), 2, out)
+
+    def test_the_mcp_tool_runs_the_same_command(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('odd_mcp_for_test', MCP)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        dear = self.marks('dear', self.writes(FIXED))
+        argv = mod.argv_for('cascade', {'slug': 'add', 'agents': dear, 'race': '1'})
+        self.assertEqual(argv, ['cascade', '--agents', dear, '--race', '1', '--', 'add'])
+        self.ok(*argv)
+        self.assertEqual(self.read('calc.py'), FIXED)
+
+    def test_it_cannot_run_without_agents(self):
+        self.assertIn('no agent', self.no('cascade', 'add', code=2))
+        self.assertIn('--race', self.no('cascade', 'add', '--agents', 'true', '--race', '0', code=2))
 
 
 if __name__ == '__main__':

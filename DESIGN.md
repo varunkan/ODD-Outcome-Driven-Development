@@ -50,6 +50,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
+| `odd cascade <slug> [--agents C1,C2,...] [--race N] [--base REF]` | the agents in order, cheapest first, each level's attempts run and checked as in `race`; the next level only when none is verified, with the failure in its prompt; park after the last (section 3c); needs a tool newer than 0.4.0 | 0 verified attempt applied, 1 parked or the winner left as a patch, 2 could not run |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd escaped <slug> "<what, where found>"` | records a defect that got past this outcome (section 9) | 0, 1 vague report or no such outcome |
@@ -119,6 +120,43 @@ Limits: verification is sequential, so N attempts cost N verifications after the
 machine, so a timing-sensitive proof may behave differently under load; installed dependencies and caches outside
 the worktree are shared; nothing stops an agent from writing outside its worktree (it runs as the user). Measured
 (fake agents, this machine): see BACKLOG item 1.
+
+### 3c. `odd cascade`: the cheapest agent first, pay more only when the proof says so
+
+`odd cascade <slug>` tries the agent commands in order, one level each: `--agents "C1,C2,..."` (split on commas, so a
+command containing a comma belongs in the setting instead) or the `"agents"` setting read as an ordered list,
+cheapest first. Race reads the same setting as commands used in turn; cascade reads it as levels. Each level is one
+call of race's attempt machinery (`_attempts()`): a fresh worktree of HEAD per attempt with the outcome and its tests
+copied in, the agent in its own process group with `race_timeout`, and the same check (`_judge()`: copied files and
+control files untouched, product changes inside `in:`, then `prove()`). `--race N` (default 1) runs N attempts of the
+level's agent in parallel, ranked as in race. Every level starts from HEAD and the user's outcome and tests, never
+from an earlier level's attempt.
+
+1. **Stop at the first verified level**: its best attempt is applied exactly as race applies a winner (`_apply()`:
+   only when nothing inside `in:` differs from HEAD in the user's tree, else `winner.patch` and exit 1). Later levels
+   never run.
+2. **Escalate with the failure passed on**: when no attempt at a level is verified, the next level's prompt gets, for
+   every earlier attempt, the agent command and the whole finding of the check that refused it (up to 1500
+   characters each): the proof's failing output, the surviving small breaks with their lines ("calc.py:6 - -> +:
+   return a - b"), the changed lines the proof never ran, an edited test file, a timeout.
+3. **Park after the last level**: the outcome gets a `parked:` line naming each attempt and the first line of why it
+   was refused, nothing is applied, and the full record (command, reason, finding, lines, seconds, cost per attempt)
+   is written to `.git/odd/cascade/<slug>/cascade.json` beside the prompts and agent logs; exit 1. To try again,
+   delete the `parked:` line.
+4. **Output**: one table row per attempt (level, or level.attempt with `--race`; agent; cost; strength; lines; agent
+   and verification seconds; verified or why not) and the sum of the reported costs.
+
+**Cost** is what the agent says it cost: the last line of its output of the form `odd-cost: <usd>` (an optional `$`,
+digits, an optional fraction, nothing else on the line). An agent that prints none shows "not reported"; odd never
+estimates a price and never reads a vendor's output format. A wrapper script around a CLI agent is the place to print
+it. `--race` needs no new setting; cascade uses `agents`, `race_timeout` and `race_seal`, so it too needs a tool newer
+than 0.4.0.
+
+Limits: the levels run one after another, so a failed cheap level adds its agent time and verification to the cost of
+the dear one; the ordering is the user's (odd does not know which agent is cheaper); a cheap attempt that is verified
+with surviving breaks under `"strength": "report"` stops the cascade (use `"enforce"` to escalate on a survivor);
+the same limits as race on shared caches and agents writing outside their worktree. Measured (fake agents, this
+machine): see BACKLOG item 2.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 

@@ -40,6 +40,11 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
              'would, and the verified one with the strongest proof and fewest changed lines is applied.',
      [SLUG, ('n', S, 'how many attempts, as a number (default: one per configured agent, or 3)'),
       ('agent', S, 'the agent command for every attempt, instead of "agents" in .odd/config.json'), BASE], ('slug',)),
+    ('cascade', 'Try the outcome with the configured agents in order, cheapest first, each attempt in its own git '
+                'worktree and verified as done would; escalate to the next agent, with the failure passed on, only when '
+                'no attempt is verified; park the outcome with every reason after the last.',
+     [SLUG, ('agents', S, 'agent commands, cheapest first, comma-separated (default: "agents" in .odd/config.json)'),
+      ('race', S, 'attempts per level in parallel, as a number (default 1)'), BASE], ('slug',)),
     ('park', 'The honest exit: the outcome is blocked or cannot be done as specified.',
      [SLUG, ('reason', S, 'why')], ('slug', 'reason')),
     ('escaped', 'Record a defect that got past a merged outcome.',

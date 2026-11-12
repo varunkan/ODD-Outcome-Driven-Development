@@ -89,6 +89,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected |
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd race <slug> [--n N] [--agent CMD]` | run N agent attempts in parallel, each in its own git worktree; the verified one with the strongest proof and fewest changed lines is applied to your tree (a tool newer than 0.4.0) |
+| `odd cascade <slug> [--agents C1,C2] [--race N]` | try the agents in order, cheapest first, each attempt in its own worktree; stop at the first verified one and apply it, else escalate with the failure in the next prompt, and park after the last (a tool newer than 0.4.0) |
 | `odd gate [--recompute]` | is every changed file inside a verified outcome? (`--recompute` for CI) |
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
 | `odd escaped <slug> "<what, where found>"` | a defect got past a verified outcome: record it on that outcome |
@@ -102,6 +103,16 @@ finish. If your tree already has changes inside the boundary it writes the winne
 (one correct, one with a weaker proof, one broken, one that edits the test) the correct one won 10 races of 10, and
 setting up and removing a worktree cost 0.03 s per attempt on a three-file repository. Not measured yet: real agents,
 and whether a race of cheap models beats one strong one (BACKLOG item 1). Details: [DESIGN.md](DESIGN.md) section 3b.
+
+**Cheapest agent first.** `odd cascade <slug>` reads the same `"agents"` list as levels, cheapest first (or
+`--agents "C1,C2"`): the first agent attempts the outcome in a fresh worktree; if the attempt is verified it is applied
+and nothing dearer runs; otherwise the next agent gets the precise failure (the proof's output, the surviving small
+break and its line, the line the proof never ran) in its prompt. After the last level the outcome is parked with every
+reason, and nothing unverified is applied. `--race N` runs N attempts per level. Each attempt's cost is shown when the
+agent prints a final line `odd-cost: <usd>`, else "not reported". On fake agents: 0.65-0.71 s wall when level 1 is
+verified, 0.74-0.87 s when it escalates to level 2, 0.42-0.49 s to park after two (5 runs each, three-file repository).
+Not measured: real agents and whether Haiku-then-Sonnet is cheaper than Sonnet alone (BACKLOG item 2). Details:
+[DESIGN.md](DESIGN.md) section 3c.
 
 ## What it checks, and what it does not
 
