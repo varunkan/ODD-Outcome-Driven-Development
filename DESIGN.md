@@ -61,7 +61,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd ask <slug> "<question>"` | records one open question as `asked:`; the gate reports the outcome as waiting for an answer (section 4b); needs a tool newer than 0.4.0 | 0, 1 not a question or no such outcome |
 | `odd escaped <slug> "<what, where found>"` | records a defect that got past this outcome (section 9) | 0, 1 vague report or no such outcome |
-| `odd stats` | counts, labelled self-reported, with escaped defects split by kind of proof | 0 |
+| `odd stats` | counts, labelled self-reported, with escaped defects split by kind of proof, and dollars and seconds per proven outcome from agent attempts (section 3h; the cost table needs a tool newer than 0.4.0) | 0 |
 
 `odd hook stop|session-start` is an internal entry point called only by the opt-in Claude Code hooks.
 
@@ -307,9 +307,32 @@ skip review and spec steps in the pilot ([12](docs/evidence/12-pilot.md)); the a
 
 Limits: the evidence is per machine and per worktree (`state_dir()`), so attempts on another machine, in CI or in a
 fresh clone are not counted, and deleting `.git/odd/evidence/` resets every count; an agent that runs `odd done` in
-a loop still uses the full budget; `odd stats` counts done runs only, not refused race attempts; the parked line is
+a loop still uses the full budget; `odd stats` counts refused race attempts only in its cost table (section 3h), not
+in its attempts column; the parked line is
 the reason list cut to the first line of each reason (up to 160 characters), the full findings stay in the race and
 cascade logs. The spend saved on tasks that end unsolved (the item's measure) is not measured on real agents.
+
+### 3h. Cost per proven outcome
+
+A tool newer than 0.4.0 (backlog item 16; no new setting). Every attempt that `race`, `cascade` or `chain` runs (all
+three go through `_attempts()`) writes one line to the outcome's local evidence (`record()`, under the git directory,
+never committed): `attempt` (its name), `cost` (the agent's last `odd-cost: <usd>` line, parsed by `_cost()` as for
+the cascade table, or null when it printed none) and `seconds` (the agent's seconds plus the verification's, rounded
+to 0.1). A refused attempt's line also carries `failed` and `why`, the same keys the attempt budget (3g) counts; a
+verified attempt's line carries neither, so it is not a failure.
+
+`odd stats` ends with a table headed `cost per proven outcome (self-reported: ...)`: per outcome with at least one
+attempt, the attempts, how many reported a cost, dollars, seconds and whether a `done` here has verified the outcome
+(`proven`); then a total line: dollars and seconds over all attempts, failed attempts and unproven outcomes included,
+divided by the number of proven outcomes among them, and how many attempts reported a cost. Without any attempt it says
+`no race, cascade or chain attempt recorded here`.
+
+Limits: dollars are what the agent command says, unchecked; an attempt that prints no line adds nothing to the dollars,
+so the dollar figure is a floor whenever "cost reported for k of n" has k < n. Seconds are summed per attempt, so a
+race of three parallel attempts counts about three times its wall clock; they are not the agent's turns or tokens
+(the item's "turns" is not recorded: odd sees no turns, only a command's output). Work done outside race, cascade and
+chain (an agent session that ends in `odd done`, `odd spec --proof-by`) is not counted. The evidence is per machine and
+worktree, as for the budget. Not measured on real agents; the tests use fake agents that print a cost.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
@@ -884,7 +907,8 @@ not implemented. `pip install odd-tool` also installs an `odd-mcp` command.
 ## 8. Measurement
 
 `odd stats` counts outcome files (total, skipped, parked, escaped) and local verification attempts, and splits
-recorded escaped defects by kind of proof (section 9). It is self-reported and is never published as a result.
+recorded escaped defects by kind of proof (section 9), and the spend per proven outcome from agent attempts (section
+3h). It is self-reported and is never published as a result.
 
 Published figures come only from the comparison harness in `bench/`: hidden acceptance tests, the harness's clock and
 the token counts the agent CLI reports. It reports "gate passed, hidden tests failed" as its own figure: that is the

@@ -443,6 +443,17 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 ### 16. Cost per proven outcome
 - **Outcome:** ODD reports dollars, seconds and turns per proven outcome, the figure the race and the cascade optimise.
 - **How:** from the agent's own usage where available (bench records, MCP) and local evidence.
+- **Done** (commit "B16: cost per proven outcome", a tool newer than 0.4.0, no new setting): `_attempts()`, which
+  race, cascade and chain share, records every attempt's `cost` (the agent's `odd-cost: <usd>` line via `_cost()`, or
+  null) and `seconds` (agent plus verification) in local evidence; `odd stats` prints per outcome and in total the
+  dollars and seconds spent, proven outcomes, and dollars and seconds per proven outcome, failed attempts included,
+  labelled self-reported. DESIGN.md section 3h. Measured with `tests/test_odd.py` class `CostPerOutcome` (4 tests,
+  fake agents printing costs), all 4 seen RED before the code (no attempt line recorded; no cost table); 12 hand-made
+  mutants (cost dropped, seconds zeroed, failed key dropped, attempt key renamed, proven always false, dollars zeroed,
+  divide by attempts, proven inverted, empty message dropped, reported count from attempts, table not printed, every
+  outcome counted as proven) each turned a new test red. Suites: 275 and 89 tests OK (the Chain budget test was made independent of the order parallel attempts end in, after it failed once on that order). Not done: turns are not recorded (odd sees
+  only a command's output); dollars are a floor when an agent prints no cost; seconds are summed per attempt, not wall
+  clock; work outside race, cascade and chain is not counted; nothing measured on real agents.
 
 ## Learning
 

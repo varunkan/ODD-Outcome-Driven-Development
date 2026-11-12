@@ -3188,7 +3188,10 @@ class Chain(Agents):
         self.commit('budget')
         out = self.no('chain', 'T-1', '--race', '2')
         self.assertRegex(self.read('.odd/outcomes/one.md'),
-                         r'(?m)^parked: odd chain T-1 .*attempt budget reached \(2 failed attempts.*attempt 1: .*attempt 2: ', out)
+                         r'(?m)^parked: odd chain T-1 .*attempt budget reached \(2 failed attempts', out)
+        parked = re.search(r'(?m)^parked: .*$', self.read('.odd/outcomes/one.md')).group(0)
+        for name in ('attempt 1: ', 'attempt 2: '):  # in the order the parallel attempts ended
+            self.assertIn(name, parked, out)
         self.no_worktrees_left()
 
     def test_a_failing_middle_outcome_stops_parks_and_a_rerun_resumes(self):
@@ -3688,6 +3691,59 @@ class AttemptBudget(Agents):
         self.assertFalse(os.path.exists(mark), 'no level runs after the budget is reached: ' + out)
         self.assertIn('attempt budget reached: 2 failed attempt(s) at add; parked', out)
         self.assertIn('attempt budget reached', self.parked())
+
+
+class CostPerOutcome(Agents):
+    """Backlog item 16: every race, cascade or chain attempt records the cost its agent printed ("odd-cost: <usd>")
+    and its seconds in local evidence; `odd stats` prints spend per outcome and per proven outcome, failed attempts
+    included, labelled self-reported. Fake agents only."""
+
+    def spend(self):
+        return [e for e in oddmod.evidence(self.dir, 'add') if 'attempt' in e]
+
+    def table(self, out):
+        return out[out.index('cost per proven outcome'):]
+
+    def test_every_attempt_records_its_cost_and_seconds(self):
+        self.config([self.agent('broken', self.writes(BROKEN.replace('0', 'a - b')) + '\necho odd-cost: 0.25'),
+                     self.agent('fixed', self.writes(FIXED, wait=0.3) + '\necho odd-cost: \$0.5'),
+                     self.agent('quiet', self.writes(FIXED))])
+        self.ok('race', 'add')
+        rows = sorted(self.spend(), key=lambda e: e['attempt'])
+        self.assertEqual([(e['attempt'], e['cost']) for e in rows], [('1', 0.25), ('2', 0.5), ('3', None)])
+        self.assertTrue(rows[0]['failed'] and not rows[1].get('failed') and not rows[2].get('failed'))
+        self.assertGreaterEqual(rows[1]['seconds'], 0.3)
+        self.assertTrue(all(isinstance(e['seconds'], float) for e in rows))
+        self.assertEqual(len(oddmod.failures(self.dir, 'add')), 1, 'a verified attempt is not a failure')
+
+    def test_stats_divide_all_spend_by_proven_outcomes(self):
+        self.config([self.agent('broken', self.writes(BROKEN.replace('0', 'a - b')) + '\necho odd-cost: 0.25')])
+        self.no('race', 'add', '--n', '2')
+        out = self.table(self.ok('stats'))
+        self.assertIn('self-reported', out)
+        self.assertRegex(out, r'(?m)^add\s+2\s+2 of 2\s+\$0\.5\s+[\d.]+\s+no$', out)
+        self.assertRegex(out, r'total: \$0\.5 and [\d.]+ s over 2 attempt\(s\) at 1 outcome\(s\); no proven outcome', out)
+        self.config([self.agent('fixed', self.writes(FIXED) + '\necho odd-cost: 0.5')])
+        self.ok('race', 'add', '--n', '1')
+        self.ok('done', 'add')
+        out = self.table(self.ok('stats'))
+        self.assertRegex(out, r'(?m)^add\s+3\s+3 of 3\s+\$1\s+[\d.]+\s+yes$', out)
+        self.assertRegex(out, r'1 proven outcome\(s\): \$1 and [\d.]+ s per proven outcome \(failed attempts included\)', out)
+
+    def test_cascade_costs_are_recorded_and_unreported_ones_are_named(self):
+        self.config([self.agent('cheap', self.writes(BROKEN.replace('0', 'a - b')) + '\necho odd-cost: 0.01'),
+                     self.agent('dear', self.writes(FIXED))])
+        self.ok('cascade', 'add')
+        self.assertEqual(sorted((e['attempt'], e['cost']) for e in self.spend()), [('1', 0.01), ('2', None)])
+        self.ok('done', 'add')
+        out = self.table(self.ok('stats'))
+        self.assertRegex(out, r'(?m)^add\s+2\s+1 of 2\s+\$0\.01\s+[\d.]+\s+yes$', out)
+        self.assertIn('cost reported for 1 of 2 attempt(s)', out)
+
+    def test_stats_without_agent_attempts_say_so(self):
+        self.no('done', 'add')
+        out = self.table(self.ok('stats'))
+        self.assertIn('no race, cascade or chain attempt recorded here', out)
 
 
 if __name__ == '__main__':

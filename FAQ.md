@@ -229,6 +229,14 @@ with every reason. You put the agents in order; odd does not know prices. Costs 
 prints a line `odd-cost: <usd>` at the end. Under `"strength": "report"` an attempt with a surviving break still counts
 as verified and stops the cascade; use `"enforce"` to escalate on it. Real agents are not measured yet.
 
+**What does a proven outcome cost me?**
+With a tool newer than 0.4.0, `odd stats` ends with a table of what race, cascade and chain attempts cost: per outcome
+the attempts, dollars, seconds and whether it was proven, and in total the dollars and seconds per proven outcome,
+with failed attempts counted in the spend. The dollars are only what your agent commands print as `odd-cost: <usd>`
+(an attempt without that line adds nothing, and the table says how many reported), the seconds are summed per
+attempt rather than wall clock, and it is this machine's record only, so it is labelled self-reported. Work an agent
+does outside race, cascade and chain is not counted.
+
 **Can an agent work through a long ticket unattended without leaving a mess when it gets stuck?**
 `odd chain <ticket>` (a tool newer than 0.4.0) runs the outcome slugs listed in `.odd/chains/<ticket>.md` in order.
 Each one not yet proven is attempted by your agents in their own git worktrees (as `odd race`, or `odd cascade` with

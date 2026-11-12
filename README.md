@@ -96,7 +96,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
 | `odd ask <slug> "<question>"` | the outcome cannot be made checkable from the ticket: record one precise question; the gate says "waiting for an answer" until the `asked:` line is deleted (a tool newer than 0.4.0) |
 | `odd escaped <slug> "<what, where found>"` | a defect got past a verified outcome: record it on that outcome |
-| `odd stats` | counts, self-reported, including escaped defects by kind of proof |
+| `odd stats` | counts, self-reported, including escaped defects by kind of proof, and dollars and seconds per proven outcome from race, cascade and chain attempts (the cost table needs a tool newer than 0.4.0) |
 
 **Racing agents.** With `"agents": ["<agent command>", ...]` in `.odd/config.json` (any CLI agent; `{prompt_file}`
 in the command becomes the prompt's path, else the prompt goes to stdin), `odd race <slug>` starts one attempt per
@@ -117,6 +117,9 @@ break and its line, the line the proof never ran) in its prompt. After the last 
 reason, and nothing unverified is applied. `--race N` runs N attempts per level. Each attempt's cost is shown when the
 agent prints a final line `odd-cost: <usd>`, else "not reported". On fake agents: 0.65-0.71 s wall when level 1 is
 verified, 0.74-0.87 s when it escalates to level 2, 0.42-0.49 s to park after two (5 runs each, three-file repository).
+Every race, cascade or chain attempt also records its reported cost and its seconds locally, and `odd stats` prints
+dollars and seconds per outcome and per proven outcome, failed attempts included, labelled self-reported (a floor
+when some agents report no cost; seconds are summed per attempt, not wall clock).
 Not measured: real agents and whether Haiku-then-Sonnet is cheaper than Sonnet alone (BACKLOG item 2). Details:
 [DESIGN.md](DESIGN.md) section 3c.
 

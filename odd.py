@@ -2462,8 +2462,12 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
             v0 = time.time()
             at['why'] = _judge(root, cfg, o, base, at, fixed)
             at['verify_s'] = round(time.time() - v0, 1)
-            if at['why']:  # counted for the attempt budget as a failed done is
-                record(root, o.slug, failed='attempt %s' % at['name'], why=(at.get('detail') or at['why'])[:300], **_kind(o))
+            at['cost'] = _cost(at)
+            # backlog item 16: every attempt's spend, for `odd stats`; a refused one is counted for the attempt budget
+            # as a failed done is
+            record(root, o.slug, attempt=at['name'], cost=at['cost'], seconds=round(at['agent_s'] + at['verify_s'], 1),
+                   **dict(dict(failed='attempt %s' % at['name'], why=(at.get('detail') or at['why'])[:300])
+                          if at['why'] else {}, **_kind(o)))
         ranked = sorted([x for x in attempts if not x['why']], key=_rank)
         patch = ''
         if ranked:
@@ -2617,8 +2621,6 @@ def _cascade_run(root, cfg, slug, base_arg, levels, n):
         print('level %d of %d: %s' % (lv, len(levels), _short(cmd, 80)))
         attempts, ranked, patch, overhead = _attempts(root, cfg, o, base, head, fixed, [cmd] * n, keep, text,
                                                       ['%d' % lv] if n == 1 else ['%d.%d' % (lv, i) for i in range(1, n + 1)])
-        for at in attempts:
-            at['cost'] = _cost(at)
         history += attempts
         if ranked:
             break
@@ -3086,6 +3088,40 @@ def cmd_stats(a, root):
     print('  ' + '; '.join([split('proof strength n of n', lambda o: kind[o.slug] == 'caught'),
                             split('a mutant survived', lambda o: kind[o.slug] == 'survived'),
                             split('not measured here', lambda o: not kind[o.slug])]))
+    spend(root, outs)
+
+
+def spend(root, outs):
+    """Backlog item 16: dollars and seconds per proven outcome, from the attempt lines _attempts() records (race,
+    cascade, chain). Dollars are the agents' own "odd-cost:" lines; seconds are summed per attempt (agent plus
+    verification), not wall clock. All spend, failed attempts and unproven outcomes included, over the outcomes with
+    an attempt that a `done` here has verified."""
+    print('cost per proven outcome (self-reported: the agents\' own "odd-cost:" lines and this machine\'s clock; '
+          'race, cascade and chain attempts only)')
+    rows, tot = [], [0, 0, 0.0, 0.0, 0]  # attempts, cost reported, dollars, seconds, proven outcomes
+    for o in outs:
+        ev = evidence(root, o.slug)
+        at = [e for e in ev if 'attempt' in e]
+        if not at:
+            continue  # an outcome no agent attempt was spent on is not in the figure
+        proven = any(e.get('ok') for e in ev)
+        tot[4] += proven
+        cost = [e['cost'] for e in at if e.get('cost') is not None]
+        row = [len(at), len(cost), sum(cost), sum(e.get('seconds') or 0 for e in at)]
+        tot[:4] = [a + b for a, b in zip(tot[:4], row)]
+        rows.append((o.slug, str(row[0]), '%d of %d' % (row[1], row[0]), '$%g' % round(row[2], 6),
+                     '%g' % round(row[3], 1), 'yes' if proven else 'no'))
+    if not rows:
+        print('no race, cascade or chain attempt recorded here')
+        return
+    rows.insert(0, ('outcome', 'attempts', 'cost reported', 'dollars', 'seconds', 'proven'))
+    wide = [max(len(r[c]) for r in rows) for c in range(5)]
+    for r in rows:
+        print('  '.join(r[c].ljust(wide[c]) for c in range(5)) + '  ' + r[5])
+    n, k, usd, sec, won = tot
+    print('total: $%g and %g s over %d attempt(s) at %d outcome(s); %s; cost reported for %d of %d attempt(s)' % (
+        round(usd, 6), round(sec, 1), n, len(rows) - 1, '%d proven outcome(s): $%g and %g s per proven outcome (failed '
+        'attempts included)' % (won, round(usd / won, 6), round(sec / won, 1)) if won else 'no proven outcome', k, n))
 
 
 # when parking is the answer: the method, `odd park` and the Stop hook say it in the same words (ImpossibleBench's
