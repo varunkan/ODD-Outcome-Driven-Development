@@ -42,6 +42,11 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   be done as asked, instead of forcing a pass.
 - **Evidence:** an abort option took GPT-5 cheating from 54% to 9% and o3 from 49% to 12% (ImpossibleBench). One
   paragraph, no code. Expected effect is small on current Claude models, large on models that cheat.
+- **Done** in the commit "R3: make parking the sanctioned answer" (`git log --grep '^R3:'`): step 5 of the method now
+  says STOP and explain with `odd park` when the task cannot be done as asked or the proof cannot honestly pass, that
+  parking is then the expected, correct answer, and that a forced pass is wrong even when the gate turns green (same
+  sentence count as before; block 1,998 -> about 2,260 characters, 27 -> 30 lines, tested under 2,600 and 32). `odd
+  park` and the Stop hook use the same words. Not measured: any change in cheat or park rates (needs R1).
 
 ### R4. Proof strength done well (refines the step being built)
 - **Outcome:** one mutant per changed line, a check that every changed line actually runs under the proof, the

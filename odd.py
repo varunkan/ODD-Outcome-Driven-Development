@@ -1353,10 +1353,10 @@ def cmd_park(a, root):
     o = Outcome.load(root, a.slug)
     o.f['parked'] = ' '.join(a.reason.split())
     o.save()
-    print('%s: parked. This is a valid result; say so plainly in your report. A parked outcome covers no files: remove '
-          'its changes, with the test that proved it, or move them to another outcome. The gate fails when more than %d '
-          'changed line(s) remain outside every outcome. Keep this file as the record; to resume, delete its "parked:" '
-          'line.' % (a.slug, load_config(root)['trivial_lines']))
+    print('%s: parked. This is the expected, correct answer when %s, or when you are blocked: explain why in your '
+          'report, plainly. A parked outcome covers no files: remove its changes, with the test that proved it, or move '
+          'them to another outcome. The gate fails when more than %d changed line(s) remain outside every outcome. Keep '
+          'this file as the record; to resume, delete its "parked:" line.' % (a.slug, PARK_WHEN, load_config(root)['trivial_lines']))
 
 
 def cmd_escaped(a, root):
@@ -1405,6 +1405,9 @@ def cmd_stats(a, root):
                             split('not measured here', lambda o: not kind[o.slug])]))
 
 
+# when parking is the answer: the method, `odd park` and the Stop hook say it in the same words (ImpossibleBench's
+# strict stop-and-explain wording plus an abort path cut cheating; docs/evidence/14-research.md section 2.3)
+PARK_WHEN = 'the task cannot be done as asked or the proof cannot honestly pass'
 METHOD = '''## Outcome-driven development (odd)
 
 Work here is done when a proof says so, not when it looks finished. `odd` below means `python3 .odd/odd.py`.
@@ -1423,14 +1426,17 @@ For any change of more than a few lines, on a branch of its own:
    `.odd/outcomes/<slug>.md`. Work that is not part of this outcome is a later outcome.
 4. Finish with `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change
    taken out, and passes again. Report the work as done only when both exit 0, and report what they printed.
-5. If it cannot be done as specified, or you are blocked, say so: `odd park <slug> "<why>"`, and take the attempt
-   out again. That is an acceptable result. Weakening or deleting a test to get a pass is not.
+5. When you are blocked, or {park_when}
+   (a test contradicts the outcome, or a pass would take special-casing the test's inputs or editing, weakening or
+   deleting a test), STOP and explain: run `odd park <slug> "<why>"`, say why in your report, and take the attempt
+   out again. Parking is then the expected, correct answer, not a failure. A forced pass is the wrong answer, even
+   when it turns the gate green.
 
 Small edits (up to {trivial} changed lines) need no outcome. If a command can answer a question, run the command.
 Decisions only the owner can make (credentials, billing, deploys, releases, deleting data, relaxing a check) go to
 the owner; decide the rest yourself and note why in the outcome file. Do not edit `.odd/odd.py` or
 `.odd/config.json`.
-'''
+'''.replace('{park_when}', PARK_WHEN)
 BEGIN, END = '<!-- odd:begin -->', '<!-- odd:end -->'
 CI_HELP = '''
 To make the gate count, add it as the last step of your existing test job. On GitHub Actions, one step:
@@ -1607,11 +1613,13 @@ def cmd_hook(a, root):
     run = 'python3 .odd/odd.py'
     if stale:
         print(json.dumps({'decision': 'block', 'reason': 'odd: %s was verified and its files have changed since, or its '
-                          'latest check failed. Run `%s done %s` again, or park it with a reason.' % (', '.join(stale), run, stale[0])}))
+                          'latest check failed. Run `%s done %s` again, or, if %s, STOP and explain (`%s park %s "<why>"`).'
+                          % (', '.join(stale), run, stale[0], PARK_WHEN, run, stale[0])}))
     elif not s['inplay'] and n > cfg['trivial_lines']:
         print(json.dumps({'decision': 'block', 'reason': 'odd: this turn left %d changed line(s) with no outcome. State '
                           'the outcome (`%s new <slug> "<outcome>" --proof "<command>" --in "<globs>"`) and verify it '
-                          '(`%s done <slug>`), or say why it cannot be done (`%s park <slug> "<why>"`).' % (n, run, run, run)}))
+                          '(`%s done <slug>`), or, if %s, STOP and explain (`%s park <slug> "<why>"`): that is the '
+                          'expected answer then, not a failure.' % (n, run, run, PARK_WHEN, run)}))
     else:
         notes = ['not verified yet: ' + ', '.join(o.slug for o in s['active'] if not any(e.get('ok') for e in tried[o.slug]))]
         if not s['active'] and n > cfg['trivial_lines']:

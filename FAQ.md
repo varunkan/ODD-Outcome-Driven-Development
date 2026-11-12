@@ -68,8 +68,8 @@ definition always comes with the name.
 2. **Enforced outside the model.** In CI the gate recomputes everything from the code, with its own pinned copy of the
    tool and the target branch's settings, so a change cannot loosen the check that judges it. Every changed file must
    belong to a proven outcome, so unproven work cannot slip in beside proven work.
-3. **An honest exit.** `odd park` makes "this cannot be done as specified" a valid result instead of a pressure to
-   fake success.
+3. **An honest exit.** `odd park` makes "this cannot be done as specified" the expected answer instead of a pressure
+   to fake success; the installed method, `odd park` and the Stop hook say so in the same words.
 
 **What is not new?**
 - Stating the outcome first: Spec Kit and others do something similar.
@@ -133,13 +133,13 @@ Superpowers, three times each, on two models. It measures whether the work is re
 | objection | answer |
 |---|---|
 | "Isn't this just TDD?" | TDD's red-first is the idea. ODD makes it the agent's definition of done, checks it automatically and enforces it at merge. |
-| "Another framework to learn?" | Six commands (two more, `seal` and `escaped`, are optional) and about twenty lines of method, which your agent reads itself. |
+| "Another framework to learn?" | Six commands (two more, `seal` and `escaped`, are optional) and about thirty lines of method, which your agent reads itself. |
 | "My tests are fine." | Then `odd done` passes in seconds. If it does not, you have learned something. |
 | "It will slow us down." | The proof runs three times, plus once per small break (at most eight; by default it stops once the breaks took about as long as the three runs), so make it the narrowest test that shows the outcome, usually seconds. Rework after a fake "done" costs more. |
 | "My agent could cheat it." | On a laptop an agent with a shell can bypass any local check, so CI is the authority: a required check, its own pinned copy of the tool, settings from the target branch. |
 | "We already use Spec Kit or BMAD." | Keep them. They plan; ODD checks the result. |
 | "Does it make agents better?" | Not proven. The comparison will say, and it will be published either way. |
-| "What if the work cannot be done?" | `odd park <slug> "<why>"`. An honest "blocked" is a valid result. |
+| "What if the work cannot be done?" | `odd park <slug> "<why>"`. The method tells the agent that when the task cannot be done as asked or the proof cannot honestly pass, stopping and explaining with `odd park` is the expected, correct answer, and a forced pass is the wrong one. This is wording, not enforcement; its effect here is not measured. |
 | "Can the agent just rewrite the test to fit its code?" | Not silently. Editing or deleting a test that existed at the base fails `done` and the gate unless the outcome says why (`test-change: <reason>`), and the review comment prints that reason. A test the change adds is covered only if the outcome is sealed. `odd seal <slug>` before the code checks the proof fails and fingerprints the test files in the outcome file; editing them later fails `done` and the gate until a reseal, which changes the outcome file in the diff. Optional; a reviewer still has to look. |
 | "What happens when a bug gets through anyway?" | `odd escaped <slug> "<what, where found>"` records it on the outcome it got past, and you write a new outcome whose proof fails on that bug. `odd stats` splits recorded escapes by sealed, take-out skipped and proof strength, so a team sees which kinds of proof leak. Only what someone records is counted, and strength only where it was measured locally. |
 | "Can the proof just skip its test or exit 0 early?" | Not for unittest, pytest, jest or go test: a proof that exits 0 having run no test, skipped every test, or stopped before the runner's summary (`sys.exit(0)` at import) is refused. It reads the output and is conservative: a multi-step proof, a script run directly or a quieted runner is not checked (DESIGN section 4). |

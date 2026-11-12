@@ -378,7 +378,9 @@ class Attacks(Repo):
         self.solve()
         self.write('calc.py', FIXED + '# pad\n' * 30)
         self.no('park', 'add', 'x')
-        self.ok('park', 'add', 'blocked on a decision about rounding')
+        said = ' '.join(self.ok('park', 'add', 'blocked on a decision about rounding').split())
+        self.assertIn('the expected, correct answer when the task cannot be done as asked or the proof cannot honestly pass', said)
+        self.assertIn('explain why in your report', said)
         out = self.no('gate')
         self.assertIn('parked  add: blocked on a decision about rounding', out)
         self.assertIn('are outside every outcome', out)
@@ -749,6 +751,27 @@ class Setup(Repo):
         self.assertIn('required check', out, 'init prints the conditions under which CI is the authority')
         self.assertFalse(os.path.exists(self.path('.github')), 'no workflow file is written')
 
+    def test_the_method_makes_parking_the_expected_answer_and_replaces_an_old_block_in_place(self):
+        old_step5 = ('5. If it cannot be done as specified, or you are blocked, say so: `odd park <slug> "<why>"`, and take '
+                     'the attempt\n   out again. That is an acceptable result. Weakening or deleting a test to get a pass is not.')
+        before, after = '# House rules\n\nBe kind.\n\n', '\n\n## Our own section\n\nKeep it.\n'
+        self.write('AGENTS.md', before + oddmod.BEGIN + '\n## Outcome-driven development (odd)\n\n' + old_step5 + '\n'
+                   + oddmod.END + after)
+        for _ in range(2):
+            self.ok('init')
+            agents = self.read('AGENTS.md')
+            self.assertTrue(agents.startswith(before) and agents.endswith(after), 'text outside the block is untouched')
+            block = agents[len(before):len(agents) - len(after)]
+            self.assertEqual([agents.count(oddmod.BEGIN), agents.count(oddmod.END)], [1, 1])
+            self.assertTrue(block.startswith(oddmod.BEGIN) and block.endswith(oddmod.END), block)
+            self.assertNotIn('That is an acceptable result.', block, 'the old step 5 is replaced, not kept beside the new one')
+            flat = ' '.join(block.split())
+            for words in ('the task cannot be done as asked or the proof cannot honestly pass',
+                          'STOP and explain', 'the expected, correct answer', 'not a failure', 'special-casing'):
+                self.assertIn(words, flat)
+            self.assertLessEqual(len(block), 2600, 'the block stays short enough to be read every session')
+            self.assertLessEqual(block.count('\n') + 1, 32)
+
     def test_no_claude_file_is_created_and_a_symlinked_one_is_left_alone(self):
         self.ok('init')
         self.assertFalse(os.path.exists(self.path('CLAUDE.md')))
@@ -780,7 +803,9 @@ class ClaudeHooks(Repo):
         self.hook('session-start')
         self.assertEqual(self.hook('stop'), '', 'a question or a discussion is never blocked')
         self.write('calc.py', BROKEN + '# pad\n' * 30)
-        self.assertIn('with no outcome', self.hook('stop'))
+        said = json.loads(self.hook('stop'))['reason']
+        self.assertIn('with no outcome', said)
+        self.assertIn('if the task cannot be done as asked or the proof cannot honestly pass, STOP and explain', said)
         self.assertEqual(self.hook('stop'), '', 'the same state is not blocked twice')
         self.write('calc.py', BROKEN + '# pad\n' * 31)
         self.assertEqual(self.hook('stop', {'stop_hook_active': True}), '')

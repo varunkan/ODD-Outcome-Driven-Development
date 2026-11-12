@@ -254,9 +254,20 @@ Exemptions are not verification. Each is printed with its line count.
 
 ## 7. How it reaches each tool
 
-`odd init` writes the method, about twenty lines, into the root `AGENTS.md` between markers (at the top on first
+`odd init` writes the method, about thirty lines, into the root `AGENTS.md` between markers (at the top on first
 insertion). That is the only rendered copy. If a Claude instruction file exists (`CLAUDE.md` or `.claude/CLAUDE.md`),
-it gets one `@AGENTS.md` import line.
+it gets one `@AGENTS.md` import line. Running `init` again replaces the block in place and leaves the rest of the file
+as it was; the block is held under 2,600 characters and 32 lines by a test (about 2,260 and 30 today).
+
+Step 5 of the method makes parking the sanctioned answer: when the agent is blocked, or the task cannot be done as asked
+or the proof cannot honestly pass, it is told to STOP and explain with `odd park`, that parking is then the expected,
+correct answer and not a failure, and that a forced pass (special-casing a test's inputs, editing, weakening or deleting
+a test) is the wrong answer even when it turns the gate green. The wording follows ImpossibleBench, where an abort path
+plus strict stop-and-explain wording cut cheating for GPT-5 from 54% to 9% and o3 from 49% to 12%, with little effect
+on Opus 4.1, while "do not modify the tests" alone did not (docs/evidence/14-research.md, section 2.3). `odd park`'s
+own message and the Claude Code Stop hook's block message use the same words (one constant, `PARK_WHEN`). This is
+instruction text: it changes what the agent is told, not what the gate enforces, and its effect on cheating in this
+tool has not been measured here.
 
 | reads a root `AGENTS.md` without configuration | needs one line of configuration |
 |---|---|

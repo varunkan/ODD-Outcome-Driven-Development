@@ -31,7 +31,7 @@ ODD keeps the one part that does not depend on the model agreeing: "done" is dec
 It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
 the model. Questions and objections: [FAQ](FAQ.md).
 
-> **Status: early (0.4.0).** The tool passes its own tests (126), including the ways an agent could fake "done". It
+> **Status: early (0.4.0).** The tool passes its own tests (127), including the ways an agent could fake "done". It
 > has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
 >
 > **Does it work better? Not claimed yet.** A same-task comparison is running: 16 tasks with hidden acceptance tests,
@@ -168,7 +168,10 @@ measured ([protocol](docs/review-time.md)).
 
 ## Works with
 
-`odd init` writes the method (about twenty lines) into the root `AGENTS.md`.
+`odd init` writes the method (about thirty lines) into the root `AGENTS.md`; running it again replaces that block in
+place. Its last step tells the agent that when the task cannot be done as asked or the proof cannot honestly pass, it
+should STOP and explain with `odd park`, and that this is the expected answer, not a failure (wording from
+ImpossibleBench's abort option; its effect here is not measured).
 
 | reads `AGENTS.md` without configuration | needs one line |
 |---|---|
