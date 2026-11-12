@@ -18,6 +18,7 @@ documents behind it.
 | 10 | [Design review](10-design-review.md) | What was wrong with the first design of the lean tool, and what changed? | Four critics (tamper, correctness, friction, portability) and one ruling: 23 required changes. |
 | 11 | [Red team of 0.2.0](11-red-team.md) | Can the tool be made to report done, lose work or crash? | Six attackers, each finding reproduced independently; each confirmed one is now a test. |
 | 12 | [Pilot of the comparison](12-pilot.md) | Does the harness measure fairly, and what will the full run cost? | 15 real sessions; harness evidence, not a result. |
+| 13 | [Verdict so far, and where ODD is useful](13-verdict-and-use.md) | Is it worth using, for whom, and what is not shown? | The comparison's Sonnet half, the red team and the source project; updated when the comparison is published. |
 
 ## Data and tools
 
