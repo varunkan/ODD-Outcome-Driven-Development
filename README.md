@@ -29,7 +29,7 @@ ODD keeps the one part that does not depend on the model agreeing: "done" is dec
 | a user of Spec Kit, BMAD or Superpowers | specs and plans, but nothing proves the code meets them | ODD sits underneath as the last check; it replaces none of them |
 
 It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
-the model.
+the model. Questions and objections: [FAQ](FAQ.md).
 
 > **Status: early (0.3.0).** The tool passes its own tests (82), including the ways an agent could fake "done". It
 > has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
@@ -139,6 +139,8 @@ one line of status at session start and stop a turn from ending on unproven work
 The method was distilled from building a production point-of-sale system with coding agents: 1,856 instructions
 given over three months, each measured and ruled on. Most were dropped.
 
+- [FAQ.md](FAQ.md): short answers, the differentiator, objections, how to adopt it, and a script for explaining it
+  in a session.
 - [WHY.md](WHY.md): what the evidence supports, what it counts against, and what is not claimed.
 - [What went wrong](docs/evidence/02-pos-evidence-ledger.md): the waste record of the source project. The two most
   expensive mistakes were its own rules.

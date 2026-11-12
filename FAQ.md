@@ -1,0 +1,205 @@
+# FAQ: Outcome-Driven Development (ODD)
+
+Short answers to the questions people ask, plus a script for explaining ODD in a session. Where a claim depends on
+evidence, the evidence is linked; where it is not proven yet, this page says so.
+
+- [What it is](#what-it-is)
+- [The name](#the-name)
+- [What makes it different](#what-makes-it-different)
+- [Who it is for](#who-it-is-for)
+- [Next to other tools](#next-to-other-tools)
+- [Does it work?](#does-it-work)
+- [Objections](#objections)
+- [Trying and adopting it](#trying-and-adopting-it)
+- [Explaining it in a session](#explaining-it-in-a-session)
+
+## What it is
+
+**What is ODD, in one sentence?**
+An outcome counts as delivered only when its proof fails without the change.
+
+**What problem does it solve?**
+Coding agents report "done" for work that is not done: the tests pass, but they test nothing the change does, and the
+bug is still there. Writing more rules does not fix this, because a rule is something the model may or may not
+follow. ODD makes "done" a command's verdict instead of the agent's claim.
+
+**How does it work?**
+1. Before writing code, the agent states the outcome: one sentence saying who observes what, a command that exits 0
+   only when it is true, and the files the change may touch (`odd new`).
+2. The agent makes the change.
+3. `odd done` runs the proof, takes the change out and runs it again (it must fail), then puts the change back and
+   runs it a third time (it must pass).
+4. In CI, `odd gate --recompute` redoes all of it from the code and trusts nothing the agent recorded. Every changed
+   file must sit inside a verified outcome.
+
+Small edits (25 lines by default) need no outcome. If the work cannot be done as specified, `odd park` says so, and
+that is an acceptable result.
+
+**What is it not?**
+Not a planning framework, a prompt library or an agent orchestrator, and it does not make the agent smarter. It is
+the one check the others leave to the model.
+
+**Where did it come from?**
+From building a production restaurant point-of-sale system with coding agents over three months. 1,856 instructions
+were given; each was catalogued and ruled on, and most were dropped. The two most expensive mistakes in that project
+were its own process rules ([the waste record](docs/evidence/02-pos-evidence-ledger.md),
+[why](WHY.md)).
+
+## The name
+
+**Why "Outcome-Driven Development"?**
+Because every piece of work starts from one outcome a command can check, and ends only when that outcome is proven.
+It sits beside test-driven (TDD) and behaviour-driven (BDD) development, and it describes how the source project was
+actually built.
+
+**Isn't that term already used?**
+Yes, in two other senses. In product management, "outcome-driven development" means aligning work with business
+goals ("outcomes over outputs"). And "ODD" is also the usual abbreviation for observability-driven development. Here
+an outcome is narrower: something a command can check, with a proof that fails without the change. That is why the
+definition always comes with the name.
+
+## What makes it different
+
+**What is the real differentiator?**
+"Done" stops being the agent's claim and becomes a command's verdict the agent cannot fake. Three things together:
+
+1. **The take-out check.** The proof must pass with the change, fail without it, and pass again. That catches the most
+   common false "done": a test that passes but tests nothing the change does.
+2. **Enforced outside the model.** In CI the gate recomputes everything from the code, with its own pinned copy of the
+   tool and the target branch's settings, so a change cannot loosen the check that judges it. Every changed file must
+   belong to a proven outcome, so unproven work cannot slip in beside proven work.
+3. **An honest exit.** `odd park` makes "this cannot be done as specified" a valid result instead of a pressure to
+   fake success.
+
+**What is not new?**
+- Stating the outcome first: Spec Kit and others do something similar.
+- The take-out idea itself: it is TDD's "red first" and a relative of mutation testing. What is new is making it the
+  agent's definition of done, checked automatically and enforced at merge.
+- Making agents smarter: ODD does not. Early measurements suggest strong models already get most work right.
+
+**So what is it, really?**
+A trust layer for code written by agents. It matters most where nobody is watching closely: agents opening pull
+requests, agents running unattended, teams that must merge agent work safely, and weaker or cheaper models. The more
+code agents write without anyone reading it, the more a check they cannot talk their way past is worth.
+
+## Who it is for
+
+| you are | the problem | how you use it |
+|---|---|---|
+| a developer working with an AI agent | the agent says done; the tests pass but test nothing | `odd init` once; the agent follows `AGENTS.md` and runs `odd done` before it reports done |
+| a team letting agents open pull requests | reviewers cannot tell whether an agent's PR really works | one CI step, made a required check: a PR whose files are not covered by a proof that fails without them cannot merge |
+| anyone running agents unattended | nobody is checking the "done" claims | the gate is the referee; `odd park` gives an honest "blocked" instead of a fake done |
+| an engineering lead | no record of what was promised and what was proven | each outcome file is a three-line record; `odd stats` counts them |
+| a user of Spec Kit, BMAD or Superpowers | specs and plans, but nothing proves the code meets them | ODD sits underneath as the last check |
+
+**Which coding tools does it work with?**
+Anything that can run a shell command. `odd init` writes the method into `AGENTS.md`, which Codex, Cursor, GitHub
+Copilot in VS Code, Claude Code, Junie and Windsurf read without configuration; Gemini CLI, Aider and Copilot Chat
+outside VS Code need one line. So far only Claude Code has actually been run with it.
+
+## Next to other tools
+
+| | what it adds | who decides "done" |
+|---|---|---|
+| Spec Kit | constitution, spec, plan, tasks, implement | the model, against written checklists |
+| BMAD | agent roles and story workflows | the model; tests and reviews are advisory |
+| Superpowers | skills with "iron laws" such as test first | the model; the rules are text |
+| ODD | an outcome, a proof, a boundary | a command that reruns the proof without the change |
+
+From each project's own documentation ([sources](docs/evidence/04-spec-kit-bmad-superpowers.md)). Other frameworks
+help the agent plan; ODD checks whether the work is actually done. Use them together.
+
+## Does it work?
+
+**Is it proven to make agents better?**
+Not yet, and nothing here claims it. A same-task comparison is running: 16 tasks with hidden acceptance tests (bug
+fixes, features, traps, vague requests, impossible ones), each done by plain Claude Code, ODD, Spec Kit, BMAD and
+Superpowers, three times each, on two models. It measures whether the work is really right, whether the agent claims
+"done" falsely, and cost and time. The results will be published whatever they show. The harness is open in
+[`bench/`](bench/SPEC.md).
+
+**What has been measured so far?**
+- The tool itself: 82 tests, a design review (23 changes) and a red team (48 confirmed defects, each now a test).
+  See [the design review](docs/evidence/10-design-review.md) and [the red team](docs/evidence/11-red-team.md).
+- The source project, from its git history: process lines per product line fell from 9.9 to 2.4 and the slowest
+  tenth of changes from 133 hours to 12 as the method matured ([measurement](docs/evidence/01-method-measured.md)).
+  One project, measured by itself.
+- A pilot of the comparison ([pilot](docs/evidence/12-pilot.md)), too small to be a result: on Sonnet, plain Claude
+  Code got the work right on every task tried, so correctness may not separate the five; on an impossible task, one
+  framework claimed "done".
+
+## Objections
+
+| objection | answer |
+|---|---|
+| "Isn't this just TDD?" | TDD's red-first is the idea. ODD makes it the agent's definition of done, checks it automatically and enforces it at merge. |
+| "Another framework to learn?" | Six commands and twenty lines of method, which your agent reads itself. |
+| "My tests are fine." | Then `odd done` passes in seconds. If it does not, you have learned something. |
+| "It will slow us down." | The proof runs three times, so make it the narrowest test that shows the outcome, usually seconds. Rework after a fake "done" costs more. |
+| "My agent could cheat it." | On a laptop an agent with a shell can bypass any local check, so CI is the authority: a required check, its own pinned copy of the tool, settings from the target branch. |
+| "We already use Spec Kit or BMAD." | Keep them. They plan; ODD checks the result. |
+| "Does it make agents better?" | Not proven. The comparison will say, and it will be published either way. |
+| "What if the work cannot be done?" | `odd park <slug> "<why>"`. An honest "blocked" is a valid result. |
+| "Does it check that my test is thorough?" | No. It checks that the proof depends on the change. A person should read the outcome sentence and the proof: three lines. |
+
+Full limits: [DESIGN.md](DESIGN.md#10-limits).
+
+## Trying and adopting it
+
+**How do I try it?**
+```bash
+pipx install odd-tool          # or: pip install odd-tool, or download odd.py
+cd your-project && odd init     # writes .odd/ and the method into AGENTS.md
+bash launch/demo.sh             # from this repository: watch it refuse a test that proves nothing
+```
+It is one file with no account and no service. To remove it, delete `.odd/` and the block it added to `AGENTS.md`.
+
+**How do I make it count in CI?**
+On GitHub Actions, one step at the end of your test job, made a required check:
+```yaml
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.3.0
+```
+Other CI systems use the two lines `odd init` prints.
+
+**What is a sensible way to adopt it?**
+1. Today: run the demo (60 seconds).
+2. This week: `odd init` on one repository and use it on your next agent task.
+3. This month: add the action as a required check on agent pull requests.
+4. Tell us: open an issue when it catches something, and when it gets in your way.
+
+**A challenge to try on your own code:** take the last change your agent called finished, state its outcome and
+proof, and run `odd done`. If the proof still passes with the change taken out, that test proves nothing.
+
+## Explaining it in a session
+
+A ten-minute talk built around the live demo.
+
+1. **Hook (1 min).** "Who has had an AI agent tell you a task was done, and it wasn't?" Then: "The tests passed. They
+   just didn't test anything the change did."
+2. **The problem (1 min).** Agents decide when they are done; their "done" is a claim. More rules do not fix it. Tell
+   the source story: 1,856 instructions over three months, and the two costliest mistakes were the process's own rules.
+3. **The idea (30 s).** On screen: *An outcome counts as delivered only when its proof fails without the change.*
+4. **Live demo (3 min).** `bash launch/demo.sh`. The agent states the outcome, writes a test that asserts nothing and
+   says done; `odd done` takes the change out, sees the test still pass, and refuses it. That is the moment people
+   remember. Then a real test and fix are verified, and CI recomputes the verdict.
+5. **Why it is different (1.5 min).** "Other frameworks help the agent plan. ODD checks whether the work is actually
+   done." Done is a command's verdict; the proof must fail without the change; in CI a change cannot loosen its own
+   check; `odd park` makes honesty acceptable.
+6. **Who it is for (1 min).** Developers with agents, teams letting agents open pull requests, anyone running agents
+   unattended. It sits under Spec Kit, BMAD or Superpowers.
+7. **Honesty (1 min).** "We are running the same tasks with five approaches and publishing whatever it shows. Early
+   sign: strong models already get most work right, so ODD's value is trust and an honest done, not a smarter agent."
+8. **Close (30 s).** "`pipx install odd-tool`, then `odd init`. In CI it is one line. Everything is on GitHub,
+   including what did not work."
+
+**Tips.** Lead with the refusal in the demo. Use the real numbers from the source project. Make no speed or quality
+claim until the comparison is published. Better still, run `odd done` live on a real agent change from someone in the
+room: one catch on their own code beats any slide.
+
+**Why people should use it, in a sentence each:**
+- It costs five minutes to try and nothing to remove.
+- It catches the false "done" on your own code, where you can see it.
+- It gets more useful as models improve, because more code goes unread.
+- It does not ask you to believe a claim: the evidence and the comparison are public, including what failed.
+
+> Your agent says it's done. ODD checks. Five minutes to try, nothing to lose.
