@@ -407,6 +407,18 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Outcome:** the method tells the agent to stop as soon as the outcome is proven and strong, with no further planning
   or review rounds.
 - **Measure:** cost and seconds per task at unchanged accuracy.
+- **Done** in the commit "B14: stop when proven" (`git log --grep '^B14:'`), a tool newer than 0.4.0, no setting:
+  step 4 of the method gains one sentence (once `odd done` passes with full proof strength and `odd gate` passes,
+  stop and report; do not plan, review or refactor further in this outcome), and `odd done`'s success output ends with
+  `next: report the outcome as done (odd gate passed)` when its gate passes, with the gate's `FAIL` and problems
+  otherwise. To keep the `AGENTS.md` block within the existing size test (2,600 characters, 32 lines) step 2 drops
+  "and the reseal shows in review"; the block is now 2,595 characters and 32 lines. Measured with `tests/test_odd.py`
+  class `StopWhenProven` (4 tests; 3 seen RED before the code for the missing sentence and line, the fourth, the
+  gate-fails case, passed before too and is a control that the line is never printed after a failing gate): 7
+  hand-made mutants (no line, always the line, inverted condition, changed wording, changed method sentence, block 32
+  characters over, block one line over) each turned a new test red. Suites: 264 and 89 tests OK. Not done: cost and
+  seconds per task (the item's measure) are not measured; the line follows the gate only, so under the default
+  `"strength": "report"` it also appears when strength is below full; the block has no size headroom left.
 
 ### 15. Attempt budget per outcome
 - **Outcome:** after N failed attempts an outcome is parked or escalated instead of consuming tokens without end.

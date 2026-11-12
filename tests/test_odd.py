@@ -3569,5 +3569,41 @@ class BoundaryPrompt(Agents):
             self.assertIn('read these first', f.read())
 
 
+class StopWhenProven(Repo):
+    """Backlog item 14: once done passes at full strength and the gate passes, the agent stops and reports."""
+    SENT = 'stop and report; do not plan, review or refactor further in this outcome'
+
+    def test_step_4_of_the_method_says_stop_when_proven(self):
+        method = oddmod.METHOD.replace('{trivial}', '25')
+        step4 = ' '.join(method[method.index('\n4. '):method.index('\n5. ')].split())
+        self.assertIn('Once `done` passes with full proof strength and `odd gate` passes, ' + self.SENT, step4)
+
+    def test_the_block_init_writes_carries_it_and_stays_within_the_size(self):
+        self.ok('init')
+        agents = self.read('AGENTS.md')
+        block = agents[agents.index(oddmod.BEGIN):agents.index(oddmod.END) + len(oddmod.END)]
+        self.assertIn(self.SENT, ' '.join(block.split()))
+        self.assertLessEqual(len(block), 2600, 'the block stays short enough to be read every session')
+        self.assertLessEqual(block.count('\n') + 1, 32)
+
+    def test_done_ends_with_report_as_done_when_the_gate_passes(self):
+        self.outcome()
+        self.solve()
+        out = self.ok('done', 'add')
+        self.assertEqual(out.rstrip('\n').split('\n')[-1], 'next: report the outcome as done (odd gate passed)', out)
+
+    def test_done_ends_with_the_gates_problems_when_the_gate_fails(self):
+        self.outcome()
+        self.solve()
+        self.write('other.py', ''.join('x%d = %d\n' % (i, i) for i in range(40)))
+        out = self.ok('done', 'add')
+        self.assertIn('add: verified.', out)
+        self.assertNotIn('report the outcome as done', out)
+        tail = out.rstrip('\n').split('\n')
+        fail = tail.index('FAIL')
+        self.assertIn('outside every outcome', '\n'.join(tail[fail:]))
+        self.assertTrue(all(l.startswith('  ') for l in tail[fail + 1:]), 'nothing follows the problems')
+
+
 if __name__ == '__main__':
     unittest.main()

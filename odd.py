@@ -2105,8 +2105,8 @@ def cmd_done(a, root):
         raise Fail('%s\n%s' % (e, next_block(e.items, _rerun(a))) if e.items else e, e.items)  # no item: rerunning fails alike
     _verified(root, o, s, res)
     print('%s: verified. %s' % (a.slug, _describe(o, res)))
-    code, lines = gate(root, a.base)
-    print('\n'.join(['', 'the change as a whole:'] + lines))
+    code, lines = gate(root, a.base)  # a failing gate's lines end with its problems
+    print('\n'.join(['', 'the change as a whole:'] + lines + ([] if code else [DONE_NEXT])))
 
 
 def cmd_seal(a, root):
@@ -3057,11 +3057,12 @@ For any change of more than a few lines, on a branch of its own:
 2. Write the proof as a test in a file of its own under a test path (`tests/`, `test_*.py`, `*_test.*`, `*.test.*`,
    `*.spec.*`). Make it the narrowest command that shows the outcome, not the whole suite. Recommended: run
    `odd seal <slug>` now, before the code; it checks the proof fails and fingerprints the test, so changing the test
-   later fails `done` until it is resealed, and the reseal shows in review.
+   later fails `done` until it is resealed.
 3. Make the change, staying inside the files the outcome names. If more are needed, add them to `in:` in
    `.odd/outcomes/<slug>.md`. Work that is not part of this outcome is a later outcome.
 4. Finish with `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change
-   taken out, and passes again. Report the work as done only when both exit 0, and report what they printed.
+   taken out, and passes again. Report done only when both exit 0, with what they printed. Once `done` passes with
+   full proof strength and `odd gate` passes, stop and report; do not plan, review or refactor further in this outcome.
 5. When you are blocked, or {park_when}
    (a test contradicts the outcome, or a pass would take special-casing the test's inputs or editing, weakening or
    deleting a test), STOP and explain: run `odd park <slug> "<why>"`, say why in your report, and take the attempt
@@ -3073,6 +3074,7 @@ Decisions only the owner can make (credentials, billing, deploys, releases, dele
 the owner; decide the rest yourself and note why in the outcome file. Do not edit `.odd/odd.py` or
 `.odd/config.json`.
 '''.replace('{park_when}', PARK_WHEN)
+DONE_NEXT = 'next: report the outcome as done (odd gate passed)'  # step 4 of METHOD: stop when proven
 BEGIN, END = '<!-- odd:begin -->', '<!-- odd:end -->'
 CI_HELP = '''
 To make the gate count, add it as the last step of your existing test job. On GitHub Actions, one step:

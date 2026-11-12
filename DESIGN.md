@@ -806,7 +806,19 @@ Exemptions are not verification. Each is printed with its line count.
 `odd init` writes the method, about thirty lines, into the root `AGENTS.md` between markers (at the top on first
 insertion). That is the only rendered copy. If a Claude instruction file exists (`CLAUDE.md` or `.claude/CLAUDE.md`),
 it gets one `@AGENTS.md` import line. Running `init` again replaces the block in place and leaves the rest of the file
-as it was; the block is held under 2,600 characters and 32 lines by a test (about 2,260 and 30 today).
+as it was; the block is held under 2,600 characters and 32 lines by a test (2,595 and 32 today, measured on the
+block `init` writes with the default settings: no room is left, so a later addition must shorten something).
+
+Step 4 of the method stops the work when it is proven (backlog item 14, a tool newer than 0.4.0, no setting): once
+`odd done` passes with full proof strength and `odd gate` passes, the agent is told to stop and report, and not to
+plan, review or refactor further in this outcome. `odd done`'s success output then ends with the line
+`next: report the outcome as done (odd gate passed)` (the constant `DONE_NEXT`) when the gate it runs passes; when that
+gate fails, the output ends with the gate's `FAIL` and its problems, and the line is not printed. The MCP `done` tool
+returns odd's output, so it carries the line too. Limits: the line follows the gate only, so under the default
+`"strength": "report"` it is printed even when the proof strength is below full (the strength is on the line above it;
+the method's wording, not the tool, asks for full strength); and whether it cuts cost or seconds per task (the item's
+measure) is not measured. To make room, step 2 no longer says that a reseal shows in review (DESIGN section 4 and the
+FAQ still do).
 
 Step 5 of the method makes parking the sanctioned answer: when the agent is blocked, or the task cannot be done as asked
 or the proof cannot honestly pass, it is told to STOP and explain with `odd park`, that parking is then the expected,

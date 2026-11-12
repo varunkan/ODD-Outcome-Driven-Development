@@ -297,7 +297,10 @@ measured ([protocol](docs/review-time.md)).
 `odd init` writes the method (about thirty lines) into the root `AGENTS.md`; running it again replaces that block in
 place. Its last step tells the agent that when the task cannot be done as asked or the proof cannot honestly pass, it
 should STOP and explain with `odd park`, and that this is the expected answer, not a failure (wording from
-ImpossibleBench's abort option; its effect here is not measured).
+ImpossibleBench's abort option; its effect here is not measured). Step 4 tells it to stop once `odd done` passes
+with full proof strength and `odd gate` passes: report, and do not plan, review or refactor further in this outcome.
+`odd done` then ends with `next: report the outcome as done (odd gate passed)`, or with the gate's problems when the
+gate fails (a tool newer than 0.4.0; whether this saves cost or time is not measured).
 
 | reads `AGENTS.md` without configuration | needs one line |
 |---|---|
