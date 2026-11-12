@@ -216,8 +216,10 @@ while tests from the weak model itself lowered it to 57.3% (arXiv 2609.09133, se
 **An attempt budget per outcome.** `"max_attempts": N` (default 0, off; a tool newer than 0.4.0) parks an outcome
 after N failed attempts at it, counted on this machine from odd's local evidence: failed `odd done` runs and refused
 `race`, `cascade` or `chain` attempts, since the outcome was last verified. The `parked:` line lists each reason; a
-cascade runs no further level once the budget is reached; delete the `parked:` line to try again. The number is
-never written into `AGENTS.md` or an agent's prompt: in our pilot a visible budget made an agent skip work. Whether it
+cascade runs no further level once the budget is reached. While parked for its budget, `done`, `race`, `cascade`
+and `chain` refuse the outcome (exit 1) and run no proof and no agent, until a person deletes the `parked:` line. The
+number is never written into `AGENTS.md` or an agent's prompt (in our pilot a visible budget made an agent skip work),
+but it is in `.odd/config.json`, which an agent can read in its copy of the repository. Whether it
 saves money on tasks that end unsolved is not measured. Details: [DESIGN.md](DESIGN.md) section 3g.
 
 ## What it checks, and what it does not
@@ -367,7 +369,8 @@ given over three months, each measured and ruled on. Most were dropped.
   uses `counterfactual: skip - <reason>`, which the gate names in its result.
 - A proof that needs a real device, account or secret cannot be recomputed in CI.
 - The verification cache does not see ignored files, installed packages, the environment or the clock; use
-  `--no-cache` when the result depends on them.
+  `--no-cache` when the result depends on them. Locally, anything that can write the git directory can plant a
+  cached pass for `odd done`; only `gate --recompute`, which ignores the local cache, decides.
 - Windows is untested.
 
 The full list is in [DESIGN.md](DESIGN.md#10-limits).

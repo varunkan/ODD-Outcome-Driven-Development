@@ -17,7 +17,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
   odd escaped <slug> "<what went wrong, where found>"     a defect got past this outcome; record it
-  odd stats [--json]                                      counts and proof quality trends (self-reported)
+  odd stats [--json]                                      counts and escaped defects by group (a snapshot)
 
 Needs a POSIX system, git 2.23+ and Python 3.8+. One file, standard library only, so a project vendors it as
 .odd/odd.py. Design and limits: DESIGN.md.
@@ -629,6 +629,21 @@ def over_budget(root, cfg, slug):
     return bool(cfg['max_attempts']) and len(failures(root, slug)) >= cfg['max_attempts']
 
 
+BUDGET_PARK = 'odd: attempt budget reached'
+
+
+class Parked(Fail):
+    """A budget-parked outcome was asked for more proof runs or agent attempts (exit 1); not itself an attempt."""
+
+
+def refuse_budget_park(o):
+    """Backlog item 15: once an outcome is parked for its attempt budget, no odd command spends another proof run or
+    agent attempt on it until a person has read the reasons and removed the "parked:" line."""
+    if o.parked.startswith(BUDGET_PARK):
+        raise Parked('%s is parked: %s\nodd runs no proof and no agent for it until a person reviews these reasons and '
+                     'clears the "parked:" line of %s.' % (o.slug, o.parked, o.rel))
+
+
 def budget(root, cfg, o):
     """Backlog item 15: when the failed attempts reach "max_attempts" (0: off), park the outcome with their reasons
     and return the line to add to the failure; else ''. The number is never shown to an agent in advance (a visible
@@ -638,11 +653,12 @@ def budget(root, cfg, o):
     fails = failures(root, o.slug)
     why = '; '.join(('%s: ' % e['failed'] if e.get('failed') else '') + (e.get('why') or '').strip().split('\n')[0][:160]
                     for e in fails)
-    o.f['parked'] = ' '.join(('odd: attempt budget reached (%d failed attempts, %s): %s' % (len(fails), now()[:10], why)).split())
+    o.f['parked'] = ' '.join((BUDGET_PARK + ' (%d failed attempts, %s): %s' % (len(fails), now()[:10], why)).split())
     o.save()
     record(root, o.slug, budget=cfg['max_attempts'], failures=len(fails))
     return ('attempt budget reached: %d failed attempt(s) at %s; parked with their reasons in the "parked:" line of %s. '
-            'Stop and report it; to try again, delete that line.' % (len(fails), o.slug, o.rel))
+            'Stop and report it to a person: until they clear that line, odd runs no proof and no agent for %s.'
+            % (len(fails), o.slug, o.rel, o.slug))
 
 
 def _state(path):
@@ -677,13 +693,19 @@ def verify_key(root, cfg, o, base, changed):
     """Backlog item 12: the identity of everything verify reads, or None when it cannot be named. The tool (version
     and its own bytes), every setting in force (under --recompute the target branch's), the base commit (what the take-out check restores), and
     each path that differs from the base as it is now: with the base that names every tracked and untracked file
-    the proof could read, inside the boundary or not. Ignored files and anything outside the repository are not in it."""
+    the proof could read, inside the boundary or not; and which outcome, with the fields verify reads, so one
+    outcome's pass never answers for another in the same change. Ignored files and anything outside the repository
+    are not in it. None when a tracked file is flagged assume-unchanged or skip-worktree: git diff then reports it as
+    it is in the index, not as it is on disk."""
     if any(os.path.isdir(os.path.join(root, p)) and not os.path.islink(os.path.join(root, p)) for p in changed):
         return None  # a submodule or a directory: its content is not named here
+    if any(x[:1].islower() or x[:1] == 'S' for x in zlist(root, 'ls-files', '-v', '-z')):
+        return None  # assume-unchanged (lower case) or skip-worktree (S): git diff does not see its edits
     with open(os.path.abspath(__file__), 'rb') as f:
         tool = hashlib.sha256(f.read()).hexdigest()
     h = hashlib.sha256(('odd %s %s\nbase=%s\n' % (VERSION, tool, rev(root, base) if base else '')).encode())
     h.update(json.dumps({k: v for k, v in cfg.items() if k != 'cache_file'}, sort_keys=True).encode())
+    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed')]).encode())
     _hash_paths(h, root, changed)  # the outcome file and config.json too: changed, or as at the base
     return h.hexdigest()
 
@@ -2110,6 +2132,7 @@ def prove(root, o, s, say=lambda s: None):
     """The checks of `odd done`: no unexplained edit of an existing test (R2), then verify. `s` is survey(root).
     Shared by done and race, which runs it inside each attempt's worktree."""
     cfg, base = s['cfg'], s['base']
+    refuse_budget_park(o)
     if o.asked:
         raise Fail('%s is waiting for an answer: %s\nanswer it, then delete the "asked:" line of %s' % (o.slug, o.asked, o.rel))
     _, bad, _, left = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug], s['product'],
@@ -2122,7 +2145,7 @@ def prove(root, o, s, say=lambda s: None):
 def _verified(root, o, s, res):
     """What a verified outcome leaves: its "parked:" line gone, and the local evidence the gate reads. Shared by done
     and chain."""
-    if o.parked:
+    if o.parked:  # never a budget park: prove() refuses one before any proof runs
         del o.f['parked']
         o.save()
     h, tests = content_hash(root, s['cfg'], o, changed_files(root, s['base']))  # read again: a proof may write files
@@ -2134,6 +2157,8 @@ def cmd_done(a, root):
     cfg, base = s['cfg'], s['base']
     try:
         res = prove(root, o, s, print)
+    except Parked:
+        raise  # a refusal, not an attempt: nothing recorded
     except Fail as e:
         record(root, a.slug, ok=False, why=str(e)[:300], **_kind(o))
         over = budget(root, cfg, o)
@@ -2360,6 +2385,7 @@ def _race_start(root, cfg, slug, base_arg):
         check_seal(root, o)
     except Fail as e:
         raise CouldNotRun(str(e))
+    refuse_budget_park(o)
     if cfg['race_seal'] and not o.get('sealed'):
         raise CouldNotRun('"race_seal" is on and %s is not sealed: run %s seal %s first, so the proof is shown to fail '
                           'before any attempt and no attempt can change it unseen' % (o.rel, ODD, o.slug))
@@ -2769,6 +2795,9 @@ def cmd_chain(a, root):
         try:
             _chain_step(root, cfg, a, slug, agents, n, rel)
             status[slug] = 'proven (%s)' % rev(root, 'HEAD')[:7]
+        except Parked as e:
+            o = Outcome.load(root, slug)
+            status[slug], stop = 'parked: %s' % o.parked, (slug, e, 'parked for its attempt budget; a person clears it')
         except Fail as e:
             o = Outcome.load(root, slug)
             o.f['parked'] = ' '.join(('odd chain %s (%s): %s' % (a.ticket, now()[:10], getattr(e, 'why', '') or
@@ -3123,8 +3152,9 @@ def cmd_stats(a, root):
     print('  ' + '; '.join([split('proof strength n of n', lambda o: o.band == 'full'),
                             split('a mutant survived', lambda o: o.band == 'partial'),
                             split('not measured here', lambda o: o.band == 'not measured')]))
-    print('proof quality trends (self-reported: only escapes recorded with `%s escaped`; seal, kind and proof-by as the '
-          'outcome files say now; strength from this machine; rate = escaped defects per outcome)' % ODD)
+    print('escaped defects by group (a snapshot of the outcome files as they are now, not a trend over time; '
+          'self-reported: only escapes recorded with `%s escaped`; seal, kind and proof-by as the outcome files say now; '
+          'strength from this machine; rate = escaped defects per outcome)' % ODD)
     rows = [('group', 'outcomes', 'escaped', 'rate')] + [(
         ('kind: %s' if t['by'] == 'kind' else 'strength: %s' if t['by'] == 'strength' else
          'proof by %s' if t['by'] == 'proof-by' else '%s') % t['group'], str(t['outcomes']), str(t['escaped']),
@@ -3133,7 +3163,7 @@ def cmd_stats(a, root):
     for r, t in zip(rows, [None] + trends):
         print('  '.join(r[c].ljust(wide[c]) for c in range(3)) + '  ' + r[3])
         if t and t['small']:
-            print('  fewer than %d outcomes: the counts are small and self-reported, not a trend' % SMALL)
+            print('  fewer than %d outcomes: the counts are small and self-reported' % SMALL)
     spend(root, outs)
 
 

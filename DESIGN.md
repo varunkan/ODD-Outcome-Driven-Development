@@ -300,14 +300,21 @@ reason>`, records the park as the new starting point, and the command exits 1 wi
 attempt(s) at <slug>; parked ...`; `done` prints that line in place of its `next:` block. A race or chain checks the
 count after its attempts; a cascade also checks it between levels and runs no further level once it is reached (the
 spend the item is about); a chain parks the outcome with the budget's line after `odd chain <ticket>`. A race whose
-winner is verified is not parked, although its refused attempts are counted until the next verified `done`. Resetting
-is deleting the `parked:` line, as for any park. The number is never shown to an agent in advance: neither the
+winner is verified is not parked, although its refused attempts are counted until the next verified `done`. A budget
+park is enforced, not advisory: while the `parked:` line starts with `odd: attempt budget reached`, `odd done`
+(`prove()`) and `race`, `cascade` and `chain` (`_race_start()`, which all three share) exit 1 with `<slug> is parked:
+...` and run no proof and no agent; the refusal is not counted as an attempt, a later pass cannot remove that line
+(nothing reaches the pass), and a chain stops there without rewriting it. The park message is addressed to a person
+("Stop and report it to a person"); a person clears the park by deleting the `parked:` line, which also starts the
+count again. The number is never shown to an agent in advance: neither the
 `AGENTS.md` block nor a race, cascade or chain prompt mentions it, because a budget the agent could see made agents
 skip review and spec steps in the pilot ([12](docs/evidence/12-pilot.md)); the agent sees it only once reached.
 
 Limits: the evidence is per machine and per worktree (`state_dir()`), so attempts on another machine, in CI or in a
-fresh clone are not counted, and deleting `.git/odd/evidence/` resets every count; an agent that runs `odd done` in
-a loop still uses the full budget; `odd stats` counts refused race attempts only in its cost table (section 3h), not
+fresh clone are not counted, and deleting `.git/odd/evidence/` resets every count; nothing stops an agent with a
+shell from deleting the `parked:` line itself, so the park holds against a cooperating agent and is visible in the
+diff, not enforced against a hostile one; the number itself is in `.odd/config.json`, which an agent reading its own
+copy of the repository can see (only `AGENTS.md` and the prompts leave it out); `odd stats` counts refused race attempts only in its cost table (section 3h), not
 in its attempts column; the parked line is
 the reason list cut to the first line of each reason (up to 160 characters), the full findings stay in the race and
 cascade logs. The spend saved on tasks that end unsolved (the item's measure) is not measured on real agents.
@@ -672,8 +679,12 @@ lane (BACKLOG item 11).
 it runs a proof it computes a key over everything the check reads (`verify_key()`): the tool (its version and the
 sha256 of its own file), every setting in force (under `--recompute` the target branch's), the base commit (what the
 take-out check restores), and the state (content, mode, link target) of every path that differs from the base, the
-same `_state()` the local gate's content hash uses. With the base commit that names every tracked and untracked file
-the proof could read, inside the boundary or not, the outcome file and `.odd/config.json` included. When a
+same `_state()` the local gate's content hash uses; and which outcome is verified (its path and the `proof`, `in`,
+`counterfactual`, `kind` and `sealed` fields), so a pass of one outcome never answers for another outcome of the same
+change, under `done` or within one `gate --recompute`. With the base commit that names every tracked and untracked
+file the proof could read, inside the boundary or not, the outcome file and `.odd/config.json` included. When any
+tracked file is flagged assume-unchanged or skip-worktree (`git ls-files -v`), git diff reports it as it is in the
+index, not on disk, so no key is made and every outcome runs in full. When a
 verification with that key passed before, its result is returned with `cached` set to when it ran, and the report
 says `cached (verified at <time>): ...`; no proof runs. A failed or "could not run" check is never stored. `--no-cache`
 (on `done`, `gate`, `race`, `cascade`, `chain`, and the MCP tools) runs it in full. A changed path that is a
@@ -694,6 +705,11 @@ The file is read once, before any proof (or, for race, any agent) of the process
 snapshot plus the entries this process added (atomic rename), also at the end of every `gate --recompute` and every
 race; so what a proof or an agent writes to the file during the run is dropped. At most 1000 entries are kept, the
 newest. A write that fails loses only the cache.
+
+Limits: locally, anything that can write the git directory between two odd processes (an agent with a shell, a
+script that imports `odd.py` and computes `verify_key()`) can plant a cached pass that a later `odd done` reports as
+`cached (verified at ...)`; a locally cached `done` is as forgeable as the local gate's recorded results. Only `gate
+--recompute`, which never reads the local cache, decides. Entries are not authenticated.
 
 For CI, a cache step saves and restores the file. Restore it on pull requests and save it only from runs on the
 target branch (`actions/cache/restore` on `pull_request`, `actions/cache/save` on `push` to the default branch), so a
@@ -934,18 +950,18 @@ latest passing verification recorded on this machine; then, in total, escapes ag
 sealed or not, take-out skipped or checked, and proof strength n of n, a mutant survived, or not measured here. Each
 split reads `N in K of M`: N escapes in K of the M outcomes of that kind. There is no lessons database.
 
-Proof quality trends (backlog item 17; a tool newer than 0.4.0, no new setting). After those splits `odd stats`
-prints a table headed `proof quality trends (self-reported: ...)`, one row per group: `kind: bug`, `kind: feature`,
+Escaped defects by group (backlog item 17; a tool newer than 0.4.0, no new setting). After those splits `odd stats`
+prints a table headed `escaped defects by group (a snapshot of the outcome files as they are now, not a trend over
+time; self-reported: ...)`; nothing in it is compared over time, one row per group: `kind: bug`, `kind: feature`,
 `kind: refactor`, `kind: none`; `sealed`, `not sealed` (sealed as above: the `sealed:` line matches a seal recorded on
 this machine); `strength: full` (the latest passing verification here caught every small break), `strength: partial`
 (a mutant survived), `strength: not measured`; `proof by another agent` (the outcome has a `proof-by:` line, written by
 `odd spec --proof-by`, section 3d) and `proof by the same author`. Each row gives the outcomes in the group, the escaped
 defects recorded against them and the rate (escaped defects per outcome, two decimals; `-` for an empty group). Under
-every group of fewer than 10 outcomes a line says `fewer than 10 outcomes: the counts are small and self-reported, not
-a trend`. The groups are a table (`TRENDS` in `odd.py`) counted by one function (`tally()`), which also renders the
+every group of fewer than 10 outcomes a line says `fewer than 10 outcomes: the counts are small and self-reported`. The groups are a table (`TRENDS` in `odd.py`) counted by one function (`tally()`), which also renders the
 `N in K of M` splits. `odd stats --json` prints instead one JSON object: `self_reported`, `outcomes` (slug, kind,
 proof_by, sealed, parked, skip, attempts, passed, escaped, strength `{killed, of}` or null), `trends` (`by`, `group`,
-`outcomes`, `escaped`, `rate` or null, `small`) and `spend` (the cost table's totals, section 3h, with
+`outcomes`, `escaped`, `rate` or null, `small`; the key keeps its first name, the groups are a snapshot) and `spend` (the cost table's totals, section 3h, with
 `per_proven_outcome` null when nothing is proven). The MCP server has a `stats` tool with a `json` flag.
 Limits, besides those below: "proof by the same author" includes every outcome whose proof's author was not recorded,
 so it is "not known to be a different agent", not "known to be the same"; kind and proof-by are read from the outcome

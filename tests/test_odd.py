@@ -3381,6 +3381,38 @@ class VerifyCache(Repo):
         self.assertNotIn(self.CACHED, self.no('done', 'add'))
         self.assertGreater(self.count(), n)
 
+    def sub_outcome(self):
+        """A second outcome in the same change, whose proof fails."""
+        self.ok('new', 'sub', 'A caller of sub(5, 3) receives 2.', '--proof',
+                '%s -c "from sub import sub; assert sub(5, 3) == 2"' % sys.executable, '--in', 'sub.py')
+        self.write('sub.py', 'def sub(a, b):\n    return a - b + 1\n')
+
+    def test_a_second_outcome_in_the_same_change_is_never_given_the_first_ones_pass(self):
+        self.sub_outcome()
+        self.ok('done', 'add')
+        out = self.no('done', 'sub')
+        self.assertNotIn(self.CACHED, out)
+        self.assertIn('the proof fails', out)
+
+    def test_recompute_runs_every_outcome_of_one_change(self):
+        cache = os.path.join(self.bin_dir(), 'odd-cache.json')
+        self.sub_outcome()
+        self.recompute_setup(cache)
+        out = self.no('gate', '--recompute')
+        self.assertIn('sub: the proof fails', out)
+        self.no('gate', '--recompute')
+
+    def test_a_file_git_diff_is_told_to_ignore_is_never_served_from_the_cache(self):
+        self.write('tests/test_calc.py', self.read('tests/test_calc.py') + 'assert open("README.md").read() == "calc\\n"\n')
+        for flag in ('--assume-unchanged', '--skip-worktree'):
+            with self.subTest(flag):
+                self.write('README.md', 'calc\n')  # as at the base, so not in git diff
+                self.ok('done', 'add')
+                self.git('update-index', flag, 'README.md')  # git diff now takes README.md as it is in the index
+                self.write('README.md', 'changed\n')  # the proof reads it, and now fails
+                self.assertNotIn(self.CACHED, self.no('done', 'add'))
+                self.git('update-index', flag.replace('--', '--no-'), 'README.md')
+
     def recompute_setup(self, cache, here=False):
         if here:  # the same settings in the change, so done uses the same file and the same key
             self.write('.odd/config.json', json.dumps({'cache_file': cache}))
@@ -3693,6 +3725,38 @@ class AttemptBudget(Agents):
         self.assertIn('attempt budget reached', self.parked())
 
 
+    def test_a_budget_park_refuses_done_race_cascade_and_chain_until_a_person_clears_it(self):
+        runs = os.path.join(self.bin, 'proof.runs')
+        mark = os.path.join(self.bin, 'agent.ran')
+        self.write('tests/test_calc.py', TEST + 'open(%r, "a").write("x")\n' % runs)
+        self.budget(2, [self.agent('fixer', 'touch %s\n' % mark + self.writes(FIXED))])
+        self.no('done', 'add')
+        out = self.no('done', 'add')
+        self.assertNotIn('delete that line', out, 'the park is addressed to a person, not a way round for the agent')
+        park, n = self.parked(), os.path.getsize(runs)
+        self.assertIn('attempt budget reached', park)
+        out = self.no('done', 'add')
+        self.assertIn('attempt budget reached', out)
+        self.assertEqual(os.path.getsize(runs), n, 'no proof ran on a budget-parked outcome')
+        self.write('calc.py', FIXED)
+        self.no('done', 'add')
+        self.assertEqual(os.path.getsize(runs), n)
+        self.assertEqual(self.parked(), park, 'a later done never removes a budget park')
+        self.write('calc.py', BROKEN)
+        for cmd in (('race', 'add', '--n', '1'), ('cascade', 'add')):
+            self.assertIn('attempt budget reached', self.no(*cmd))
+            self.assertFalse(os.path.exists(mark), 'no agent ran: %s' % (cmd,))
+            self.assertEqual(self.parked(), park)
+        self.write('.odd/chains/T.md', 'add\n')
+        self.commit('work')
+        self.assertIn('attempt budget reached', self.no('chain', 'T', '--race', '1'))
+        self.assertFalse(os.path.exists(mark), 'no agent ran in chain')
+        self.assertEqual(self.parked(), park, 'chain keeps the budget park')
+        self.assertEqual(os.path.getsize(runs), n)
+        self.write('.odd/outcomes/add.md', re.sub(r'(?m)^parked: .*\n', '', self.read('.odd/outcomes/add.md')))
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+
 class CostPerOutcome(Agents):
     """Backlog item 16: every race, cascade or chain attempt records the cost its agent printed ("odd-cost: <usd>")
     and its seconds in local evidence; `odd stats` prints spend per outcome and per proven outcome, failed attempts
@@ -3770,12 +3834,14 @@ class ProofQualityTrends(Repo):
         self.fixture('d')
 
     def trends(self, out):
-        return out[out.index('proof quality trends'):out.index('cost per proven outcome')]
+        return out[out.index('escaped defects by group'):out.index('cost per proven outcome')]
 
     def test_escapes_are_grouped_by_kind_seal_strength_and_proof_author_with_rates(self):
         self.four()
         out = self.trends(self.ok('stats'))
         self.assertIn('self-reported', out.split('\n')[0])
+        self.assertIn('a snapshot of the outcome files as they are now, not a trend over time', out.split('\n')[0])
+        self.assertNotIn('trends', out.split('\n')[0], 'nothing here is compared over time')
         for row in (r'kind: bug\s+1\s+2\s+2\.00', r'kind: feature\s+1\s+1\s+1\.00', r'kind: refactor\s+1\s+0\s+0\.00',
                     r'kind: none\s+1\s+0\s+0\.00', r'sealed\s+1\s+2\s+2\.00', r'not sealed\s+3\s+1\s+0\.33',
                     r'strength: full\s+1\s+2\s+2\.00', r'strength: partial\s+1\s+1\s+1\.00',

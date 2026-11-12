@@ -386,6 +386,16 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   learned file-to-proof map (selection stays by `in:` path); the CI recipe (restore on pull requests, save on the
   target branch) is documented, not run on GitHub Actions; ignored files, installed packages and the environment are
   not in the key; seconds per CI gate on a real repository and false passes on real work are not measured.
+- **Fixed after review** (commit "Review fixes: B12 key per outcome, B15 park enforced, B17 snapshot label"): the key did not name the outcome, so a second outcome of one change was given the
+  first one's pass, under `done` and inside one `gate --recompute` (a false pass in CI). `verify_key()` now hashes
+  the outcome's path and its `proof`, `in`, `counterfactual`, `kind` and `sealed` fields, and makes no key while a
+  tracked file is flagged assume-unchanged or skip-worktree (git diff hides its edits). Tests
+  `VerifyCache.test_a_second_outcome_in_the_same_change_is_never_given_the_first_ones_pass`,
+  `test_recompute_runs_every_outcome_of_one_change`, `test_a_file_git_diff_is_told_to_ignore_is_never_served_from_the_cache`,
+  each seen RED before the fix (the first two served `cached`, the third served the stale pass); mutants dropping the
+  outcome from the key or ignoring the index flags each turned them red. Documented, not fixed: locally anything that
+  can write the git directory can plant a cached pass for `done` (entries are not authenticated); only
+  `gate --recompute` decides.
 
 ### 13. Boundary as context
 - **Outcome:** the agent is given the outcome's file boundary up front, so it explores less of the repository.
@@ -439,6 +449,15 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   turned a new test red. In the cascade test with `"max_attempts": 2` and three levels, the third agent did not run.
   Suites: 271 and 89 tests OK. Not done: spend on tasks that end unsolved (the item's measure) is not measured on real
   agents; the count is per machine and worktree; `odd stats` does not show refused race attempts.
+- **Fixed after review** (commit "Review fixes: B12 key per outcome, B15 park enforced, B17 snapshot label"): a budget park stopped nothing; `done`, `race`, `cascade` and `chain` ran on and a
+  later pass deleted the line. Now `prove()` and `_race_start()` refuse a budget-parked outcome (`Parked`, exit 1, no
+  proof, no agent, not counted), a chain stops without rewriting the line, and the message says to report it to a
+  person instead of "delete that line". Test `AttemptBudget.test_a_budget_park_refuses_done_race_cascade_and_chain_until_a_person_clears_it`,
+  RED before the fix (the message offered the way round); mutants (no refusal in `prove()`, none in `_race_start()`,
+  chain overwriting the park, done recording the refusal, the old message) each turned it red; a guard in
+  `_verified()` was dropped as unreachable (its mutant survived because `prove()` refuses first). Documented, not
+  changed: the number is in `.odd/config.json`, readable by an agent in its copy; an agent with a shell can delete the
+  `parked:` line itself.
 
 ### 16. Cost per proven outcome
 - **Outcome:** ODD reports dollars, seconds and turns per proven outcome, the figure the race and the cascade optimise.
@@ -477,6 +496,10 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   time (a single snapshot, not dated buckets); kind, seal and proof-by are read as the outcome files are now, not as
   they were when a defect escaped; "the same author" includes outcomes whose proof author was never recorded; no
   real project's escape log has been run through it.
+- **Fixed after review** (commit "Review fixes: B12 key per outcome, B15 park enforced, B17 snapshot label"): the table was headed "proof quality trends" although it is one undated snapshot. It
+  is now `escaped defects by group (a snapshot of the outcome files as they are now, not a trend over time;
+  self-reported: ...)`; the JSON key stays `trends` for compatibility. `ProofQualityTrends` asserts the heading; the
+  old heading as a mutant turns it red. Dated buckets are still not done.
 
 ## Evidence
 
