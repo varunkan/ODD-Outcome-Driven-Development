@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "odd-tool"
 dynamic = ["version"]
-description = "Outcome-driven development: work is done when a proof says so, not when the agent says so."
+description = "Outcome-Driven Development: an outcome counts as delivered only when its proof fails without the change."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.8"

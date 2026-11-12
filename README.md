@@ -1,6 +1,10 @@
-# ODD: outcome-driven development
+# Outcome-Driven Development (ODD)
 
-**Work is done when a proof says so, not when the agent says so.**
+**An outcome counts as delivered only when its proof fails without the change.**
+
+Work is done when a proof says so, not when the agent says so. (Not to be confused with the product-management use of
+"outcome-driven", aligning work with business goals, or with observability-driven development, also abbreviated ODD.
+Here an outcome is something a command can check.)
 
 `odd` is one small command-line tool and a half-page method for building software with a coding agent. It works with
 Claude Code, Cursor, Copilot, Codex or anything else that can run a shell command, because it needs only a shell and

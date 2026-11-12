@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""odd: outcome-driven development. "Done" is recomputed from the code, not claimed.
+"""odd: Outcome-Driven Development. An outcome counts as delivered only when its proof fails without the change.
 
 An outcome is one sentence, a proof command and a boundary, kept in .odd/outcomes/<slug>.md. It is verified when the
 proof passes on the tree as it is, fails on the same tree with the change taken out, and passes again once the

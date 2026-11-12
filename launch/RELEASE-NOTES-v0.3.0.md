@@ -1,6 +1,7 @@
 # odd 0.3.0
 
-The first public release of ODD: outcome-driven development for coding agents.
+The first public release of Outcome-Driven Development (ODD) for coding agents: an outcome counts as delivered only
+when its proof fails without the change.
 
 **Work is done when a proof says so, not when the agent says so.** Before writing code the agent states one outcome
 sentence, a proof command and the files it may touch. `odd done` passes only when the proof passes, fails with the
