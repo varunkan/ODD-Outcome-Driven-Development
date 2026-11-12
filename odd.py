@@ -26,6 +26,7 @@ import argparse
 import ast
 import collections
 import datetime
+import difflib
 import hashlib
 import json
 import os
@@ -1546,21 +1547,8 @@ def strength(root, cfg, o, base, targets, say=lambda s: None, core=None):
         lines = text.split('\n')
         was = lines[line - 1]
         lines[line - 1] = was[:col] + new + was[col + len(old):]
-        after = '\n'.join(lines).encode('utf-8')
-
-        def swap_in(entries, save, lock, p=p, data=data, after=after):
-            e, full = entries[0], os.path.join(root, p)
-            if e['was'] is None or e['was'][0] != 'file' or not _same(full, data):
-                raise CouldNotRun('%s changed while the proof-strength check was running; run the command again' % p)
-            e['left'] = ['file', hashlib.sha256(after).hexdigest(), e['was'][2]]
-            save()  # what will be left is noted first, so a kill at any point is put back
-            tmp = full + '.odd-putback'
-            with open(tmp, 'wb') as f:
-                f.write(after)
-            os.chmod(tmp, e['was'][2])
-            e['touched'] = _bump(tmp, e.get('mtime'))
-            os.replace(tmp, full)
-        rc, _, secs = in_place(root, cfg, o, base, [p], set(), swap_in, 'put a mutant in')
+        rc, _, secs = in_place(root, cfg, o, base, [p], set(), _swap(root, p, data, '\n'.join(lines).encode('utf-8')),
+                               'put a mutant in')
         res['seconds'] = round(res['seconds'] + secs, 1)
         where = '%s:%d %s -> %s: %s' % (p, line, old, new, was.strip()[:80])
         if rc == 0:
@@ -1570,6 +1558,48 @@ def strength(root, cfg, o, base, targets, say=lambda s: None, core=None):
         else:
             res['killed'] += 1
     return res
+
+
+def _swap(root, p, data, after):
+    """An in_place alteration that writes `after` over file `p` (whose bytes must still be `data`): the journal notes
+    what will be left before the first byte changes, so a kill at any point is put back. Shared by the proof-strength
+    mutants and the per-block inertness check."""
+    def swap_in(entries, save, lock):
+        e, full = entries[0], os.path.join(root, p)
+        if e['was'] is None or e['was'][0] != 'file' or not _same(full, data):
+            raise CouldNotRun('%s changed while the check was running; run the command again' % p)
+        e['left'] = ['file', hashlib.sha256(after).hexdigest(), e['was'][2]]
+        save()
+        tmp = full + '.odd-putback'
+        with open(tmp, 'wb') as f:
+            f.write(after)
+        os.chmod(tmp, e['was'][2])
+        e['touched'] = _bump(tmp, e.get('mtime'))
+        os.replace(tmp, full)
+    return swap_in
+
+
+def blocks(root, base, p):
+    """Backlog item 33: (label, the file with one changed block put back as at the base) for each changed block of
+    `p`, when it has more than one; [] for a file the base lacks, a binary file, or a single block."""
+    full = os.path.join(root, p)
+    r = sh(['git', 'show', '%s:%s' % (base, p)], root) if base else None
+    if not r or r.returncode != 0 or os.path.islink(full) or not os.path.isfile(full):
+        return []
+    with open(full, 'rb') as f:
+        data = f.read()
+    try:
+        now_lines, base_lines = data.decode('utf-8').split('\n'), r.stdout.split('\n')
+    except ValueError:
+        return []
+    ops = [op for op in difflib.SequenceMatcher(None, base_lines, now_lines, autojunk=False).get_opcodes() if op[0] != 'equal']
+    if len(ops) < 2:
+        return []
+    out = []
+    for _, i1, i2, j1, j2 in ops:
+        label = '%s:%d' % (p, j1 + 1) + ('-%d' % j2 if j2 > j1 + 1 else '')
+        out.append((label, data, '\n'.join(now_lines[:j1] + base_lines[i1:i2] + now_lines[j2:]).encode('utf-8')))
+    return out
 
 
 def _same(path, data):
@@ -1625,9 +1655,13 @@ def weak(cfg, o, res):
     for a verification recorded earlier."""
     if res.get('skip'):
         return
-    if cfg['inert'] == 'enforce' and res.get('files', 0) > 1:
+    if cfg['inert'] == 'enforce':
         if res.get('inert') is None:
-            raise Fail('verified before each changed file was taken out on its own; run: %s done %s' % (ODD, o.slug))
+            raise Fail('verified before each changed file and block was taken out on its own; run: %s done %s' % (ODD, o.slug))
+        if res['inert'].get('hunks'):
+            raise Fail('the proof passes with %s put back as at the base ("inert": "enforce"): the proof does not need '
+                       'that block of the change.\n  take it out of the change, or make the proof check what it does.'
+                       % ', '.join(res['inert']['hunks']), [('inert', h) for h in res['inert']['hunks']])
         if res['inert']['files']:
             raise Fail('the proof passes with %s taken out on its own ("inert": "enforce"): the proof does not need %s.'
                        '\n  take %s out of the change, or make the proof check what %s.' % (
@@ -1804,7 +1838,7 @@ def _verify(root, cfg, o, base, changed, say):
     res.update(seconds=[s1, s2, s3], red_says=says(ctail))
     if o.bug:
         res['reproduced'] = last_line(ctail)
-    if cfg['inert'] != 'off' and len(targets) > 1:
+    if cfg['inert'] != 'off':
         res['inert'] = inert(root, cfg, o, base, targets, say)
     if cfg['strength'] != 'off':
         res['strength'] = strength(root, cfg, o, base, targets, say, [s1, s2, s3])
@@ -1820,12 +1854,23 @@ def inert(root, cfg, o, base, targets, say):
     whose removal leaves the proof passing is one the proof does not need ("inert"); a run that cannot complete shows
     nothing either way. One proof run per file; only when more than one file changed (with one, the take-out check
     already took it out on its own)."""
-    say('  "inert": taking out each of %d changed file(s) on its own' % len(targets))
     t0, found, unrun = time.time(), [], []
-    for p in targets:
-        rc = without_change(root, cfg, o, base, [p])[0]
-        (unrun if unrunnable(rc) else found if rc == 0 else []).append(p)
-    return {'files': found, 'unrun': unrun, 'checked': len(targets), 'seconds': round(time.time() - t0, 1)}
+    if len(targets) > 1:
+        say('  "inert": taking out each of %d changed file(s) on its own' % len(targets))
+        for p in targets:
+            rc = without_change(root, cfg, o, base, [p])[0]
+            (unrun if unrunnable(rc) else found if rc == 0 else []).append(p)
+    hunks = pick([b for p in targets if p not in found for b in blocks(root, base, p)], max(cfg['mutants'], 1),
+                 lambda b: (b[0].split(':')[0], b[0]))
+    if hunks:
+        say('  "inert": putting back each of %d changed block(s) on its own' % len(hunks))
+    idle = []
+    for label, data, after in hunks:
+        p = label.rsplit(':', 1)[0]
+        rc = in_place(root, cfg, o, base, [p], set(), _swap(root, p, data, after), 'put a block back')[0]
+        (unrun if unrunnable(rc) else idle if rc == 0 else []).append(label)
+    return {'files': found, 'hunks': idle, 'unrun': unrun, 'checked': len(targets) if len(targets) > 1 else 0,
+            'blocks': len(hunks), 'seconds': round(time.time() - t0, 1)}
 
 
 def same_behaviour(root, cfg, o, base, targets, say):
@@ -1926,11 +1971,13 @@ def _describe(o, res):
     if res.get('checkpoint'):
         text += '\n          verified as its own change (%s, at its checkpoint), and its proof passes at the head' % res['checkpoint']
     ine = res.get('inert')
-    if ine:
+    if ine and ine.get('checked'):
         text += '\n          per-file: %d of %d changed file(s) needed by the proof (each taken out on its own)%s; %s s' % (
-            ine['checked'] - len(ine['files']) - len(ine['unrun']), ine['checked'],
+            ine['checked'] - len(ine['files']) - len([u for u in ine['unrun'] if ':' not in u]), ine['checked'],
             '; %d could not run' % len(ine['unrun']) if ine['unrun'] else '', ine['seconds'])
+    if ine:
         text += ''.join('\n          inert: %s (the proof passes with it taken out on its own)' % p for p in ine['files'])
+        text += ''.join('\n          inert: %s (the proof passes with this block put back as it was)' % h for h in ine.get('hunks', []))
     st = res.get('strength')
     if st:
         text += '\n          proof strength %d of %d (small breaks in the changed lines the proof caught)%s%s; %s s' % (

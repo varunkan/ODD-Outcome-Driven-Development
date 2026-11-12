@@ -795,6 +795,12 @@ All need a tool newer than 0.4.0 (backlog items 24 to 29, with the evidence, in 
   lane will not take it, and under `"strength": "enforce"` it fails. A test that imports the code names a module, not
   a path. Limits: a path built at run time is not seen; a test that names a product file for another reason (a
   fixture path) is flagged too.
+- **Inertness per block (item 33).** Under `"inert"` (section 4f), after the per-file check, each changed block of a
+  file with more than one block (`difflib` against the base) is put back as at the base on its own, the rest kept,
+  through the same journalled swap the strength mutants use (`_swap()`), and the proof run: a block whose return
+  leaves the proof passing is named `inert: <file>:<lines> (the proof passes with this block put back as it was)`,
+  and fails under `"enforce"`. At most `"mutants"` blocks are checked, spread across files. A new file, a binary file
+  or a single block is left to the per-file and take-out checks.
 - **`odd ship` (item 34).** Release checks done by hand become one command: the artifact (usually ignored build
   output) is hashed, the gate is recomputed on the commit (so work that is not committed is refused, exit 2), the
   artifact is hashed again (it must not change meanwhile), and a ship record (artifact, sha256, commit, owed steps,

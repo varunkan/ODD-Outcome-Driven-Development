@@ -4463,5 +4463,30 @@ class Ship(Repo):
         self.assertIn('no such artifact', self.no('ship', 'dist/none.bin', '--base', 'main', code=2))
 
 
+class InertHunks(Repo):
+    """Backlog item 33: inertness per changed block of lines, not only per file."""
+    BASE = 'def add(a, b):\n    return 0\n\n\n# helpers\n\n\ndef unused():\n    return 0\n'
+    BOTH = 'def add(a, b):\n    return a + b\n\n\n# helpers\n\n\ndef unused():\n    return 1\n'
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.git('checkout', '-q', 'main')
+        self.write('calc.py', self.BASE)
+        self.commit('two regions')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)
+        self.write('calc.py', self.BOTH)
+
+    def test_a_block_the_proof_does_not_need_is_named_inside_a_needed_file(self):
+        self.write('.odd/config.json', json.dumps({'inert': 'report'}))
+        out = self.ok('done', 'add')
+        self.assertIn('inert: calc.py:9 (the proof passes with this block put back as it was)', out)
+        self.assertNotIn('inert: calc.py:2', out)
+        self.assertEqual(self.read('calc.py'), self.BOTH, 'every block was put back')
+        self.write('.odd/config.json', json.dumps({'inert': 'enforce'}))
+        self.assertIn('calc.py:9', self.no('done', 'add'))
+
+
 if __name__ == '__main__':
     unittest.main()

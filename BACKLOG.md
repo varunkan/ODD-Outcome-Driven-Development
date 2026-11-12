@@ -665,6 +665,8 @@ cost to build.
 ### 33. Inertness per hunk
 - **Evidence:** a change made for a premise the data later disproved, reverted at the owner's request.
 - **Outcome:** item R7 per changed hunk, not only per file.
+- **Done** in the commit "B33: inertness per block" (`blocks()`, `_swap()`; tests `InertHunks`; [DESIGN 5f](DESIGN.md)).
+
 
 ### 34. `odd ship`: what is delivered is what was gated
 - **Evidence:** release checks done by hand each time (tree equal to the gated tree, signer, app id, checksum).
