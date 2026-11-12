@@ -86,7 +86,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | command | what it does |
 |---|---|
 | `odd init [--claude-hooks] [--mcp]` | set up or repair a project; prints the step to add to CI and a proof suggestion |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected; `--covers R1,R3` names the ticket requirements it covers (a tool newer than 0.4.0) |
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd race <slug> [--n N] [--agent CMD]` | run N agent attempts in parallel, each in its own git worktree; the verified one with the strongest proof and fewest changed lines is applied to your tree (a tool newer than 0.4.0) |
 | `odd cascade <slug> [--agents C1,C2] [--race N]` | try the agents in order, cheapest first, each attempt in its own worktree; stop at the first verified one and apply it, else escalate with the failure in the next prompt, and park after the last (a tool newer than 0.4.0) |
@@ -117,6 +117,15 @@ agent prints a final line `odd-cost: <usd>`, else "not reported". On fake agents
 verified, 0.74-0.87 s when it escalates to level 2, 0.42-0.49 s to park after two (5 runs each, three-file repository).
 Not measured: real agents and whether Haiku-then-Sonnet is cheaper than Sonnet alone (BACKLOG item 2). Details:
 [DESIGN.md](DESIGN.md) section 3c.
+
+**Every requirement covered.** Write the ticket's requirements once, one per line, in
+`.odd/requirements/<ticket>.md` (`R1: ...`, `R2: ...`), and let each outcome name the ones it covers (`covers: R1, R3`,
+or `odd new ... --covers R1,R3`). `odd gate` and the pull-request summary then print `requirements <ticket>: 1 of 2
+covered; not covered: R2 (...)`, and a `covers:` id that is not in the file fails the gate. `"coverage": "enforce"` in
+`.odd/config.json` makes an uncovered requirement a Fail too (`"report"` is the default, `"off"` turns it off; a tool
+newer than 0.4.0). It catches "works, but not what was asked" only as far as the list is complete and each proof tests
+what its outcome says; odd checks neither. Not measured: requirements missed with and without it (BACKLOG item 4).
+Details: [DESIGN.md](DESIGN.md) section 5a.
 
 **A stronger model writes the proof, a cheaper one the code.** `odd spec <slug> --proof-by "<command>"` gives the
 outcome to one agent command to write only the proof, in its own worktree. odd accepts it only if it changes test

@@ -38,7 +38,8 @@ Free notes: questions asked and answered, decisions and why.
   deletes a test that existed at the base, section 5; needs a tool newer than 0.4.0, the next release:
   a pinned Action at 0.4.0 or older refuses the unknown field), `proof-by: <name>` (written by `odd spec`: which
   agent command wrote the sealed proof, section 3d; the same tool version, and the same refusal by an older one:
-  delete the line for an older tool).
+  delete the line for an older tool), `covers: R1, R3` (the ticket requirements this outcome covers, section 5a;
+  the same tool version and the same refusal by an older one).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -48,7 +49,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | command | what it does | exit |
 |---|---|---|
 | `odd init [--claude-hooks] [--mcp]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step, the conditions under which CI is the authority, and a proof suggestion (section 3a); `--mcp` also installs the MCP server (section 7) | 0 |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a) | 0, 1 refused (also: `auto` and no runner detected) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
@@ -427,6 +428,32 @@ It needs full history (not a depth-1 checkout) and the toolchain the proofs use,
 project's existing test job. On GitHub, do not move it to `pull_request_target`. Without CI, fetch the target
 branch and run `odd gate --recompute --base <target branch>` on the committed work before merging. A ref name that
 could mean a tag, a local branch and a remote branch at once is refused rather than guessed.
+
+### 5a. Requirement coverage
+
+A ticket's requirements can be recorded once, before any outcome, as numbered lines in
+`.odd/requirements/<ticket>.md` (`R1: ...`, `R2: ...`, also as list items; any other line is prose and ignored),
+written by the agent or a person. Each outcome names the ones it covers with `covers: R1, R3` (`odd new --covers`).
+For every requirements file added or changed in the change, `odd gate` (local and `--recompute`) prints
+`requirements <ticket>: k of n covered; not covered: R2 (<text>)` and, when a requirement listed at the base is gone,
+`removed in this change: R4`; the `--summary` lists each requirement with the outcomes that cover it, and `--json`
+has a `requirements` list. A parked outcome covers nothing. The setting `"coverage"` decides the rest:
+
+- `"report"` (the default): an uncovered requirement is printed, not a Fail.
+- `"enforce"`: an uncovered requirement is a Fail, with the remedy (cover it, or take it out of the file).
+- `"off"`: no requirement is read and `covers:` is ignored.
+
+Under `"report"` and `"enforce"` a `covers:` id that names no requirement is always a Fail: an id missing from the
+file, a plain id when the change has no requirements file or more than one (then write `<ticket>:R1`), a malformed
+id, a requirement listed twice, or a requirements file with no `R<n>:` line. `<ticket>:R1` may also name a ticket
+recorded in an earlier change; it is checked to exist and counts for nothing. `covers:` is not part of what `odd done`
+verified, so changing it needs no new `done`. Setting `coverage` and field `covers` need a tool newer than 0.4.0.
+
+Limits: odd checks that every listed requirement is named by some outcome, not that the outcome's proof tests it, and
+not that the list is the whole ticket: whoever writes the list can leave a requirement out, and a requirement removed
+in the change is printed but not refused (review reads the list). Requirements files are exempt only through the
+default `**/*.md` exemption; a custom `"exempt"` list without it makes them product files. Not measured: requirements
+missed per task with and without the check (BACKLOG item 4).
 
 ## 6. Exemptions
 

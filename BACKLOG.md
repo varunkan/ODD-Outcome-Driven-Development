@@ -192,6 +192,18 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **How:** the ticket is split into numbered requirements (by the agent, recorded in the outcome files); `odd gate`
   reports any requirement without an outcome.
 - **Measure:** requirements missed per task on the vague and feature tasks, with and without.
+- **Done** in the commit "B4: requirement coverage check ..." (`git log --grep '^B4:'`): requirements as `R<n>: ...`
+  lines in `.odd/requirements/<ticket>.md`, the outcome field `covers: R1, R3` (or `<ticket>:R1`), `odd new --covers`,
+  the MCP `new` tool's `covers`, the setting `coverage` (`off` / `report`, the default / `enforce`), one sentence in
+  step 1 of the method; DESIGN.md section 5a. `coverage()` runs inside `gate()` (local and `--recompute`, settings
+  from the target under `--recompute`), so the summary and `--json` carry it; a parked outcome covers nothing; an
+  unknown, ambiguous or malformed id is a Fail unless `off`; a requirement dropped since the base is printed.
+  Measured with `tests/test_odd.py` class `Coverage` (11 tests; 9 seen RED on the missing `--covers`, setting and
+  sentence; the `off` test, split out of one of them, and the removed-requirement test written after; all green) and
+  20 hand-made mutants of the new code, each turning a `Coverage` test red (one survived at first, the ids of a parked
+  outcome going unchecked; an assertion was added and it then turned red).
+  Not measured: requirements missed per task with and without it, and whether an agent writes a complete list; odd
+  cannot check that a covering outcome's proof tests its requirement.
 
 ### 5. Reproduce first for bugs
 - **Outcome:** for a bug, the proof must fail on the unfixed code by reproducing the reported behaviour before any fix

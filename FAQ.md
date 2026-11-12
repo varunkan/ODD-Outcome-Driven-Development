@@ -226,6 +226,15 @@ published result, not one we have reproduced; the comparison to run is the same 
 against a strong-written sealed proof. odd cannot tell whether the proof tests the right thing, only that it is red
 first and stays unchanged; read it.
 
+**How do I make sure every requirement of the ticket was done, not just the ones the agent liked?**
+List them once in `.odd/requirements/<ticket>.md`, one per line (`R1: ...`, `R2: ...`), and give each outcome a
+`covers: R1, R3` line (`odd new ... --covers R1,R3`; a tool newer than 0.4.0). `odd gate`, local and `--recompute`,
+and the pull-request summary report each requirement no outcome in the change covers, and fail on a `covers:` id that
+is not in the file. With `"coverage": "enforce"` an uncovered requirement fails the gate; the default `"report"` only
+prints it, and `"off"` turns the check off. Outcomes without `covers:` behave as before. odd cannot tell whether the
+list is the whole ticket or whether a proof tests the requirement it claims to cover; a reviewer reads both. Whether
+this lowers missed requirements is not measured yet.
+
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).
 2. This week: `odd init` on one repository and use it on your next agent task.

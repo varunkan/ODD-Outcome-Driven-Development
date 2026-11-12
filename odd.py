@@ -60,9 +60,10 @@ DEFAULTS = {
     'race_timeout': 1800,  # odd race: seconds an attempt's agent may run before it is killed with its process group
     'race_seal': False,    # odd race: refuse an outcome that is not sealed
     'proof_tries': 3,      # odd spec: tries for the proof author to write a proof that fails before the code
+    'coverage': 'report',  # requirements no outcome in the change covers: off, report, or enforce (an uncovered one fails)
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
@@ -177,7 +178,8 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'agents': lambda v: isinstance(v, list) and all(isinstance(c, str) and c.strip() for c in v),
             'race_timeout': lambda v: type(v) in (int, float) and 0 < v < float('inf'),
             'race_seal': lambda v: type(v) is bool,
-            'proof_tries': lambda v: type(v) is int and 1 <= v <= 32}
+            'proof_tries': lambda v: type(v) is int and 1 <= v <= 32,
+            'coverage': lambda v: v in ('off', 'report', 'enforce')}
 
 
 def load_config(root, at=None):
@@ -406,6 +408,120 @@ def escape_only(root, base, o):
 def all_outcomes(root):
     d = odd_dir(root, 'outcomes')
     return [Outcome.load(root, n[:-3]) for n in (sorted(os.listdir(d)) if os.path.isdir(d) else []) if n.endswith('.md')]
+
+
+# ---------------------------------------------------------------- requirement coverage (backlog item 4)
+
+REQ_FILE = re.compile(r'^\.odd/requirements/([A-Za-z0-9][A-Za-z0-9._-]{0,63})\.md$')
+REQ_LINE = re.compile(r'^\s*(?:[-*]\s+)?(R\d+)\s*:\s*(\S.*)$')   # "R1: ...", also as a list item
+COVER_ID = re.compile(r'^(?:([A-Za-z0-9][A-Za-z0-9._-]{0,63}):)?(R\d+)$')  # R1, or <ticket>:R1
+
+
+def cover_ids(value):
+    """The ids a covers: value names, as (ticket or None, id); a malformed one raises Fail."""
+    out = []
+    for item in split_globs(value):
+        m = COVER_ID.match(item)
+        if not m:
+            raise Fail('covers: %r is not a requirement id (R<number>, or <ticket>:R<number> naming '
+                       '.odd/requirements/<ticket>.md)' % item)
+        out.append(m.groups())
+    return out
+
+
+def requirements(root, ticket, at=None):
+    """{id: text} from .odd/requirements/<ticket>.md, in file order (at a revision when `at` is given; None when
+    the file is not there). A repeated id raises Fail."""
+    rel = '.odd/requirements/%s.md' % ticket
+    if at:
+        r = sh(['git', 'show', '%s:%s' % (at, rel)], root)
+        if r.returncode:
+            return None
+        text = r.stdout
+    elif os.path.isfile(os.path.join(root, rel)):
+        text = read_text(os.path.join(root, rel))
+    else:
+        return None
+    reqs = collections.OrderedDict()
+    for line in text.split('\n'):
+        m = REQ_LINE.match(line)
+        if m and m.group(1) in reqs:
+            raise Fail('%s: %s is listed twice; number each requirement once' % (rel, m.group(1)))
+        if m:
+            reqs[m.group(1)] = m.group(2).strip()
+    return reqs
+
+
+def coverage(root, s):
+    """(report lines, problems, facts) for the requirements of the tickets this change records: each id in a
+    changed .odd/requirements/<ticket>.md and the outcomes in the change that cover it. A covers: id that names no
+    requirement is always a problem; an uncovered requirement is one only under "coverage": "enforce"."""
+    mode = s['cfg']['coverage']
+    if mode == 'off':
+        return [], [], []
+    tickets = [m.group(1) for m in map(REQ_FILE.match, s['changed']) if m]
+    lists, problems = collections.OrderedDict(), []
+    for t in tickets:
+        try:
+            reqs = requirements(root, t)
+        except Fail as e:
+            problems.append(str(e))
+            continue
+        if reqs is None:  # deleted in this change
+            continue
+        if not reqs:
+            problems.append('.odd/requirements/%s.md has no "R<number>: ..." lines; write one requirement per line '
+                            '(R1: ..., R2: ...)' % t)
+            continue
+        lists[t] = reqs
+    who = {t: collections.OrderedDict((r, []) for r in reqs) for t, reqs in lists.items()}
+    for o in s['inplay']:
+        try:
+            ids = cover_ids(o.get('covers'))
+        except Fail as e:
+            problems.append('%s: %s' % (o.slug, e))
+            continue
+        for t, r in ids:
+            if t is None and len(lists) != 1:
+                problems.append('%s: covers: %s %s' % (o.slug, r, 'is ambiguous: this change has requirements for %s; '
+                                'write <ticket>:%s' % (' and '.join(lists), r) if lists else
+                                'names a requirement, but this change has no .odd/requirements/<ticket>.md; add it, '
+                                'or write <ticket>:%s for a ticket recorded earlier' % r))
+                continue
+            t = t or list(lists)[0]
+            if t not in lists:  # a ticket recorded in an earlier change: read as it is now, counted for nothing
+                try:
+                    reqs = requirements(root, t)
+                except Fail:
+                    reqs = None
+                if not reqs or r not in reqs:
+                    problems.append('%s: covers: %s:%s, but %s' % (o.slug, t, r, '.odd/requirements/%s.md has no %s'
+                                    % (t, r) if reqs else 'there is no .odd/requirements/%s.md' % t))
+                continue
+            if r not in lists[t]:
+                problems.append('%s: covers: %s, but .odd/requirements/%s.md has no %s (it has %s)'
+                                % (o.slug, r, t, r, ', '.join(lists[t])))
+            elif not o.parked and o.slug not in who[t][r]:  # a parked outcome covers nothing
+                who[t][r].append(o.slug)
+    lines, facts = [], []
+    for t, reqs in lists.items():
+        missing = [r for r, slugs in who[t].items() if not slugs]
+        try:
+            was = (requirements(root, t, s['base']) if s['base'] else None) or {}
+        except Fail:
+            was = {}
+        dropped = [r for r in was if r not in reqs]
+        lines.append('  requirements %s: %d of %d covered%s%s' % (
+            t, len(reqs) - len(missing), len(reqs),
+            '; not covered: ' + ', '.join('%s (%s)' % (r, reqs[r][:80]) for r in missing) if missing else '',
+            '; removed in this change: ' + ', '.join(dropped) if dropped else ''))
+        if mode == 'enforce':
+            problems += ['%s %s is covered by no outcome in this change: %s. Cover it (an outcome with covers: %s, '
+                         '%s new ... --covers %s), or take it out of .odd/requirements/%s.md if it is not part of '
+                         'this ticket.' % (t, r, reqs[r][:120], r, ODD, r, t) for r in missing]
+        facts.append(dict(ticket=t, covered={r: v for r, v in who[t].items() if v}, uncovered=missing, removed=dropped,
+                          text=dict(reqs)))
+    return lines, problems, facts
 
 
 def now():
@@ -1427,6 +1543,11 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
         problems += [bad] if bad else []
     lines += ['  ' + e for e in exempted]
     exempted += ['skip: ' + k for k in skips]
+    cov_lines, cov_problems, cov_facts = coverage(root, s)
+    lines += cov_lines
+    problems += cov_problems
+    if cov_facts:
+        facts['requirements'] = cov_facts
     if s['control']:
         lines.append('  CONTROL FILES CHANGED (a person must review; in CI the tool and settings are read from the target): '
                      + ', '.join(s['control']))
@@ -1513,7 +1634,9 @@ def cmd_new(a, root):
         if a.proof is None:
             raise Fail('%s.\ngive the command yourself: %s new %s "<outcome>" --proof "<command>" --in "<globs>"' % (said, ODD, a.slug))
         print(said)
-    o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(globs))])
+    covers = ', '.join('%s:%s' % (k, r) if k else r for k, r in cover_ids(a.covers or ''))
+    o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(globs))] +
+               ([('covers', covers)] if covers else []))
     o.save()
     odd_looking = [g for g in globs if re.search(r'[\s{}]', g)]
     print('%s created (paths and the proof are relative to the repository root).%s\n'
@@ -2214,6 +2337,11 @@ def markdown(f):
                                                     red, score))
     if survived:
         md += ['', 'Survived (each a changed line the proof does not depend on):'] + ['- ' + _cell(w, True, False) for w in survived]
+    for r in f.get('requirements', []):
+        md += ['', '**Requirements %s**: %d of %d covered.' % (_cell(r['ticket'], True, False), len(r['covered']),
+                                                               len(r['text']))]
+        md += ['- %s: %s, covered by %s' % (k, _cell(v, table=False), ', '.join(r['covered'][k])) if k in r['covered'] else
+               '- %s: %s, **not covered**' % (k, _cell(v, table=False)) for k, v in r['text'].items()]
     if f.get('exemptions'):
         md += ['', '**Exemptions** (passed without verification):'] + ['- ' + _cell(e, table=False) for e in f['exemptions']]
     if f.get('control'):
@@ -2292,7 +2420,8 @@ For any change of more than a few lines, on a branch of its own:
 
 1. State the outcome before writing code: one sentence saying who observes what, a command that exits 0 only when
    that is true, and the files the change may touch. If the request is unclear, ask (at most five questions)
-   instead of guessing.
+   instead of guessing. List the ticket's requirements first, one per line, in `.odd/requirements/<ticket>.md`
+   (`R1: ...`), and cover each with an outcome (`--covers R1,R2`).
    `odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated, relative to the repository root>"`
 2. Write the proof as a test in a file of its own under a test path (`tests/`, `test_*.py`, `*_test.*`, `*.test.*`,
    `*.spec.*`). Make it the narrowest command that shows the outcome, not the whole suite. Recommended: run
@@ -2520,6 +2649,8 @@ def main(argv=None):
                    'one picked from the test runner the repository uses')
     s.add_argument('--test', metavar='PATH', help='with --proof auto: the test file the proof runs')
     s.add_argument('--in', dest='in_', required=True, action='append', help='globs, comma-separated (may be repeated)')
+    s.add_argument('--covers', metavar='IDS', help='the requirements this outcome covers, comma-separated: R1, R3 (from '
+                   '.odd/requirements/<ticket>.md), or <ticket>:R1')
     s = sub.add_parser('seal')
     s.add_argument('slug')
     s.add_argument('--base', help='measure from this revision instead of the target branch')

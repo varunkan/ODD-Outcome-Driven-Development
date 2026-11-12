@@ -1562,6 +1562,127 @@ class ReviewSummary(Repo):
         self.assertEqual((js['verdict'], js['exit']), ('COULD NOT RUN', 2))
 
 
+class Coverage(Repo):
+    """Backlog item 4: a ticket's requirements in .odd/requirements/<ticket>.md, outcomes name what they cover."""
+    REQS = '# PROJ-7\n\nR1: a caller of add(2, 3) receives 5\n- R2: add rejects a string with a TypeError\n'
+
+    def covered(self, covers='R1', reqs=REQS, ticket='PROJ-7'):
+        self.write('.odd/requirements/%s.md' % ticket, reqs)
+        self.ok('new', 'add', SENTENCE, '--proof', PROOF, '--in', 'calc.py', '--covers', covers)
+        self.solve()
+        self.ok('done', 'add')
+
+    def enforce(self, mode='enforce'):
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/config.json', json.dumps({'coverage': mode}))
+        self.commit('settings')
+        self.git('checkout', '-q', 'feat')
+        self.git('merge', '-q', 'main')
+
+    def test_an_uncovered_requirement_is_reported_by_default_and_the_gate_passes(self):
+        self.covered()
+        self.assertRegex(self.read('.odd/outcomes/add.md'), r'(?m)^covers: R1$')
+        out = self.ok('gate')
+        self.assertIn('requirements PROJ-7: 1 of 2 covered; not covered: R2 (add rejects a string with a TypeError)', out)
+        self.assertIn('PASS', out)
+        self.commit('work')
+        md, js = self.path('.git/s.md'), self.path('.git/s.json')
+        out = self.ok('gate', '--recompute', '--summary', md, '--json', js)
+        self.assertIn('not covered: R2', out)
+        self.assertIn('- R2: add rejects a string with a TypeError, **not covered**', self.read('.git/s.md'),
+                      'the pull-request summary says it too')
+        req = json.loads(self.read('.git/s.json'))['requirements'][0]
+        self.assertEqual((req['ticket'], req['covered'], req['uncovered']), ('PROJ-7', {'R1': ['add']}, ['R2']))
+
+    def test_enforce_makes_an_uncovered_requirement_a_fail_until_an_outcome_covers_it(self):
+        self.enforce()
+        self.covered()
+        out = self.no('gate')
+        self.assertIn('PROJ-7 R2 is covered by no outcome in this change', out)
+        self.commit('work')
+        self.assertIn('R2 is covered by no outcome', self.no('gate', '--recompute'))
+        md = self.read('.odd/outcomes/add.md').replace('covers: R1', 'covers: R1, R2')
+        self.write('.odd/outcomes/add.md', md)
+        self.assertIn('2 of 2 covered', self.ok('gate'), 'covers: is not part of what done verified')
+        self.commit('cover R2')
+        self.assertIn('PASS', self.ok('gate', '--recompute'))
+
+    def test_a_parked_outcome_covers_nothing(self):
+        self.enforce()
+        self.covered(covers='R1, R2')
+        self.ok('park', 'add', 'the TypeError contradicts the existing callers')
+        out = self.no('gate')
+        self.assertIn('PROJ-7 R1 is covered by no outcome', out)
+        md = self.read('.odd/outcomes/add.md').replace('covers: R1, R2', 'covers: R1, R9')
+        self.write('.odd/outcomes/add.md', md)
+        self.assertIn('add: covers: R9, but', self.no('gate'), 'a parked outcome\'s ids are still checked')
+
+    def test_a_covers_id_that_does_not_exist_is_refused_even_when_only_reported(self):
+        self.covered(covers='R1, R9')
+        out = self.no('gate')
+        self.assertIn('add: covers: R9, but .odd/requirements/PROJ-7.md has no R9 (it has R1, R2)', out)
+        self.assertIn("'two' is not a requirement id", self.no('new', 'b', SENTENCE, '--proof', PROOF, '--in', 'x.py', '--covers', 'two'))
+        self.assertFalse(os.path.exists(self.path('.odd/outcomes/b.md')))
+
+    def test_a_covers_id_without_a_requirements_file_is_refused(self):
+        self.ok('new', 'add', SENTENCE, '--proof', PROOF, '--in', 'calc.py', '--covers', 'R1')
+        self.solve()
+        self.ok('done', 'add')
+        self.assertIn('this change has no .odd/requirements/<ticket>.md', self.no('gate'))
+
+    def test_two_tickets_need_qualified_ids(self):
+        self.write('.odd/requirements/other.md', 'R1: something else\n')
+        self.covered()
+        self.assertIn('covers: R1 is ambiguous', self.no('gate'))
+        md = self.read('.odd/outcomes/add.md').replace('covers: R1', 'covers: PROJ-7:R1, PROJ-7:R2, other:R1')
+        self.write('.odd/outcomes/add.md', md)
+        out = self.ok('gate')
+        self.assertIn('requirements PROJ-7: 2 of 2 covered', out)
+        self.assertIn('requirements other: 1 of 1 covered', out)
+
+    def test_a_requirement_removed_in_the_change_is_named(self):
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/requirements/PROJ-7.md', self.REQS + 'R3: add logs nothing\n')
+        self.commit('ticket')
+        self.git('checkout', '-q', 'feat')
+        self.git('merge', '-q', 'main')
+        self.covered(covers='R1, R2')
+        self.assertIn('requirements PROJ-7: 2 of 2 covered; removed in this change: R3', self.ok('gate'))
+
+    def test_a_duplicate_or_missing_requirement_list_is_refused(self):
+        self.covered(reqs='R1: one\nR1: again\n')
+        self.assertIn('.odd/requirements/PROJ-7.md: R1 is listed twice', self.no('gate'))
+        self.write('.odd/requirements/PROJ-7.md', 'just prose\n')
+        self.assertIn('.odd/requirements/PROJ-7.md has no "R<number>: ..." lines', self.no('gate'))
+
+    def test_outcomes_without_the_field_behave_as_before(self):
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add')
+        self.assertNotIn('requirement', self.ok('gate'))
+        self.assertNotIn('covers', self.read('.odd/outcomes/add.md'))
+        js = self.path('.git/s.json')
+        self.ok('gate', '--json', js)
+        self.assertNotIn('requirements', json.loads(self.read('.git/s.json')))
+
+    def test_off_turns_the_check_off(self):
+        self.enforce('off')  # before any work: enforce() commits everything on main
+        self.write('.odd/requirements/PROJ-7.md', self.REQS)
+        self.outcome()
+        self.add_line('add', 'covers: R9')
+        self.solve()
+        self.ok('done', 'add')
+        self.assertNotIn('requirement', self.ok('gate'), 'off: no coverage check at all')
+        self.assertEqual(oddmod.DEFAULTS['coverage'], 'report')
+
+    def test_the_method_and_the_mcp_tool_name_it(self):
+        self.assertIn('cover each with an outcome', oddmod.METHOD)
+        sys.path.insert(0, os.path.dirname(MCP))
+        import odd_mcp
+        argv = odd_mcp.argv_for('new', {'slug': 'a', 'outcome': SENTENCE, 'proof': 'p', 'in': 'x', 'covers': 'R1'})
+        self.assertEqual(argv[argv.index('--covers') + 1], 'R1')
+
+
 class Adoption(Repo):
     """Step 5: a proof suggested from the runner the repository already uses, and odd as MCP tools for agents."""
 
