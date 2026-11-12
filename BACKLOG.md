@@ -121,6 +121,16 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   parallel; the winner is merged into the working tree; the race result says why it won.
 - **Measure:** accuracy and cost per proven outcome for Haiku x 3 race against plain Sonnet x 1 and plain Haiku x 1, as
   a new bench arm.
+- **Done** in the commit "B1: odd race ..." (`git log --grep '^B1:'`): `odd race <slug> [--n N] [--agent CMD]`, the
+  settings `agents`, `race_timeout`, `race_seal` (a tool newer than 0.4.0), the MCP tool `race`, and `prove()` shared
+  with `odd done`; DESIGN.md section 3b. Each attempt runs in a detached worktree under the git directory, is checked
+  by the copied-files rule, the boundary and `prove()` (R2 + green-red-green + strength), and the winner is applied
+  only to a tree with no changes inside the boundary. Measured with fake agents (`tests/test_odd.py` class `Race`,
+  8 tests; 12 hand-made mutants of the new code, each turned its test red): one correct, one weak-proof (an unproven
+  extra function), one broken, one that edits the test, rotated through 10 races: the correct one won 10 of 10
+  (on proof strength), 1.3 to 1.5 s wall per race of four; setup and removal 0.03 s per attempt on a three-file
+  repository. Not measured: real agents, the bench arm (Haiku x 3 against Sonnet x 1 and Haiku x 1), large
+  repositories (worktree checkout grows with the tree), and agents that write outside their worktree (not prevented).
 
 ### 2. `odd cascade`: cheap model first, pay more only when the proof says so
 - **Outcome:** an outcome is attempted by the cheapest configured model first and escalated to a stronger one only when

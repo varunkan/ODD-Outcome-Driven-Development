@@ -9,6 +9,7 @@ review named (docs/evidence/10-design-review.md).
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -1656,7 +1657,7 @@ class Adoption(Repo):
                      tool='.odd/odd_mcp.py')
         self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
         self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
-        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['done', 'escaped', 'gate', 'new', 'park', 'seal'])
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['done', 'escaped', 'gate', 'new', 'park', 'race', 'seal'])
         self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
         done = r[4]['result']
         self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)
@@ -1929,6 +1930,149 @@ class Distribution(Repo):
         self.assertEqual((rc, seen), (0, []), 'by default only a pull_request event comments')
         with open(summary) as f:
             self.assertEqual(f.read().count('odd gate: PASS'), 3, 'the step summary is written always')
+
+
+class Race(Repo):
+    """odd race: N agent attempts, each in its own git worktree under the git directory; the proof picks the winner.
+    The agents are small shell scripts (fakes): no model is called."""
+    TWO = FIXED + '\n\ndef sub(a, b):\n    return a - b\n'   # proven add, unproven sub: a weaker proof of this change
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.bin = tempfile.mkdtemp(prefix='odd-agents-')
+        self.addCleanup(shutil.rmtree, self.bin, True)
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)
+
+    def agent(self, name, body, prompt='{prompt_file}'):
+        """A fake agent: a shell script run in the attempt's worktree; returns its command line."""
+        path = os.path.join(self.bin, name + '.sh')
+        with open(path, 'w') as f:
+            f.write('set -e\n' + body + '\n')
+        return 'sh %s %s' % (path, prompt) if prompt else 'sh %s' % path
+
+    def writes(self, text, wait=0):
+        return 'sleep %s\nprintf %%s %s > calc.py' % (wait, shlex.quote(text))
+
+    def config(self, agents, **more):
+        self.write('.odd/config.json', json.dumps(dict(dict(agents=agents, race_timeout=60), **more)))
+
+    def gone(self, pidfile):
+        """The process whose pid the agent wrote has ended (a zombie nobody reaps counts as ended)."""
+        with open(pidfile) as f:
+            child = int(f.read())
+        for _ in range(40):
+            try:
+                if not os.path.isdir('/proc'):  # no procfs (macOS): signal 0 says whether it exists
+                    os.kill(child, 0)
+                    raise FileNotFoundError
+                with open('/proc/%d/stat' % child) as f:
+                    if f.read().rsplit(')', 1)[1].split()[0] == 'Z':
+                        return
+            except (FileNotFoundError, ProcessLookupError):
+                return
+            time.sleep(0.05)
+        self.fail('process %d, started by the agent, is still running' % child)
+
+    def no_worktrees_left(self):
+        self.assertEqual(len(self.git('worktree', 'list').splitlines()), 1, self.git('worktree', 'list'))
+
+    def test_the_verified_strongest_attempt_wins_and_is_applied(self):
+        keep = os.path.join(self.bin, 'prompt.txt')
+        self.config([self.agent('weak', self.writes(self.TWO)),
+                     self.agent('broken', 'cat > %s.stdin\n' % keep + self.writes(BROKEN.replace('0', 'a - b')), prompt=''),
+                     self.agent('correct', 'cp "$1" %s\n' % keep + self.writes(FIXED, wait=0.5)),
+                     self.agent('cheat', self.writes(BROKEN) + "\nprintf 'import unittest\\n' > tests/test_calc.py")])
+        before = self.read('tests/test_calc.py')
+        out = self.ok('race', 'add')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertEqual(self.read('tests/test_calc.py'), before)
+        self.assertRegex(out, r'(?m)^\s*3\b.*\bwinner\b', out)
+        self.assertRegex(out, r'(?m)^\s*1\s+\d+ of \d+\s.*\sverified$', out)
+        self.assertRegex(out, r'(?m)^\s*2\b.*the proof fails', out)
+        self.assertRegex(out, r'(?m)^\s*4\b.*edited.*tests/test_calc\.py', out)
+        self.assertIn('won on proof strength', out)
+        self.assertRegex(out, r'setup and clean-up: [\d.]+ s per attempt', out)
+        with open(keep) as f:
+            prompt = f.read()
+        for want in (SENTENCE, PROOF, 'calc.py', 'odd done'):
+            self.assertIn(want, prompt)
+        with open(keep + '.stdin') as f:
+            self.assertEqual(f.read(), prompt, 'without {prompt_file} the prompt arrives on stdin')
+        self.no_worktrees_left()
+
+    def test_fewer_changed_lines_win_when_strength_is_equal(self):
+        self.config([self.agent('long', self.writes('# adds two numbers\n' + FIXED)),
+                     self.agent('short', self.writes(FIXED, wait=0.5))])
+        out = self.ok('race', 'add')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertIn('won on fewer changed lines', out)
+
+    def test_none_verified_exits_1_with_each_reason_and_leaves_the_tree_alone(self):
+        self.config([self.agent('broken', self.writes(BROKEN.replace('0', 'a - b'))),
+                     self.agent('idle', 'true')])
+        out = self.no('race', 'add', '--n', '3')
+        self.assertEqual(self.read('calc.py'), BROKEN)
+        self.assertEqual(len(re.findall(r'(?m)^\s*[123]\b.*not verified', out)), 3, out)
+        self.assertEqual(out.count('the proof fails'), 3, out)
+        self.no_worktrees_left()
+
+    def test_a_tree_with_changes_inside_the_boundary_gets_a_patch_not_an_overwrite(self):
+        self.config([self.agent('correct', self.writes(FIXED))])
+        md = self.read('.odd/outcomes/add.md')
+        self.write('.odd/outcomes/add.md', md.replace('in: calc.py', 'in: calc.py, wip.py'))
+        self.write('wip.py', 'x = 1\n')  # inside the boundary, and the winner's patch would apply cleanly
+        out = self.no('race', 'add', '--n', '1')
+        self.assertEqual(self.read('calc.py'), BROKEN)
+        self.assertIn('wip.py', out)
+        patch = re.search(r'patch: (\S+\.patch)', out)
+        self.assertTrue(patch, out)
+        self.write('calc.py', BROKEN)
+        self.git('apply', patch.group(1))
+        self.assertEqual(self.read('calc.py'), FIXED)
+
+    def test_an_attempt_past_the_timeout_is_killed_with_its_process_group(self):
+        pid = os.path.join(self.bin, 'pid')
+        self.config([self.agent('slow', 'sleep 30 &\necho $! > %s\nwait' % pid)], race_timeout=1)
+        out = self.no('race', 'add', '--n', '1')
+        self.assertIn('timed out after 1', out)
+        self.gone(pid)
+        self.no_worktrees_left()
+
+    def test_what_an_agent_leaves_running_is_stopped_before_its_attempt_is_verified(self):
+        pid, state = os.path.join(self.bin, 'pid'), os.path.join(self.bin, 'state')
+        self.config([self.agent('leaves', self.writes(FIXED) + '\nsleep 30 > /dev/null 2>&1 &\necho $! > %s' % pid),
+                     self.agent('looks', 'while [ ! -s %s ]; do sleep 0.1; done\nsleep 1.5\n'
+                                         'ps -o stat= -p "$(cat %s)" > %s || true' % (pid, pid, state))])
+        self.ok('race', 'add')
+        with open(state) as f:
+            self.assertRegex(f.read().strip(), r'^(Z.*)?$', 'still running while the race went on')
+
+    def test_a_kill_mid_run_leaves_the_users_tree_untouched(self):
+        pid, started = os.path.join(self.bin, 'pid'), os.path.join(self.bin, 'started')
+        self.config([self.agent('slow', 'printf x > calc.py\nsleep 30 &\necho $! > %s\ntouch %s\nwait' % (pid, started))])
+        status = self.git('status', '--porcelain')
+        p = subprocess.Popen([sys.executable, ODD, 'race', 'add', '--n', '1'], cwd=self.dir,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        for _ in range(300):
+            if os.path.exists(started):
+                break
+            time.sleep(0.05)
+        p.send_signal(signal.SIGTERM)
+        p.communicate(timeout=60)
+        self.assertEqual(p.returncode, 143)
+        self.assertEqual(self.read('calc.py'), BROKEN)
+        self.assertEqual(self.git('status', '--porcelain'), status)
+        self.gone(pid)
+        self.no_worktrees_left()
+
+    def test_it_cannot_run_without_an_agent_an_outcome_or_a_required_seal(self):
+        self.assertIn('no agent', self.no('race', 'add', code=2))
+        self.assertIn('no outcome', self.no('race', 'nope', '--agent', 'true', code=2))
+        self.config([self.agent('idle', 'true')], race_seal=True)
+        self.assertIn('odd seal', self.no('race', 'add', code=2).replace('odd.py seal', 'odd seal'))
+        self.write('.odd/config.json', json.dumps({'agents': 'one string'}))
+        self.assertIn('"agents" has the wrong kind of value', self.no('race', 'add', code=2))
 
 
 if __name__ == '__main__':

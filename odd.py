@@ -10,6 +10,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated>"   (--proof auto [--test PATH])
   odd seal <slug> [--base REF]                            optional: the proof fails now; fingerprint its tests
   odd done <slug> [--base REF]                            exit 0 verified, 1 not shown, 2 could not run
+  odd race <slug> [--n N] [--agent CMD] [--base REF]      N agent attempts in worktrees; the proof picks the winner
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
   odd escaped <slug> "<what went wrong, where found>"     a defect got past this outcome; record it
@@ -25,6 +26,7 @@ import datetime
 import hashlib
 import json
 import os
+import queue
 import re
 import shlex
 import shutil
@@ -32,6 +34,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import traceback
 
@@ -51,6 +54,9 @@ DEFAULTS = {
     'default_branch': None,
     'strength': 'report',  # small breaks in the changed lines after green-red-green: off, report, or enforce (a survivor fails)
     'mutants': 8,          # at most this many per outcome; each one is one proof run
+    'agents': [],          # odd race: agent commands, one per attempt in turn; {prompt_file} is the prompt's path, else stdin
+    'race_timeout': 1800,  # odd race: seconds an attempt's agent may run before it is killed with its process group
+    'race_seal': False,    # odd race: refuse an outcome that is not sealed
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
 FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change')
@@ -164,7 +170,10 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'proof_timeout': lambda v: type(v) in (int, float) and 0 < v < float('inf'),
             'default_branch': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
             'exempt': _globs, 'test_globs': _globs,
-            'strength': lambda v: v in ('off', 'report', 'enforce'), 'mutants': lambda v: type(v) is int and v >= 0}
+            'strength': lambda v: v in ('off', 'report', 'enforce'), 'mutants': lambda v: type(v) is int and v >= 0,
+            'agents': lambda v: isinstance(v, list) and all(isinstance(c, str) and c.strip() for c in v),
+            'race_timeout': lambda v: type(v) in (int, float) and 0 < v < float('inf'),
+            'race_seal': lambda v: type(v) is bool}
 
 
 def load_config(root, at=None):
@@ -1509,15 +1518,22 @@ def cmd_new(a, root):
                      % odd_looking[0]) if odd_looking else '', o.get('in'), ODD, a.slug))
 
 
+def prove(root, o, s, say=lambda s: None):
+    """The checks of `odd done`: no unexplained edit of an existing test (R2), then verify. `s` is survey(root).
+    Shared by done and race, which runs it inside each attempt's worktree."""
+    cfg, base = s['cfg'], s['base']
+    _, bad, _ = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug], s['product'],
+                            cfg['test_globs'])
+    if bad:
+        raise Fail(bad)
+    return verify(root, cfg, o, base, changed_files(root, base), say)
+
+
 def cmd_done(a, root):
     o, s = Outcome.load(root, a.slug), survey(root, a.base)
     cfg, base = s['cfg'], s['base']
     try:
-        _, bad, _ = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug], s['product'],
-                                  cfg['test_globs'])
-        if bad:
-            raise Fail(bad)
-        res = verify(root, cfg, o, base, changed_files(root, base), print)
+        res = prove(root, o, s, print)
     except Fail as e:
         record(root, a.slug, ok=False, why=str(e)[:300])
         raise
@@ -1553,6 +1569,222 @@ def cmd_seal(a, root):
     print('%s: sealed; the proof fails now (%s). Sealed: %s. Now write the code; a later edit to these files fails '
           '%s done and the gate until it is resealed.' % (a.slug, says(tail),
                                                         ', '.join(tests), ODD))
+
+
+# ---------------------------------------------------------------- race: N attempts, the proof picks the winner
+
+RACE_PROMPT = """You are one attempt of several at one outcome. Each attempt works in its own copy of the repository (the
+current directory); the proof decides which attempt is kept, and the others are discarded.
+
+Outcome: %(outcome)s
+Proof (a command that exits 0 only when the outcome holds): %(proof)s
+Change only files inside: %(ins)s (new test files are allowed too)
+Leave alone: %(fixed)s. An attempt that edits them is discarded.
+
+When you have finished, exit. odd then checks this copy as `odd done %(slug)s` would: the proof passes, fails with the
+change taken out and passes again, and small breaks in the changed lines make it fail. Do not commit, push or run
+`odd park` here; if the outcome cannot honestly be reached, say why in your output and exit.
+
+"""
+
+
+def _killpg(p):
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except OSError:
+        pass
+
+
+def _alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def _drop_run(root, run):
+    """Remove one race run's worktrees and their directory. The user's working tree is never touched."""
+    for name in sorted(os.listdir(run)) if os.path.isdir(run) else []:
+        sh(['git', 'worktree', 'remove', '--force', '--force', os.path.join(run, name)], root)
+    shutil.rmtree(run, ignore_errors=True)
+    sh(['git', 'worktree', 'prune'], root)
+
+
+def _wait_agent(at, p, timeout, done):
+    try:
+        rc = p.wait(timeout=max(0.0, timeout - (time.time() - at['t0'])))
+    except subprocess.TimeoutExpired:
+        rc = None
+    _killpg(p)  # whatever the agent left running in its process group goes with it
+    p.wait()
+    at.update(rc=rc, agent_s=round(time.time() - at['t0'], 1))
+    done.put(at)
+
+
+def _judge(cfg, o, base, at, fixed):
+    """Check one finished attempt inside its worktree: what it may not touch, then the checks of `odd done`."""
+    wt, start = at['wt'], at['start']
+    if at['rc'] is None:
+        return 'timed out after %ss (killed with its process group)' % cfg['race_timeout']
+    delta = changed_files(wt, start)
+    control, exempt, tests, product = classify(delta, cfg)
+    at['delta'] = delta
+    at['lines'] = sum(sizes(wt, start, tests + product).values())
+    moved = sorted(set(zlist(wt, *DIFF, '--name-only', start, '--', *fixed)) | set(control))
+    if moved:
+        return 'edited %s, which an attempt must leave alone' % ', '.join(moved[:6])
+    outside = [p for p in product if not o.covers(p)]
+    if outside:
+        return 'changed files outside "in: %s": %s' % (o.get('in'), ', '.join(outside[:6]))
+    try:
+        at['res'] = prove(wt, Outcome.load(wt, o.slug), survey(wt, base))
+    except (Fail, CouldNotRun) as e:
+        first = str(e).strip().split('\n')[0][:160]
+        return first if isinstance(e, Fail) else 'could not verify: ' + first
+    return ''
+
+
+def _score(at):
+    """(caught, of): small breaks the proof caught; (0, 0) when strength was not measured."""
+    st = (at.get('res') or {}).get('strength') or {}
+    return st.get('killed', 0), st.get('killed', 0) + len(st.get('survivors', [])) + len(st.get('unrun', []))
+
+
+def _rank(at):
+    k, n = _score(at)
+    return (-(float(k) / n if n else 0.0), at['lines'], at['agent_s'], at['n'])
+
+
+def _why_won(ranked):
+    if len(ranked) == 1:
+        return 'the only verified attempt'
+    w, r = ranked[0], ranked[1]
+    if _rank(w)[0] != _rank(r)[0]:
+        return 'won on proof strength (%d of %d against %d of %d for attempt %d)' % (_score(w) + _score(r) + (r['n'],))
+    if w['lines'] != r['lines']:
+        return 'won on fewer changed lines (%d against %d for attempt %d)' % (w['lines'], r['lines'], r['n'])
+    return 'won on the earlier finish (%ss against %ss for attempt %d)' % (w['agent_s'], r['agent_s'], r['n'])
+
+
+def cmd_race(a, root):
+    t0 = time.time()
+    cfg = load_config(root)
+    agents = [a.agent] if a.agent else cfg['agents']
+    if not agents or not all(c.strip() for c in agents):
+        raise CouldNotRun('no agent to race: set "agents": ["<command>", ...] in .odd/config.json (each command runs in '
+                          'an attempt\'s worktree; {prompt_file} in it becomes the prompt\'s path, else the prompt is on '
+                          'stdin), or pass --agent "<command>"')
+    n = a.n if a.n is not None else (len(agents) if len(agents) > 1 else 3)
+    if not 1 <= n <= 32:
+        raise CouldNotRun('--n must be between 1 and 32')
+    try:
+        o = Outcome.load(root, a.slug)
+        check_seal(root, o)
+    except Fail as e:
+        raise CouldNotRun(str(e))
+    if cfg['race_seal'] and not o.get('sealed'):
+        raise CouldNotRun('"race_seal" is on and %s is not sealed: run %s seal %s first, so the proof is shown to fail '
+                          'before any attempt and no attempt can change it unseen' % (o.rel, ODD, o.slug))
+    head = rev(root, 'HEAD')
+    if not head:
+        raise CouldNotRun('each attempt starts from a commit and there is none yet: commit first')
+    base, _ = find_base(root, cfg, a.base)
+    tests = classify(changed_files(root, base), cfg)[2]
+    fixed = [o.rel] + [p for p in tests if os.path.isfile(os.path.join(root, p)) and not os.path.islink(os.path.join(root, p))]
+    fixed += ['.odd/config.json'] if os.path.isfile(odd_dir(root, 'config.json')) else []
+    keep = state_dir(root, 'race', o.slug)  # prompts, agent logs and the winner's patch; replaced by the next race
+    shutil.rmtree(keep, ignore_errors=True)
+    os.makedirs(keep)
+    for name in os.listdir(state_dir(root, 'race')):  # runs left by a race that was killed outright
+        if name.startswith('run-') and name[4:].isdigit() and not _alive(int(name[4:])):
+            _drop_run(root, state_dir(root, 'race', name))
+    run, attempts, procs, done = state_dir(root, 'race', 'run-%d' % os.getpid()), [], [], queue.Queue()
+    text = RACE_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), fixed=', '.join(fixed),
+                              slug=o.slug) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
+    print('%s race %s: %d attempt(s) from %s, agents in parallel; each verified as %s done would, in its own worktree'
+          % (ODD, o.slug, n, head[:10], ODD))
+    try:
+        for i in range(1, n + 1):
+            wt = os.path.join(run, str(i))
+            git(root, 'worktree', 'add', '--detach', '--quiet', wt, head)
+            for p in fixed:  # the outcome and its proof, as they are in the user's tree, committed as the start
+                os.makedirs(os.path.dirname(os.path.join(wt, p)), exist_ok=True)
+                shutil.copy2(os.path.join(root, p), os.path.join(wt, p))
+            git(wt, 'add', '-f', '--', *fixed)
+            git(wt, '-c', 'user.name=odd', '-c', 'user.email=odd@localhost', '-c', 'commit.gpgsign=false', 'commit',
+                '--quiet', '--no-verify', '--allow-empty', '-m', 'odd race: the outcome and its proof')
+            at = dict(n=i, wt=wt, start=rev(wt, 'HEAD'), cmd=agents[(i - 1) % len(agents)], lines=0, res=None,
+                      prompt=os.path.join(keep, 'prompt-%d.md' % i), log=os.path.join(keep, 'agent-%d.log' % i))
+            with open(at['prompt'], 'w', encoding='utf-8') as f:
+                f.write(text)
+            attempts.append(at)
+        setup = time.time() - t0
+        for at in attempts:
+            named = '{prompt_file}' in at['cmd']
+            with open(at['log'], 'wb') as log, open(at['prompt'], 'rb') as prompt:
+                p = subprocess.Popen(at['cmd'].replace('{prompt_file}', shlex.quote(at['prompt'])), shell=True,
+                                     cwd=at['wt'], stdin=subprocess.DEVNULL if named else prompt, stdout=log,
+                                     stderr=subprocess.STDOUT, start_new_session=True)
+            at['t0'] = time.time()
+            procs.append(p)
+            threading.Thread(target=_wait_agent, args=(at, p, cfg['race_timeout'], done), daemon=True).start()
+        for _ in attempts:
+            while True:
+                try:
+                    at = done.get(timeout=0.5)  # a timeout, so a signal is handled while waiting
+                    break
+                except queue.Empty:
+                    pass
+            print('  attempt %d: the agent ended after %ss (%s); verifying' % (
+                at['n'], at['agent_s'], 'killed at the timeout' if at['rc'] is None else 'exit %d' % at['rc']))
+            v0 = time.time()
+            at['why'] = _judge(cfg, o, base, at, fixed)
+            at['verify_s'] = round(time.time() - v0, 1)
+        ranked = sorted([x for x in attempts if not x['why']], key=_rank)
+        patch = ''
+        if ranked:
+            w = ranked[0]
+            if w['delta']:
+                git(w['wt'], 'add', '-A', '--', *w['delta'])
+                patch = git(w['wt'], 'diff', '--cached', '--binary', '--no-renames', w['start'], '--', *w['delta'])
+        t1 = time.time()
+    finally:
+        for p in procs:
+            _killpg(p)
+        _drop_run(root, run)
+    clean = time.time() - t1
+    rows = [('#', 'strength', 'lines', 'seconds', 'result')]  # seconds: the agent's, then the verification's
+    for at in attempts:
+        k, m = _score(at)
+        rows.append((str(at['n']), '%d of %d' % (k, m) if m else '-', str(at['lines']), '%s+%s' % (at['agent_s'], at['verify_s']),
+                     ('verified' + (', winner' if ranked and at is ranked[0] else '')) if not at['why']
+                     else 'not verified: ' + at['why']))
+    wide = [max(len(r[c]) for r in rows) for c in range(4)]
+    for r in rows:
+        print('  ' + '  '.join(r[c].ljust(wide[c]) for c in range(4)) + '  ' + r[4])
+    print('setup and clean-up: %s s per attempt (worktree, copies, start commit, removal); prompts and agent logs: %s'
+          % (round((setup + clean) / n, 2), keep))
+    if not ranked:
+        raise Fail('no attempt was verified; each one\'s reason is in the table above')
+    w = ranked[0]
+    print('winner: attempt %d, %s' % (w['n'], _why_won(ranked)))
+    path = os.path.join(keep, 'winner.patch')
+    with open(path, 'w', encoding='utf-8', errors='surrogateescape') as f:
+        f.write(patch)
+    mine = [p for p in changed_files(root, head) if o.covers(p)]
+    if mine:
+        raise Fail('not applied: your working tree has changes inside "in: %s" (%s), so the winner was written as a '
+                   'patch: %s\n  apply it when ready: git apply %s; then %s done %s'
+                   % (o.get('in'), ', '.join(mine[:6]), path, shlex.quote(path), ODD, o.slug))
+    r = sh(['git', 'apply', '--binary', path], root) if patch else None
+    if r is not None and r.returncode != 0:
+        raise Fail('not applied (git apply: %s), so the winner was written as a patch: %s'
+                   % ((r.stderr or r.stdout).strip()[:300], path))
+    print('applied to your working tree: %s\nnext: %s done %s, then %s gate (the attempt was verified in its worktree; '
+          'done records it here)' % (', '.join(w['delta'][:8]) or 'nothing', ODD, o.slug, ODD))
 
 
 def cmd_gate(a, root):
@@ -1932,6 +2164,11 @@ def main(argv=None):
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('done')
     s.add_argument('slug')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('race')
+    s.add_argument('slug')
+    s.add_argument('--n', type=int, help='how many attempts (default: one per configured agent, or 3 for one agent)')
+    s.add_argument('--agent', help='the agent command for every attempt, instead of "agents" in .odd/config.json')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('gate')
     s.add_argument('--base')

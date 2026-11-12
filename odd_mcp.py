@@ -36,6 +36,10 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
      [SLUG, BASE], ('slug',)),
     ('gate', 'Check the whole change: every changed product file is inside one verified outcome or an exemption.',
      [BASE, ('recompute', B, 'trust nothing recorded: verify every outcome again (as CI does)')], ()),
+    ('race', 'Run the outcome as N parallel agent attempts, each in its own git worktree; each is verified as done '
+             'would, and the verified one with the strongest proof and fewest changed lines is applied.',
+     [SLUG, ('n', S, 'how many attempts, as a number (default: one per configured agent, or 3)'),
+      ('agent', S, 'the agent command for every attempt, instead of "agents" in .odd/config.json'), BASE], ('slug',)),
     ('park', 'The honest exit: the outcome is blocked or cannot be done as specified.',
      [SLUG, ('reason', S, 'why')], ('slug', 'reason')),
     ('escaped', 'Record a defect that got past a merged outcome.',

@@ -49,6 +49,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a) | 0, 1 refused (also: `auto` and no runner detected) |
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
+| `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd escaped <slug> "<what, where found>"` | records a defect that got past this outcome (section 9) | 0, 1 vague report or no such outcome |
@@ -78,6 +79,46 @@ project really runs its tests (a virtualenv, `npm test` flags, a workspace, a Go
 command is a starting point for a person or agent to read, and `make test` is not narrow. A proof literally `auto`
 can no longer be written with `--proof` (edit the file). A proof that exits 5 or prints that it ran no tests gets the
 hint that the runner may be wrong; unittest is still picked for a repository whose only sign is a `.py` file.
+
+### 3b. `odd race`: parallel attempts, the proof picks the winner
+
+`odd race <slug>` runs one outcome as N attempts by coding agents and keeps the one the proof favours. The outcome
+must exist with its proof; with `"race_seal": true` it must also be sealed (recommended: the seal shows the proof
+red before any attempt). odd never calls a model: an agent is a shell command in `"agents"` in `.odd/config.json`
+(or `--agent CMD` for every attempt), used in turn, one per attempt; N defaults to the number of agents, or 3
+when there is one. `{prompt_file}` in the command becomes the path
+of a prompt file; without it the prompt arrives on stdin. The prompt names the outcome, the proof, the boundary, the
+files to leave alone, and the method `odd init` installs.
+The settings `agents`, `race_timeout` and `race_seal` need a tool newer than 0.4.0: v0.4.0 (and its Action)
+refuses an unknown setting, so a project that adds them vendors the newer `odd.py` first.
+
+1. **Worktrees.** Each attempt gets `git worktree add --detach` of HEAD under the git directory
+   (`.git/odd/race/run-<pid>/<n>`), never the user's tree. The outcome file, the changed test files and
+   `.odd/config.json` are copied in as they are in the user's tree and committed there as the attempt's start.
+   Uncommitted product changes in the user's tree are not copied.
+2. **Agents run in parallel**, each in its own process group with stdin closed or the prompt, its output in
+   `.git/odd/race/<slug>/agent-<n>.log`. At `race_timeout` seconds (default 1800) an agent is killed with its process
+   group; when an agent ends, whatever it left running in its group is killed before its attempt is checked.
+3. **Each attempt is checked when it ends**, one at a time, inside its worktree: it must not have edited the copied
+   files or a control file, and must not have changed product files outside `in:`; then the checks of `odd done`
+   (`prove()`: the R2 test-change rule, then `verify()`: green, red without the change, green, the empty-proof
+   checks and, unless `"strength": "off"`, the strength check; `"enforce"` applies as in `done`). A timed-out attempt is
+   not checked.
+4. **The winner**: verified, then the highest share of small breaks caught, then the fewest changed lines (test and
+   product files against the attempt's start), then the earliest agent finish. The output is a table of attempts
+   (strength, lines, seconds of agent and of verification, verified or the first line of why not) and the reason
+   the winner beat the runner-up.
+5. **Applying**: the winner's diff is written to `.git/odd/race/<slug>/winner.patch` and applied with `git apply`
+   only if no path inside `in:` differs from HEAD in the user's tree; otherwise, or if `git apply` refuses, the tree
+   is left alone and the patch path is printed (exit 1). The race records no evidence in the user's tree: run
+   `odd done <slug>` there, which re-verifies on the tree as it is.
+6. **Cleanup**: the worktrees are removed when the race ends, also on SIGTERM/SIGINT (agents killed first). After a
+   kill -9 the next race removes runs whose process is gone; agents still running then are not found.
+
+Limits: verification is sequential, so N attempts cost N verifications after the agents; the attempts share the
+machine, so a timing-sensitive proof may behave differently under load; installed dependencies and caches outside
+the worktree are shared; nothing stops an agent from writing outside its worktree (it runs as the user). Measured
+(fake agents, this machine): see BACKLOG item 1.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 

@@ -88,10 +88,20 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | `odd init [--claude-hooks] [--mcp]` | set up or repair a project; prints the step to add to CI and a proof suggestion |
 | `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected |
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
+| `odd race <slug> [--n N] [--agent CMD]` | run N agent attempts in parallel, each in its own git worktree; the verified one with the strongest proof and fewest changed lines is applied to your tree (a tool newer than 0.4.0) |
 | `odd gate [--recompute]` | is every changed file inside a verified outcome? (`--recompute` for CI) |
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
 | `odd escaped <slug> "<what, where found>"` | a defect got past a verified outcome: record it on that outcome |
 | `odd stats` | counts, self-reported, including escaped defects by kind of proof |
+
+**Racing agents.** With `"agents": ["<agent command>", ...]` in `.odd/config.json` (any CLI agent; `{prompt_file}`
+in the command becomes the prompt's path, else the prompt goes to stdin), `odd race <slug>` starts one attempt per
+command in its own git worktree under `.git/`, checks each one as `odd done` would, prints a table of attempts and
+applies the winner: verified, then the most small breaks caught, then the fewest changed lines, then the earliest
+finish. If your tree already has changes inside the boundary it writes the winner as a patch instead. On fake agents
+(one correct, one with a weaker proof, one broken, one that edits the test) the correct one won 10 races of 10, and
+setting up and removing a worktree cost 0.03 s per attempt on a three-file repository. Not measured yet: real agents,
+and whether a race of cheap models beats one strong one (BACKLOG item 1). Details: [DESIGN.md](DESIGN.md) section 3b.
 
 ## What it checks, and what it does not
 

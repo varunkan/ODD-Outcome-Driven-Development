@@ -188,6 +188,15 @@ Yes: `odd init --mcp` installs a small MCP server (`.odd/odd_mcp.py`, standard l
 `.mcp.json` next to any servers you already have. Each tool runs odd itself and returns its exit code and output,
 so the tools can never disagree with the command line. Only the test suite has driven it so far.
 
+**Can it run several agents at once and keep the best attempt?**
+`odd race <slug>` (a tool newer than 0.4.0) runs the outcome as N attempts, each by an agent command you configure
+in `"agents"` in `.odd/config.json`, each in its own git worktree under `.git/`, never in your working tree. Every
+attempt is checked as `odd done` would check it, and an attempt that edits the proof's test files or the outcome
+is discarded. The winner is the verified attempt whose proof caught the most small breaks, then the smallest, then
+the first to finish; it is applied to your tree only if you have no changes inside the boundary, otherwise it is
+written as a patch. Seal the proof first (`odd seal`; `"race_seal": true` makes the race refuse an unsealed one).
+odd calls no model itself. On fake agents the correct attempt won 10 races of 10; real agents are not measured yet.
+
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).
 2. This week: `odd init` on one repository and use it on your next agent task.
