@@ -106,6 +106,11 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
 - **Outcome:** an optional held-out proof run only by `gate --recompute`, plus a base-against-head behaviour diff for
   "no behaviour change" outcomes.
 - **Evidence:** visible-only checks scored 97% against 0% held-out on a lookup-table solution (arXiv 2605.21384).
+- **Done** in the commit "R8: held-out proofs and same-behaviour checks" (`git log --grep '^R8:'`), a tool newer than
+  0.4.0: setting `"held_out"`, run only by `gate --recompute`, output never shown ([DESIGN 5e](DESIGN.md)); outcome
+  line `same: <command>`, output identical with and without the change ([DESIGN 4e](DESIGN.md)). Tests:
+  `HeldOut`, `SameBehaviour`. Measure: not yet run on the harness (it needs held-out tests per task, which the
+  harness's hidden tests already are: the next comparison can pass them as `"held_out"`).
 
 ### What the research says not to build
 An LLM judge as the arbiter of done; chain-of-thought monitoring as a control; prompt-only "do not modify the tests";

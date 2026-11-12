@@ -3917,5 +3917,124 @@ class ProofQualityTrends(Repo):
         self.assertEqual(odd_mcp.argv_for('stats', {}), ['stats'])
 
 
+HIDDEN = ('import sys\nsys.path.insert(0, ".")\nfrom calc import add\nopen(sys.argv[1], "w").write("ran")\n'
+          'print("HIDDEN-CASE add(10, -4)")\nsys.exit(0 if add(10, -4) == 6 else 1)\n')
+OVERFIT = 'def add(a, b):\n    return 5\n'  # passes the visible proof add(2, 3) == 5, and fails without the change
+
+
+class HeldOut(Repo):
+    """R8: a proof the agent never sees, named in the target branch's settings and run only by gate --recompute."""
+
+    def setUp(self):
+        super().setUp()
+        self.hidden = tempfile.mkdtemp(prefix='odd-hidden-')  # outside the repository, as a CI checkout would be
+        self.addCleanup(shutil.rmtree, self.hidden, True)
+        self.ran = os.path.join(self.hidden, 'ran')
+        with open(os.path.join(self.hidden, 'check.py'), 'w') as f:
+            f.write(HIDDEN)
+
+    def adopt(self, **entry):
+        entry.setdefault('proof', '%s %s %s' % (sys.executable, os.path.join(self.hidden, 'check.py'), self.ran))
+        self.git('checkout', '-q', 'main')
+        self.ok('init')
+        cfg = json.loads(self.read('.odd/config.json') or '{}')
+        cfg['held_out'] = [entry]
+        self.write('.odd/config.json', json.dumps(cfg))
+        self.commit('adopt odd with a held-out proof')
+        self.git('checkout', '-q', '-B', 'feat')
+
+    def work(self, code):
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)
+        self.write('calc.py', code)
+        self.ok('done', 'add')
+
+    def test_an_overfit_change_passes_its_visible_proof_and_fails_the_held_out_one_without_seeing_it(self):
+        self.adopt(name='hidden')
+        self.work(OVERFIT)
+        out = self.no('gate', '--recompute', '--base', 'main')
+        self.assertIn('held-out proof hidden fails', out)
+        self.assertNotIn('HIDDEN-CASE', out, 'the held-out proof\'s output must not reach the agent')
+
+    def test_a_real_fix_passes_the_held_out_proof(self):
+        self.adopt(name='hidden')
+        self.work(FIXED)
+        out = self.ok('gate', '--recompute', '--base', 'main')
+        self.assertRegex(out, r'held-out hidden: passes')
+        self.ok('gate', '--recompute', '--base', 'main', '--json', self.path('facts.json'))
+        data = json.loads(self.read('facts.json'))
+        self.assertEqual([(h['name'], h['state']) for h in data['held_out']], [('hidden', 'ok')])
+
+    def test_a_local_gate_never_runs_it(self):
+        self.adopt(name='hidden')
+        self.work(FIXED)
+        self.assertRegex(self.ok('gate', '--base', 'main'), r'held-out 1 proof\(s\) run only by .* gate --recompute')
+        self.assertFalse(os.path.exists(self.ran), 'a local gate ran the held-out proof')
+        self.ok('gate', '--recompute', '--base', 'main')
+        self.assertTrue(os.path.exists(self.ran))
+
+    def test_a_change_cannot_remove_the_held_out_proof_from_its_own_gate(self):
+        self.adopt(name='hidden')
+        self.write('.odd/config.json', '{}')
+        self.work(OVERFIT)
+        self.assertIn('held-out proof hidden fails', self.no('gate', '--recompute', '--base', 'main'))
+
+    def test_it_runs_only_when_the_change_touches_its_boundary(self):
+        self.adopt(name='other', **{'in': 'other/**'})
+        self.work(OVERFIT)
+        out = self.ok('gate', '--recompute', '--base', 'main')
+        self.assertIn('held-out other: not run, no changed file inside other/**', out)
+        self.assertFalse(os.path.exists(self.ran))
+
+    def test_a_wrong_shape_or_a_proof_that_cannot_run_stops_the_gate(self):
+        self.git('checkout', '-q', 'main')
+        self.ok('init')
+        self.write('.odd/config.json', json.dumps({'held_out': [{'name': 'x'}]}))
+        self.assertIn('"held_out" has the wrong kind of value', self.no('gate', code=2))
+        self.write('.odd/config.json', '{}')
+        self.adopt(name='gone', proof='/nonexistent/held-out-check')
+        self.work(FIXED)
+        self.assertIn('held-out proof gone could not run', self.no('gate', '--recompute', '--base', 'main', code=2))
+
+
+SAME = '%s -c "from calc import add; print(add(2, 3), add(-1, 1), add(0.5, 0.25))"' % sys.executable
+
+
+class SameBehaviour(Repo):
+    """R8: "same: <command>" holds a behaviour-preserving change to the command's output with and without it."""
+
+    def setUp(self):
+        super().setUp()
+        self.git('checkout', '-q', 'main')
+        self.write('calc.py', FIXED)
+        self.write('tests/test_calc.py', TEST)
+        self.commit('add works')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.write('.odd/outcomes/tidy.md', '---\noutcome: A caller of add(2, 3) still receives 5 after the tidy-up.\n'
+                   'proof: %s\nin: calc.py\nkind: refactor\ncounterfactual: skip - behaviour-preserving refactor\n'
+                   'same: %s\n---\n' % (PROOF, SAME))
+
+    def test_a_refactor_with_the_same_output_passes_and_says_so(self):
+        self.write('calc.py', 'def add(a, b):\n    return sum((a, b))\n')
+        out = self.ok('done', 'tidy')
+        self.assertIn('same output with and without the change', out)
+        self.assertIn('sum((a, b))', self.read('calc.py'), 'the change was put back')
+        self.assertIn('same output', self.ok('gate', '--recompute', '--base', 'main'))
+
+    def test_a_behaviour_change_under_same_fails_and_names_the_difference(self):
+        self.write('calc.py', 'def add(a, b):\n    return round(a + b)\n')  # the visible proof still passes
+        out = self.no('done', 'tidy')
+        self.assertIn('"same:" output differs with the change taken out', out)
+        self.assertIn('with the change:    5 0 1', out)
+        self.assertIn('without the change: 5 0 0.75', out)
+        self.assertIn('round(a + b)', self.read('calc.py'))
+
+    def test_editing_same_after_done_needs_done_again(self):
+        self.write('calc.py', 'def add(a, b):\n    return sum((a, b))\n')
+        self.ok('done', 'tidy')
+        self.write('.odd/outcomes/tidy.md', self.read('.odd/outcomes/tidy.md').replace(SAME, '%s -c "print(1)"' % sys.executable))
+        self.assertRegex(self.no('gate'), r'run: .* done tidy')
+
+
 if __name__ == '__main__':
     unittest.main()

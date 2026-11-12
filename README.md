@@ -219,6 +219,16 @@ number is never written into `AGENTS.md` or an agent's prompt (in our pilot a vi
 but it is in `.odd/config.json`, which an agent can read in its copy of the repository. Whether it
 saves money on tasks that end unsolved is not measured. Details: [DESIGN.md](DESIGN.md) section 3g.
 
+**A proof the agent never sees.** `"held_out": [{"name", "proof", "in"}]` (a tool newer than 0.4.0) lists proofs
+kept outside the repository, for example in a private checkout a CI step provides. Only `odd gate --recompute` runs
+them, with the list read from the target branch, and their output is never shown: a change fitted to its visible
+proof (a lookup table for the cases it checks) fails there without learning why. Why: visible-only checks scored 97%
+against 0% held out on such a solution (arXiv 2605.21384). Details: [DESIGN.md](DESIGN.md) section 5e.
+
+**Refactors checked by comparison, not skipped.** `same: <command>` in an outcome (a tool newer than 0.4.0) runs the
+command with the change and with it taken out; its exit code and whole output must be identical, or `done` names the
+first differing line. Details: [DESIGN.md](DESIGN.md) section 4e.
+
 ## What it checks, and what it does not
 
 It checks that the proof **depends on the change**: with the change removed, the proof fails. It checks that nothing

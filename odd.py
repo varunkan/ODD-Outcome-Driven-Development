@@ -69,9 +69,10 @@ DEFAULTS = {
     'auto_max_lines': 120,     # the auto lane: most changed product lines
     'cache_file': None,    # backlog item 12: the verification cache file (default: under the git directory); a CI cache step saves it
     'max_attempts': 0,     # backlog item 15: park an outcome after this many failed attempts (done, race, cascade, chain); 0 is off
+    'held_out': [],        # R8: proofs the agent never sees, [{"name", "proof", "in"}], run only by gate --recompute
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same')
 KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
 REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
 HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
@@ -87,7 +88,7 @@ BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
-RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached')  # what --json says of a verified outcome
+RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -194,6 +195,13 @@ def _globs(v):
     return isinstance(v, list) and all(isinstance(g, str) and g.strip() for g in v)
 
 
+def _held_out(v):
+    """R8: each entry names a proof command, and optionally a name and an "in:" boundary (comma-separated globs)."""
+    text = lambda e, k: isinstance(e.get(k, 'x'), str) and bool(e.get(k, 'x').strip())  # noqa: E731
+    return isinstance(v, list) and all(isinstance(e, dict) and 'proof' in e and set(e) <= {'name', 'proof', 'in'} and
+                                       all(text(e, k) for k in ('name', 'proof', 'in')) for e in v)
+
+
 SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'proof_timeout': lambda v: type(v) in (int, float) and 0 < v < float('inf'),
             'default_branch': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
@@ -210,7 +218,8 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'auto_min_strength': lambda v: type(v) in (int, float) and 0 <= v <= 1,
             'auto_max_lines': lambda v: type(v) is int and v >= 0,
             'cache_file': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
-            'max_attempts': lambda v: type(v) is int and v >= 0}
+            'max_attempts': lambda v: type(v) is int and v >= 0,
+            'held_out': _held_out}
 
 
 def load_config(root, at=None):
@@ -680,6 +689,8 @@ def content_hash(root, cfg, o, changed, tests=None):
     h = hashlib.sha256()
     for k in ('proof', 'in', 'counterfactual'):
         h.update((k + '=' + o.get(k) + '\n').encode())
+    if o.get('same'):  # R8; absent, the identity of an outcome verified before it is unchanged
+        h.update(('same=' + o.get('same') + '\n').encode())
     _hash_paths(h, root, sorted(set(tests) | {p for p in product if o.covers(p)}))
     return h.hexdigest()[:20], sorted(tests)
 
@@ -705,7 +716,7 @@ def verify_key(root, cfg, o, base, changed):
         tool = hashlib.sha256(f.read()).hexdigest()
     h = hashlib.sha256(('odd %s %s\nbase=%s\n' % (VERSION, tool, rev(root, base) if base else '')).encode())
     h.update(json.dumps({k: v for k, v in cfg.items() if k != 'cache_file'}, sort_keys=True).encode())
-    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed')]).encode())
+    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same')]).encode())
     _hash_paths(h, root, changed)  # the outcome file and config.json too: changed, or as at the base
     return h.hexdigest()
 
@@ -866,7 +877,7 @@ def test_change(root, base, tests, outcomes, product=(), globs=()):
 
 # ---------------------------------------------------------------- proofs, and taking the change out
 
-def run_proof(root, cmd, timeout, env=None):
+def run_proof(root, cmd, timeout, env=None, whole=False):
     """(exit code or None on timeout, last lines of output, seconds). The command's exit status is the verdict.
     Output goes to a file, so a process the proof leaves behind cannot hold the check open, and whatever is still
     running in the proof's process group when it ends is stopped. No environment variable marks the run, except
@@ -885,11 +896,19 @@ def run_proof(root, cmd, timeout, env=None):
             except OSError:
                 pass
             p.wait()
+        if whole:  # R8 "same:": the whole output's digest, and its first part to show where two runs differ
+            out.seek(0)
+            h, head = hashlib.sha256(), b''
+            for block in iter(lambda: out.read(1 << 16), b''):
+                h.update(block)
+                head = head or block
+            whole = (h.hexdigest(), head.decode(errors='replace'))
         out.seek(max(0, out.seek(0, 2) - 8000))
         tail = out.read().decode(errors='replace')
     if rc is None:
         tail += '\ntimed out after %ss' % timeout
-    return rc, '\n'.join(tail.strip().splitlines()[-20:])[-2000:], round(time.time() - t0, 1)
+    res = rc, '\n'.join(tail.strip().splitlines()[-20:])[-2000:], round(time.time() - t0, 1)
+    return res + (whole,) if whole else res
 
 
 RUNNERS = re.compile(r'^(python[\d.]*|pypy[\d.]*|(ba|z|da|k)?sh|node|deno|bun|ruby|perl|php|pytest|py\.test|jest|vitest|'
@@ -1171,10 +1190,10 @@ def recover(root):
     return ' '.join(msgs)
 
 
-def without_change(root, cfg, o, base, targets):
+def without_change(root, cfg, o, base, targets, run=None):
     """Run the proof with `targets` (this outcome's changed product files) taken out, in place, then put them back.
-    Returns (exit code or None on timeout, output tail, seconds)."""
-    named = proof_runs(o.get('proof'), targets)
+    Returns (exit code or None on timeout, output tail, seconds), or what `run()`, run in place of the proof, returns."""
+    named = proof_runs(o.get('proof'), targets) if run is None else ()
     if named:
         raise CouldNotRun('the proof runs %s, which is part of the change and would be taken out by the check. Keep '
                           'what the proof runs under a test path (for example tests/).' % ', '.join(named))
@@ -1206,10 +1225,10 @@ def without_change(root, cfg, o, base, targets):
             if e['left']:
                 e['touched'] = _bump(full, e.get('mtime'))
         save()
-    return in_place(root, cfg, o, base, targets, at_base, take_out, 'take the change out')
+    return in_place(root, cfg, o, base, targets, at_base, take_out, 'take the change out', run)
 
 
-def in_place(root, cfg, o, base, targets, at_base, alter, what):
+def in_place(root, cfg, o, base, targets, at_base, alter, what, run=None):
     """Change `targets` in the working tree with `alter(entries, save, lock)`, run the proof, and put every target
     back from a journal written before the first byte changes (put_back; recover after a kill). Returns (exit code or
     None on timeout, output tail, seconds). `alter` notes in each entry what it `left`, then calls save()."""
@@ -1243,14 +1262,14 @@ def in_place(root, cfg, o, base, targets, at_base, alter, what):
                 alter(entries, save, lock)
             except OSError as err:  # never run a proof on a half-changed tree
                 raise CouldNotRun('could not %s (%s); nothing was verified' % (what, err))
-            rc, tail, secs = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+            result = run() if run else run_proof(root, o.get('proof'), cfg['proof_timeout'])
         finally:
             _, left = put_back(root, jdir, journal)
     finally:
         os.close(lock)
     if left:
         raise CouldNotRun('files changed while the check was running and were left as they are: ' + '; '.join(left))
-    return rc, tail, secs
+    return result
 
 
 def unrunnable(rc):
@@ -1593,6 +1612,8 @@ def _verify(root, cfg, o, base, changed, say):
         raise Fail('the proof exited 0 but %s, so it is not a proof: %s\n%s\n  make the proof run the test that shows '
                    'the outcome; a skip, an empty suite or an early exit 0 shows nothing.' % (empty, o.get('proof'), _indent(tail)))
     res = {'files': len(targets), 'lines': lines, 'seconds': [s1], 'red_says': '', 'skip': o.skip}
+    if o.get('same') and targets:
+        res['same'] = same_behaviour(root, cfg, o, base, targets, say)
     if o.skip and o.bug:
         raise Fail('a bug outcome cannot skip the run at the base revision: the proof must reproduce the bug there. '
                    'Take the "counterfactual:" line out of %s, or drop "kind: bug" if this is not a bug fix.' % o.rel)
@@ -1633,6 +1654,30 @@ def _verify(root, cfg, o, base, changed, say):
         res['strength'] = strength(root, cfg, o, base, targets, say, [s1, s2, s3])
         weak(cfg, o, res)
     return res
+
+
+def same_behaviour(root, cfg, o, base, targets, say):
+    """R8: the "same:" command's whole output and exit code, with the change and with it taken out, must be identical:
+    a behaviour-preserving change shown by comparison rather than skipped. Returns what --json records."""
+    cmd, t = o.get('same'), cfg['proof_timeout']
+    say('  "same:" runs twice, with the change and without it: %s' % cmd)
+    runs = [run_proof(root, cmd, t, whole=True)]
+    runs.append(without_change(root, cfg, o, base, targets, run=lambda: run_proof(root, cmd, t, whole=True)))
+    for (rc, tail, _, _), what in zip(runs, ('with', 'without')):
+        if unrunnable(rc):
+            raise CouldNotRun('"same:" could not run %s the change (%s): %s\n%s' % (
+                what, 'timeout' if rc is None else 'exit %d' % rc, cmd, _indent(tail)))
+    (rc1, _, s1, (d1, h1)), (rc2, _, s2, (d2, h2)) = runs
+    if (rc1, d1) == (rc2, d2):
+        return 'same output with and without the change (exit %d), %s+%s s' % (rc1, s1, s2)
+    a, b = h1.splitlines(), h2.splitlines()
+    n = next((i for i in range(min(len(a), len(b))) if a[i] != b[i]), min(len(a), len(b)))
+    line = lambda ls: ls[n] if n < len(ls) else '(no line %d)' % (n + 1)  # noqa: E731
+    raise Fail('"same:" output differs with the change taken out, so the change alters behaviour: %s\n'
+               '  exit with the change %d, without it %d; first differing line (%d):\n'
+               '    with the change:    %s\n    without the change: %s\n'
+               '  if the change is meant to alter behaviour, it is not a refactor: drop "same:" and prove the new behaviour.'
+               % (cmd, rc1, rc2, n + 1, line(a)[:300], line(b)[:300]))
 
 
 NO_REPRO = ('the proof does not reproduce the bug: it passes at the base revision (%s), so it cannot show the fix.\n'
@@ -1692,12 +1737,15 @@ def _describe(o, res):
     if res.get('cached'):
         return 'cached (verified at %s): %s' % (res['cached'], _describe(o, dict(res, cached=None)))
     if res.get('skip'):
-        return 'SKIPPED the take-out check (%s): the proof passes; %d line(s) in %d file(s) not verified' % (
-            res['skip'].split('-', 1)[-1].strip() or 'no reason', res['lines'], res['files'])
+        return 'SKIPPED the take-out check (%s): the proof passes; %d line(s) in %d file(s) %s' % (
+            res['skip'].split('-', 1)[-1].strip() or 'no reason', res['lines'], res['files'],
+            'checked by "same:": ' + res['same'] if res.get('same') else 'not verified')
     text = 'took out %d file(s), %d line(s); without them the proof said: %s; %s s' % (
         res['files'], res['lines'], res['red_says'], '+'.join(str(s) for s in res['seconds']))
     if res.get('reproduced'):
         text += '\n          reproduced: ' + res['reproduced']
+    if res.get('same'):
+        text += '\n          ' + res['same']
     st = res.get('strength')
     if st:
         text += '\n          proof strength %d of %d (small breaks in the changed lines the proof caught)%s%s; %s s' % (
@@ -1857,6 +1905,35 @@ def survey(root, base_arg=None, recompute=False):
                 stray_lines=sum(sizes(root, base, stray, cfg['trivial_lines']).values()))
 
 
+def held_out(root, s, recompute, problems, facts, say):
+    """R8: the target branch's held-out proofs, run only when recomputing, each when the change touches its "in:" (by
+    default any product file). Their output is never shown: it is what the agent must not fit the change to.
+    Returns report lines; a failing one adds a problem; one that cannot run stops the gate (exit 2)."""
+    entries, rows = s['cfg']['held_out'], []
+    if entries and not recompute:
+        return ['  held-out %d proof(s) run only by %s gate --recompute (in CI), never locally' % (len(entries), ODD)]
+    lines = []
+    for n, e in enumerate(entries, 1):
+        name, where = e.get('name') or str(n), split_globs(e.get('in'))
+        if not any(matches(p, where, tree=True) for p in s['product']) if where else not s['product']:
+            lines.append('  held-out %s: not run, no changed file inside %s' % (name, e.get('in') or 'the product'))
+            rows.append(dict(name=name, state='not run'))
+            continue
+        say('held-out %s' % name)
+        rc, _, secs = run_proof(root, e['proof'], s['cfg']['proof_timeout'])
+        if unrunnable(rc):
+            raise CouldNotRun('held-out proof %s could not run (%s); check the CI step that provides it'
+                              % (name, 'timeout' if rc is None else 'exit %d' % rc))
+        rows.append(dict(name=name, state='ok' if rc == 0 else 'fail', seconds=secs))
+        lines.append('  held-out %s: %s, %ss' % (name, 'passes' if rc == 0 else 'FAILS (exit %d)' % rc, secs))
+        if rc:
+            problems.append('held-out proof %s fails (exit %d). Its output is not shown, so the change cannot be fitted '
+                            'to it: make the change do what the outcome says for every input, not only the ones its '
+                            'visible proof checks.' % (name, rc))
+    facts['held_out'] = rows
+    return lines
+
+
 def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     """(exit code, report lines). Raises CouldNotRun. A dict passed as facts is filled with the same result as data,
     for the --json and --summary renderings."""
@@ -1916,6 +1993,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
                             'proof: %s' % (name, last, o.get('proof')))
         else:
             lines.append('  guard   %s now fails: %s (reported only; "guard": "enforce" fails the gate)' % (name, last))
+    lines += held_out(root, s, recompute, problems, facts, say)
     if cache:
         cache.save()  # what a guard's proof wrote to the file after the last verification is dropped too
     facts['guards_skipped'] = s.get('guards_skipped', 0)
@@ -3048,6 +3126,10 @@ def markdown(f):
         md += ['- **%s** (proven in %s)%s: %s' % (g['slug'], _cell(g['commit'], True, False),
                ', %s, reported only' % _cell(g['note'], table=False) if g.get('note') else '', 'passes' if g['state'] == 'ok'
                else '**now fails**: ' + _cell(g.get('why', ''), True, False)) for g in f['guards']]
+    if f.get('held_out'):
+        md += ['', '**Held-out proofs** (in the target\'s settings; output not shown):'] + [
+            '- **%s**: %s' % (_cell(h['name'], table=False), {'ok': 'passes', 'fail': '**fails**'}.get(h['state'], h['state']))
+            for h in f['held_out']]
     md += ['', '**Deleted outcomes** (merged earlier; this change deletes the file, so nothing checks them):'] + [
         '- **%s** (merged in %s)' % (_cell(d['slug'], table=False), _cell(d['commit'], True, False))
         for d in f['deleted']] if f.get('deleted') else []

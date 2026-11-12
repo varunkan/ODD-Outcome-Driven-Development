@@ -40,7 +40,9 @@ Free notes: questions asked and answered, decisions and why.
   agent command wrote the sealed proof, section 3d; the same tool version, and the same refusal by an older one:
   delete the line for an older tool), `covers: R1, R3` (the ticket requirements this outcome covers, section 5a;
   the same tool version and the same refusal by an older one), `kind: bug` (section 4a), `asked: <question>`
-  (written by `odd ask`: an open question, section 4b; the same tool version and the same refusal by an older one).
+  (written by `odd ask`: an open question, section 4b; the same tool version and the same refusal by an older one),
+  `same: <command>` (the command's output must be identical with and without the change, section 4e; the same tool
+  version and the same refusal by an older one).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -675,6 +677,31 @@ fault. A local `odd gate` reads recorded results, which can be forged; only the 
 anything a merge rule should trust. Not measured: review minutes per merged change or defects escaping through the
 lane (BACKLOG item 11).
 
+### 5e. Held-out proofs: `"held_out"`
+
+Needs a tool newer than 0.4.0 (R8). The outcome's proof is written or seen by the agent, so work can fit it without
+doing what the outcome says (a lookup table for the visible cases; research: 97% on visible checks against 0% held
+out, arXiv 2605.21384). `"held_out"` in `.odd/config.json` lists proofs the agent never sees:
+
+```json
+{"held_out": [{"name": "billing", "proof": "python3 -m pytest -q $HELD_OUT/billing", "in": "src/billing/**"}]}
+```
+
+`proof` is required; `name` (default: its position) and `in` (comma-separated globs; default: any product file) are
+optional; any other key or a wrong type stops the run (exit 2). The files the command runs live outside the
+repository: a CI step checks them out from a private repository or a secret store before the gate. Only `gate
+--recompute` runs them, so in CI the list is read from the target branch and a change cannot remove or alter its own
+held-out proofs. A local gate prints `held-out N proof(s) run only by odd gate --recompute (in CI), never locally`
+and runs nothing. Each runs when a changed product file is inside its `in:` (else `not run, no changed file inside
+...`), after the outcomes and guards, with the proof timeout. Exit 0: `passes`. Any other completed exit fails the
+gate, and the failure says only the name and exit code: the output is never printed, in the report, the job summary
+or the PR comment, because it is what the change must not be fitted to. A command that cannot run (timeout, 126,
+127, 129-192) is exit 2: the CI step that provides it is broken. `--json` adds `held_out: [{name, state, seconds}]`;
+the PR comment lists each by name with passes or fails. Limits: whoever can read the CI log can read what the
+command itself writes there (odd prints nothing of it; a test runner run with `-q` still names a failing test). The
+held-out proofs are not take-out checked: they show the code meets them, not that the change caused it. They cost
+one more run per proof per gate. The outcome's own proof still has to pass the take-out check first.
+
 ### 5d. Verification cache and affected guards
 
 `odd done`, `race`, `cascade`, `chain` and `gate --recompute` all verify through one function, `verify()`. Before
@@ -808,7 +835,7 @@ printed.
 |---|---|---|---|
 | `bug` | `kind: bug` | require the proof to fail at the base revision (section 4a) | reproduce first, then fix |
 | `feature` | `kind: feature`; the proof as given | as for an outcome without a kind | the proof covers the new behaviour; keep the existing suite green (the proof alone does not run it) |
-| `refactor` | `kind: refactor`; `counterfactual: skip - behaviour-preserving refactor`; `--proof` optional, defaulting to `auto` with the runner's whole suite | `done` passes when the proof passes and no existing test changed unexplained (section 4's take-out and the strength check are skipped, as for any `counterfactual: skip`) | the existing suite is the proof; do not change the tests to fit |
+| `refactor` | `kind: refactor`; `counterfactual: skip - behaviour-preserving refactor`; `--proof` optional, defaulting to `auto` with the runner's whole suite | `done` passes when the proof passes and no existing test changed unexplained (section 4's take-out and the strength check are skipped, as for any `counterfactual: skip`); add `same: <command>` to have the behaviour compared with and without the change (section 4e) | the existing suite is the proof; do not change the tests to fit |
 
 The whole-suite command per runner is `SUITES` in odd.py, picked by the same detection as `--proof auto` (section
 3a): `python3 -m pytest -q`, `npx jest`, `npx vitest run`, `node --test`, `npx mocha`, `go test ./...`, `cargo test`,
@@ -820,6 +847,23 @@ exercises the changed code. The refactor sentence still meets the ambiguity stop
 refused, "Every existing test of X still passes after the split." is not. Only the unittest suite command is
 exercised by the tests; the others are not run. Whether the templates lower turns or failed `done` attempts is not
 measured.
+
+### 4e. Behaviour-preserving changes: `same: <command>`
+
+Needs a tool newer than 0.4.0 (R8). A refactor skips the take-out check, because nothing should fail without it, so
+until now odd showed only that the proof passes. With the outcome line `same: <command>`, `done` and `gate
+--recompute` also run that command twice: with the change, and with the change taken out (the same in-place take-out
+and journal as section 4, `without_change(run=...)`). Its exit code and its whole output (sha256 over every byte;
+`run_proof(whole=True)`) must be identical. Equal: the result says `same output with and without the change (exit N)`
+and, for a skip, `checked by "same:"` in place of `not verified`. Different: a fail naming the command, both exit
+codes and the first differing line of each run (from the first 64 KiB), and saying that a change meant to alter
+behaviour is not a refactor. A run that cannot complete (timeout, exit 126, 127, 129-192) is "could not run". It
+works with or without a skip; it runs only when files inside `in:` changed. The command may run the changed files
+themselves (unlike the proof: comparing them at the base and at the head is the point). The field is in the
+verification's identity (`content_hash`, `verify_key`) only when present, so outcomes verified before it keep their
+recorded results. Limits: output that varies from run to run (times, temporary paths, ordering of a set, addresses)
+fails the comparison; print what is stable. It compares one command's output, not all behaviour; a command that
+prints little shows little.
 
 ### 4d. Failure feedback: the `next:` block
 
@@ -1019,4 +1063,7 @@ line still loads, and is now counted as one escape against the outcome that carr
   environment variable, a plugin installed outside the repository, a `load_tests` in a test module, or test
   selection written in a product file are not detected. The ids collected at the base and at the head are not
   compared.
+- `same:` compares one command's output; output that varies between runs fails it. Held-out proofs are only as
+  hidden as the CI step that provides them, and are not take-out checked (sections 4e, 5e). Neither is measured on
+  the comparison harness.
 - Every effectiveness figure is unmeasured until the comparison runs.
