@@ -248,16 +248,29 @@ records `counterfactual: skip - behaviour-preserving refactor`, since taking a r
 `done` then passes when the suite passes and no existing test was edited unexplained; the take-out and strength
 checks are skipped, so odd does not show the suite runs the changed lines. The sentence still needs an observable:
 "Every existing test of billing still passes after the split." `--kind feature` and `--kind bug` print their own
-hints (the proof covers the new behaviour and the suite stays green; reproduce first).
+hints (the proof covers the new behaviour and the suite stays green; reproduce first). Turning a `kind: bug` outcome
+into a refactor to skip the reproduce rule shows: a sealed one fails until resealed, and the local gate prints `kind
+changed from bug`.
 
 **What if the ticket is too vague to state a checkable outcome?**
 `odd new` refuses a sentence with no observable (no verb such as sees, gets, returns, is refused, and no measurable
 term such as a number, every, within, seconds) and suggests "<who> <observes> <what>, measurably". The agent is told
 to ask one precise question instead of guessing: `odd ask <slug> "<question>"` writes it into the outcome file, and
 the gate shows "waiting for an answer" for that outcome rather than a fail. Delete the `asked:` line once it is
-answered. The check is a word list, not a model: it stops "Refactor the billing module." and lets through vague
-sentences that contain a listed word; set `"ambiguity_stop": false` if it gets in your way (for example, outcomes
+answered; until then the outcome covers no files and no requirement, so it does not satisfy `"coverage": "enforce"`.
+The check is a word list, not a model: it stops "Refactor the billing module." and "Improve the code so the tests
+pass." (the suite passing is not an observable), passes state sentences such as "The login button is disabled while
+the request is pending.", lets through vague sentences that contain a listed word, and refuses ordinary sentences
+built only from words it does not list; set `"ambiguity_stop": false` if it gets in your way (for example, outcomes
 written in another language). A tool newer than 0.4.0. Whether it lowers rework is not measured.
+
+**When `odd done` fails, how does my agent know what to fix?**
+The output ends with a `next:` block: one line per item that is present (the proof's failing line, each small break
+the proof did not notice, each changed line it never ran, each test edit refused for lack of a reason) and the
+command to rerun. A failure with none of these items (nothing changed inside `in:`, the proof passes with the change
+taken out) has no block: rerunning would fail the same way, and the message says what to do. Race, cascade (whose next prompt carries it) and the MCP server (`structuredContent.next`) give the
+same block. It states facts and does not say how to pass. A tool newer than 0.4.0. Whether it shortens the loop is
+not measured.
 
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).

@@ -64,7 +64,8 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
     ('escaped', 'Record a defect that got past a merged outcome.',
      [SLUG, ('what', S, 'what went wrong, and where it was found')], ('slug', 'what')),
 )
-OUTPUT = {'type': 'object', 'properties': {'exit_code': {'type': 'integer'}, 'output': {'type': 'string'}},
+OUTPUT = {'type': 'object', 'properties': {'exit_code': {'type': 'integer'}, 'output': {'type': 'string'},
+                                         'next': {'type': 'array', 'items': {'type': 'string'}}},
           'required': ['exit_code', 'output']}
 INFO = {'name': 'odd', 'version': '1'}
 
@@ -123,8 +124,11 @@ def call(name, given):
 
 def result(rc, out, name):
     rc = rc if rc in MEANING else 2  # anything else is never reported as a pass or a plain failure
+    lines = out.rstrip('\n').split('\n')
+    at = [i for i, line in enumerate(lines) if line == 'next:']  # odd's next: block (a failed done, race or cascade)
+    more = {'next': [line.strip() for line in lines[at[-1] + 1:]]} if at else {}
     return {'content': [{'type': 'text', 'text': 'odd %s: exit %d (%s)\n%s' % (name, rc, MEANING[rc], out)}],
-            'structuredContent': {'exit_code': rc, 'output': out}, 'isError': rc != 0}
+            'structuredContent': dict({'exit_code': rc, 'output': out}, **more), 'isError': rc != 0}
 
 
 def handle(method, params):

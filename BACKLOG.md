@@ -203,7 +203,10 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   20 hand-made mutants of the new code, each turning a `Coverage` test red (one survived at first, the ids of a parked
   outcome going unchecked; an assertion was added and it then turned red).
   Not measured: requirements missed per task with and without it, and whether an agent writes a complete list; odd
-  cannot check that a covering outcome's proof tests its requirement.
+  cannot check that a covering outcome's proof tests its requirement. Review fix (commit "Fix review findings ...",
+  `git log --grep '^Fix review findings'`): an asked outcome (item 6) covered requirements, so `odd ask` got around
+  `coverage=enforce`; now a parked or asked outcome covers nothing (test `test_an_asked_outcome_covers_nothing`, seen
+  RED, one mutant turning it red).
 
 ### 5. Reproduce first for bugs
 - **Outcome:** for a bug, the proof must fail on the unfixed code by reproducing the reported behaviour before any fix
@@ -217,7 +220,10 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   on the missing `--kind`; the unknown-kind test and the unchanged-outcome control passed before the code, the first
   for the wrong reason, the field being unknown) and 13 hand-made mutants of the new code in odd.py and odd_mcp.py,
   each turning a `ReproduceFirst` test red. Not measured: pass rate and false "done" on bug tasks with and without;
-  odd cannot tell whether the failure is the reported symptom.
+  odd cannot tell whether the failure is the reported symptom. Review fix (commit "Fix review findings ..."): editing
+  `kind: bug` to `kind: refactor` dropped the rule unseen; now a seal carries `kind@<kind>` (a sealed bug that changes
+  kind fails until resealed) and the local gate prints `kind changed from bug` from local evidence (2 tests, seen
+  RED). An unsealed outcome never run as a bug here, and `--recompute` without a seal, still show nothing.
 
 ### 6. Ambiguity stop
 - **Outcome:** when the outcome cannot be made checkable from the ticket, the agent asks one precise question instead
@@ -235,6 +241,11 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   and odd_mcp.py, each turning an `AmbiguityStop` test red (one survived at first, dropping the measurable-term list;
   a sentence relying only on it was added and it then turned red). Not measured: rework and wrong-problem rate on
   vague tasks; the word list lets through vague sentences containing a listed word and likely refuses other languages.
+  Review fix (commit "Fix review findings ..."): the lists refused ordinary sentences ("The login button is disabled
+  while the request is pending.", "A cashier can split a bill between guests.") and passed "Improve the code so the
+  tests pass."; now state predicates, "can <verb>" and common domain verbs count, and the suite passing is taken out
+  first (`SUITE_PASSES`); 2 tests with 10 sentences, seen RED. Sentences built only from unlisted words are still
+  refused.
 
 ### 7. Outcome templates by kind of change
 - **Outcome:** a bug, a feature and a refactor each start from the right proof shape: reproduce-then-fix; new
@@ -257,6 +268,17 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   proof output) so it fixes that instead of guessing.
 - **How:** a compact machine-readable failure block in `done` output and through the MCP server.
 - **Measure:** turns between the first failed `done` and the first passing one.
+- **Done** in the commit "B8: precise failure feedback ..." (`git log --grep '^B8:'`): a failed `done`, and a race or
+  cascade with no verified attempt, ends with `next:`, one line per item present (`proof:` failing line, `survived:`
+  break, `not run:` line, `refused:` test edit) and `rerun:` the command; items ride on `Fail.items`, one formatter
+  `next_block()`, reused by the cascade prompt; the MCP server adds `structuredContent.next`. DESIGN.md section 4d.
+  Measured with `tests/test_odd.py` classes `FailureFeedback` and `AttemptFeedback` (8 tests, 7 seen RED for want of
+  the block before the code; the pass-has-no-block control passed). Mutants: no record of a B8 mutation run was kept; in the review-fix step
+  2 mutants of the `cmd_done` block condition (block always, block never) were run, each turning a `FailureFeedback`
+  test red; no other B8 mutants were run. Review fix: a failure with no item printed only `rerun:` of the command
+  known to fail the same way (for example nothing changed inside `in:`, whose remedy is `--base <revision>`); now such
+  a failure prints no block (2 tests, seen RED). Not measured: the turns between the
+  first failed `done` and the first passing one, with and without the block (no agent run).
 
 ### 9. Regression guard
 - **Outcome:** every proven outcome's proof joins a guard set, and the proofs of outcomes touching the same files run

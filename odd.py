@@ -84,7 +84,11 @@ ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 
 
 class Fail(Exception):
-    """The outcome is not shown (exit 1)."""
+    """The outcome is not shown (exit 1). `items`: (kind, text) pairs an agent can act on, for the "next:" block."""
+
+    def __init__(self, msg, items=()):
+        Exception.__init__(self, msg)
+        self.items = list(items)
 
 
 class CouldNotRun(Exception):
@@ -523,7 +527,7 @@ def coverage(root, s):
             if r not in lists[t]:
                 problems.append('%s: covers: %s, but .odd/requirements/%s.md has no %s (it has %s)'
                                 % (o.slug, r, t, r, ', '.join(lists[t])))
-            elif not o.parked and o.slug not in who[t][r]:  # a parked outcome covers nothing
+            elif not o.parked and not o.asked and o.slug not in who[t][r]:  # a parked or asked outcome covers nothing
                 who[t][r].append(o.slug)
     lines, facts = [], []
     for t, reqs in lists.items():
@@ -555,6 +559,16 @@ def record(root, slug, **data):
     os.makedirs(state_dir(root, 'evidence'), exist_ok=True)
     with open(state_dir(root, 'evidence', slug + '.jsonl'), 'a') as f:
         f.write(json.dumps(dict(ts=now(), **data)) + '\n')
+
+
+def _kind(o):
+    """The kind an attempt ran under, for the evidence log: the gate says when a bug outcome later changed kind."""
+    return {'kind': o.get('kind')} if o.get('kind') else {}
+
+
+def was_bug(root, o):
+    """True when this outcome is not kind: bug now but an earlier done or seal here ran it as one (local evidence)."""
+    return not o.bug and any(e.get('kind') == 'bug' for e in evidence(root, o.slug))
 
 
 def evidence(root, slug):
@@ -598,20 +612,22 @@ def fingerprint(root, o, files):
     test file as it is now (content, mode, links), so a reviewer sees which files are sealed."""
     h = lambda text: hashlib.sha256(text.encode(errors='surrogateescape')).hexdigest()[:12]  # noqa: E731
     return ', '.join(['proof@' + h(o.get('proof'))] +
-                     ['%s@%s' % (p, h(json.dumps(_state(os.path.join(root, p))))) for p in files])
+                     ['%s@%s' % (p, h(json.dumps(_state(os.path.join(root, p))))) for p in files] +
+                     (['kind@' + o.get('kind')] if o.get('kind') else []))  # a sealed bug stays a bug until resealed
 
 
 def check_seal(root, o):
     """Fail when the outcome is sealed and its proof command or a sealed test file differs from the seal."""
     if not o.get('sealed'):
         return
-    files = [e.rsplit('@', 1)[0] for e in o.get('sealed').split(', ')[1:]]
+    files = [e.rsplit('@', 1)[0] for e in o.get('sealed').split(', ')[1:] if not e.startswith('kind@')]
     now = dict(e.rsplit('@', 1) for e in fingerprint(root, o, files).split(', '))
     was = dict(e.rsplit('@', 1) for e in o.get('sealed').split(', ') if '@' in e)
     if 'proof' not in was:
         raise Fail('%s: "sealed:" is not a seal odd wrote (proof@<hash>, <file>@<hash>, ...); run %s seal %s'
                    % (o.rel, ODD, o.slug))
-    moved = ['the proof command' if k == 'proof' else k for k in was if now.get(k) != was[k]]
+    moved = [{'proof': 'the proof command', 'kind': 'the kind (sealed as %s)' % was[k]}.get(k, k)
+             for k in was if now.get(k) != was[k]]
     if moved:
         raise Fail('the sealed proof changed after it was sealed: %s; reseal it (%s seal %s; the reseal shows in the '
                    'diff) or restore it' % (', '.join(moved), ODD, o.slug))
@@ -643,7 +659,7 @@ def collects(root, base, path):
 
 
 def test_change(root, base, tests, outcomes, product=(), globs=()):
-    """(touched, problem or '', what the reviewer reads or ''): test files that existed at the base and this change modified
+    """(touched, problem or '', what the reviewer reads or '', the files no reason covers): test files that existed at the base and this change modified
     or deleted, and files that decide which tests run (a conftest.py or pytest.ini, new or not; a changed pytest
     section or load_tests, collects), allowed only by a `test-change: <reason>` line in one of the given (in-play, not
     parked) outcomes. A reason that names test files (`globs`, or a file above) covers only those; one that names none covers every
@@ -652,7 +668,7 @@ def test_change(root, base, tests, outcomes, product=(), globs=()):
     picks = [p for p in list(tests) + list(product) if COLLECT.search(p) or collects(root, base, p)]
     touched = [p for p in tests if p in old and p not in picks] + picks
     if not touched:
-        return touched, '', ''
+        return touched, '', '', []
     why, left = [], list(touched)
     for o in outcomes:
         if not o.get('test-change'):
@@ -665,13 +681,13 @@ def test_change(root, base, tests, outcomes, product=(), globs=()):
         why.append('test-change (%s): %s [%s]' % (o.slug, o.get('test-change'), (
             'names no file, so it covers every test edit: ' if named is None else 'covers: ') + (', '.join(covers) or 'none')))
     if not left:
-        return touched, '', '; '.join(why)
+        return touched, '', '; '.join(why), []
     named = ', '.join(left[:8]) + (', ...' if len(left) > 8 else '')
     return touched, ('%s: %s. A change that edits or deletes an existing test, or changes which tests run, fails closed: '
             'rewriting the test is the easiest way to make a proof pass. If the edit is right, say why in the outcome with '
             'the line "test-change: <reason>" (name the files to cover only those); the gate and the review comment show it.'
             % (named, 'an existing test file or one that decides which tests run, and no reason covers %s'
-               % ('it' if len(left) == 1 else 'them'))), ''
+               % ('it' if len(left) == 1 else 'them'))), '', left
 
 
 # ---------------------------------------------------------------- proofs, and taking the change out
@@ -1363,7 +1379,8 @@ def weak(cfg, o, res):
         why.append('%s\n  the proof never executes these changed lines ("strength": "enforce"), so it cannot show what '
                    'they do: make the proof run them, or take them out of the change.' % lines_run(st))
     if why:
-        raise Fail('\n'.join(why))
+        raise Fail('\n'.join(why), [('survived', w) for w in st['survivors']] + [
+            ('not run', '%s:%s' % (f, n)) for f, ns in (x.rsplit(':', 1) for x in st.get('not_run') or []) for n in ns.split(',')])
 
 
 def verify(root, cfg, o, base, changed, say=lambda s: None):
@@ -1380,7 +1397,8 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
         raise Fail('the proof fails (exit %d): %s\n%s%s' % (rc, o.get('proof'), _indent(tail), (
             '\n  it ran no tests: the runner may be wrong for these tests (pytest exits 5 when it collects none; '
             'unittest finds only unittest.TestCase classes); pick the runner in the proof yourself.')
-            if rc == 5 or re.search(r'NO TESTS RAN|no tests ran|collected 0 items|Ran 0 tests', tail or '') else ''))
+            if rc == 5 or re.search(r'NO TESTS RAN|no tests ran|collected 0 items|Ran 0 tests', tail or '') else ''),
+                   [('proof', failing(tail))])
     empty = hollow(o.get('proof'), tail, s1, root, targets)
     if empty:
         raise Fail('the proof exited 0 but %s, so it is not a proof: %s\n%s\n  make the proof run the test that shows '
@@ -1418,7 +1436,7 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
     if rc3 != 0:
         raise Fail('the proof passed, failed without the change, and then did not pass again with the change put back '
                    '(%s). A proof must give the same answer each time it runs; this one may leave state behind.\n%s'
-                   % ('timeout' if rc3 is None else 'exit %d' % rc3, _indent(tail3)))
+                   % ('timeout' if rc3 is None else 'exit %d' % rc3, _indent(tail3)), [('proof', failing(tail3))])
     res.update(seconds=[s1, s2, s3], red_says=says(ctail))
     if o.bug:
         res['reproduced'] = last_line(ctail)
@@ -1444,9 +1462,28 @@ def says(tail):
     """What a failing proof said, in one line: the last line that names a reason (an error, a failed assertion), then
     the runner's last line when that is a different one (so a footer such as jest's "Ran all test suites" never
     stands alone)."""
-    lines = [l.strip() for l in (tail or '').splitlines() if l.strip()] or ['(no output)']
-    why = [l for l in lines if WHY.search(l)]
-    return (why[-1][:120] + ' / ' if why and why[-1] != lines[-1] else '') + lines[-1][:120]
+    why, last = failing(tail), last_line(tail)[:120]
+    return (why + ' / ' if why != last else '') + last
+
+
+def failing(tail):
+    """The proof's failing line: the last line of its output that names a reason, else its last line."""
+    why = [l.strip() for l in (tail or '').splitlines() if WHY.search(l)]
+    return (why[-1] if why else last_line(tail))[:120]
+
+
+def next_block(items, rerun):
+    """What a failed done, race or cascade ends with, and what the cascade prompt and the MCP server pass on: "next:",
+    one line per actionable item (kind: text, from Fail.items), then the one command to rerun."""
+    return '\n'.join(['next:'] + ['  %s: %s' % kv for kv in items] + ['  rerun: ' + rerun])
+
+
+def _rerun(a):
+    """The command line of `a` (parsed arguments of done, race or cascade), to paste: odd, the command, the slug, then
+    every option that was given."""
+    opts = ['--%s %s' % (k.rstrip('_').replace('_', '-'), shlex.quote(str(v))) for k, v in sorted(vars(a).items())
+            if k not in ('cmd', 'slug') and v is not None]
+    return ' '.join([ODD, a.cmd, shlex.quote(a.slug)] + opts)
 
 
 def _indent(text):
@@ -1521,7 +1558,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     for the --json and --summary renderings."""
     s = survey(root, base_arg, recompute)
     cfg, base, changed, product, active, stray = s['cfg'], s['base'], s['changed'], s['product'], s['active'], s['stray']
-    lines, problems, skips, outs, exempted = [], [], [], [], []
+    lines, problems, skips, outs, exempted, changed_kind = [], [], [], [], [], []
     facts = {} if facts is None else facts
     facts.update(base=base, recompute=recompute, changed=len(changed), in_play=len(s['inplay']), outcomes=outs,
                  exemptions=exempted, control=s['control'], problems=problems)
@@ -1546,7 +1583,11 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
             if res.get('skip'):
                 skips.append('%s - %s, %d line(s)' % (o.slug, res['skip'].split('-', 1)[-1].strip(), res['lines']))
             lines += ['  ok      %s: %s' % (o.slug, o.get('outcome')[:100]), '          ' + _describe(o, res)]
-            fact(o, 'ok', **{k: res[k] for k in RESULT if k in res})
+            if was_bug(root, o):
+                changed_kind.append(o.slug)
+                lines.append('          kind changed from bug to %s: the proof no longer has to fail at the base'
+                             % (o.get('kind') or 'none'))
+            fact(o, 'ok', **dict({k: res[k] for k in RESULT if k in res}, **({'kind_was': 'bug'} if o.slug in changed_kind else {})))
         except Fail as e:
             problems.append('%s: %s' % (o.slug, e))
             fact(o, 'fail', why=str(e))
@@ -1578,7 +1619,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
         exempted.append('exempt paths: %d file(s), %s line(s)' % (
             len(s['exempt']), sum(min(v, 10 ** 5) for v in sizes(root, base, s['exempt']).values())))
     if s['tests'] or s['product']:
-        touched, bad, why = test_change(root, base, s['tests'], active, s['product'], cfg['test_globs'])
+        touched, bad, why, _ = test_change(root, base, s['tests'], active, s['product'], cfg['test_globs'])
         picks = [p for p in touched if COLLECT.search(p) or collects(root, base, p)]
         old = [p for p in touched if p not in picks]
         exempted += [] if not (s['tests'] or touched) else ['test files: %d changed%s%s%s' % (
@@ -1598,6 +1639,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     head = '%s gate%s: base %s, %d file(s) changed, %d outcome(s) in this change' % (
         ODD, ' --recompute' if recompute else '', (base or 'none')[:10], len(changed), len(s['inplay']))
     tail = ' (%d skipped the take-out check: %s)' % (len(skips), '; '.join(skips)) if skips else ''
+    tail += ' (%d changed kind from bug: %s)' % (len(changed_kind), ', '.join(changed_kind)) if changed_kind else ''
     waiting = [o.slug for o in s['inplay'] if o.asked and not o.parked]
     tail += ' (%d waiting for an answer: %s)' % (len(waiting), ', '.join(waiting)) if waiting else ''
     if problems:
@@ -1670,22 +1712,31 @@ def suggest_proof(root, slug, test=None, suite=False):
         '  (the test goes in %s)' % path))
 
 
-# backlog item 6: a sentence names something checkable when it has a verb of observation or a measurable term. The
-# lists are deliberately wide (English only): the stop refuses only a sentence with neither, such as "Refactor X."
+# backlog item 6: a sentence names something checkable when it has a verb of observation, a state predicate ("is
+# disabled", "keeps", "no longer"), a capability ("can export") or a measurable term. English only. "The tests pass" is
+# no observable (it is what every proof says), so a sentence whose only such word is the suite passing is refused.
 OBSERVE = re.compile(r'\b(?:(?:see|get|receive|observe|read|find|show|display|print|return|report|list|log|exit|fail|'
                      r'pass|reject|refuse|accept|raise|throw|respond|answer|reply|load|contain|hear|notice|measure|'
                      r'match|appear|produce|output|emit|render|download|send|warn|alert|block|stay|remain|succeed|'
                      r'complete|finish|reach|hold|include|exclude|equal|count|total|sum|lose|crash|hang|redirect|'
-                     r'record|allow|deny|restore|recover|survive|detect|notify)(?:s|es|ed|d|n|ing)?|'
-                     r'saw|seen|got|gotten|found|shown|heard|ran|held|sent|lost|told|gives|gave|given)\b', re.I)
+                     r'record|allow|deny|restore|recover|survive|detect|notify|keep|export|import|split|save|delete|'
+                     r'remove|open|close|upload|cancel|undo|disappear|become)(?:s|es|ed|d|n|ing)?|'
+                     r'saw|seen|got|gotten|found|shown|heard|ran|held|sent|lost|told|gives|gave|given|kept|became|'
+                     r'no longer|still|can(?:not)?|(?:is|are|was|were|stays?|remains?|becomes?)(?: not)? (?:\w+(?:ed|en)|'
+                     r'visible|hidden|empty|active|inactive|available|unavailable|open|closed|on|off|valid|invalid|'
+                     r'present|absent|unchanged|blank|greyed out|read-only|locked|unlocked))\b', re.I)
 MEASURE = re.compile(r'\d|%|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|every|each|'
                      r'none|never|always|only|exactly|within|under|at (?:least|most)|(?:fewer|less|more) than|same|'
                      r'percent|ms|seconds?|minutes?|hours?|bytes?|errors?|status|empty)\b', re.I)
+SUITE_PASSES = re.compile(r'\b(?:the |all (?:the )?)?(?:unit |existing )?(?:tests?|test suite|suite|build|ci|checks?)'
+                          r'(?: all)?(?: still)? (?:pass|succeed|go green|are green|is green)(?:es|ed|s|ing)?\b', re.I)
 
 
 def observable(sentence):
-    """True unless the sentence has neither a verb of observation nor a measurable term (conservative)."""
-    return bool(OBSERVE.search(sentence) or MEASURE.search(sentence))
+    """True unless the sentence has neither an observation (verb, state, capability) nor a measurable term, once "the
+    tests pass" is taken out (conservative: it refuses "Refactor X." and "Clean X so the tests pass.")."""
+    rest = SUITE_PASSES.sub(' ', sentence)
+    return bool(OBSERVE.search(rest) or MEASURE.search(rest))
 
 
 def cmd_new(a, root):
@@ -1737,10 +1788,10 @@ def prove(root, o, s, say=lambda s: None):
     cfg, base = s['cfg'], s['base']
     if o.asked:
         raise Fail('%s is waiting for an answer: %s\nanswer it, then delete the "asked:" line of %s' % (o.slug, o.asked, o.rel))
-    _, bad, _ = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug], s['product'],
+    _, bad, _, left = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug], s['product'],
                             cfg['test_globs'])
     if bad:
-        raise Fail(bad)
+        raise Fail(bad, [('refused', p) for p in left])
     return verify(root, cfg, o, base, changed_files(root, base), say)
 
 
@@ -1750,13 +1801,13 @@ def cmd_done(a, root):
     try:
         res = prove(root, o, s, print)
     except Fail as e:
-        record(root, a.slug, ok=False, why=str(e)[:300])
-        raise
+        record(root, a.slug, ok=False, why=str(e)[:300], **_kind(o))
+        raise Fail('%s\n%s' % (e, next_block(e.items, _rerun(a))) if e.items else e, e.items)  # no item: rerunning fails alike
     if o.parked:
         del o.f['parked']
         o.save()
     h, tests = content_hash(root, cfg, o, changed_files(root, base))  # read again: a proof may write files of its own
-    record(root, a.slug, ok=True, hash=h, tests=tests, **res)
+    record(root, a.slug, ok=True, hash=h, tests=tests, **dict(res, **_kind(o)))
     print('%s: verified. %s' % (a.slug, _describe(o, res)))
     code, lines = gate(root, a.base)
     print('\n'.join(['', 'the change as a whole:'] + lines))
@@ -1786,7 +1837,7 @@ def cmd_seal(a, root):
                    'take the change out first.' % o.get('proof'))
     o.f['sealed'] = fingerprint(root, o, tests)
     o.save()
-    record(root, a.slug, seal=o.f['sealed'], base=base, red=says(tail))  # what stats counts as sealed
+    record(root, a.slug, seal=o.f['sealed'], base=base, red=says(tail), **_kind(o))  # what stats counts as sealed
     print('%s: sealed; the proof fails now (%s). Sealed: %s. Now write the code; a later edit to these files fails '
           '%s done and the gate until it is resealed.' % (a.slug, says(tail),
                                                         ', '.join(tests), ODD))
@@ -1938,6 +1989,7 @@ def _judge(root, cfg, o, base, at, fixed):
     try:
         at['res'] = prove(wt, Outcome.load(wt, o.slug), survey(wt, base))
     except (Fail, CouldNotRun) as e:
+        at['items'] = getattr(e, 'items', [])
         at['detail'] = str(e).strip()[:3000]  # the whole finding: what failed, which break survived, which line did not run
         first = str(e).strip().split('\n')[0][:160]
         return first if isinstance(e, Fail) else 'could not verify: ' + first
@@ -2137,6 +2189,12 @@ def _agents(cfg, given, what):
     return given
 
 
+def _none_verified(msg, attempts, a):
+    """The Fail of a race or cascade with no verified attempt: `msg`, then the next: block of every attempt's items."""
+    items = [('attempt %s %s' % (at['name'], k), v) for at in attempts for k, v in at.get('items', [])]
+    return Fail('%s\n%s' % (msg, next_block(items, _rerun(a))), items)
+
+
 def cmd_race(a, root):
     cfg = load_config(root)
     agents = _agents(cfg, [a.agent] if a.agent else cfg['agents'], 'race')
@@ -2154,7 +2212,7 @@ def cmd_race(a, root):
     print('setup and clean-up: %s s per attempt (worktree, copies, start commit, removal); prompts and agent logs: %s'
           % (round(overhead / n, 2), keep))
     if not ranked:
-        raise Fail('no attempt was verified; each one\'s reason is in the table above')
+        raise _none_verified('no attempt was verified; each one\'s reason is in the table above', attempts, a)
     print('winner: attempt %s, %s' % (ranked[0]['name'], _why_won(ranked)))
     _apply(root, o, head, ranked[0], patch, keep)
 
@@ -2210,21 +2268,22 @@ def cmd_cascade(a, root):
         if ranked:
             break
         for at in attempts:
-            before.append('- level %d (agent `%s`), attempt %s: %s' % (lv, cmd, at['name'], (at.get('detail') or at['why'])[:1500]))
+            before.append('- level %d (agent `%s`), attempt %s: %s\n%s' % (lv, cmd, at['name'], (at.get('detail') or at['why'])[:1500],
+                                                                       next_block(at.get('items', []), '%s done %s' % (ODD, o.slug))))
     _table(history, ranked, more)
     costs = [at['cost'] for at in history if at['cost'] is not None]
     print('cost reported by the agents: %s; prompts and agent logs: %s' % (
         '$%g over %d of %d attempt(s)' % (round(sum(costs), 6), len(costs), len(history)) if costs else 'none', keep))
     record_path = os.path.join(keep, 'cascade.json')
     write_json(record_path, {'slug': o.slug, 'head': head, 'levels': levels, 'attempts': [
-        {k: at.get(k) for k in ('name', 'cmd', 'why', 'detail', 'lines', 'agent_s', 'verify_s', 'cost')} for at in history]})
+        {k: at.get(k) for k in ('name', 'cmd', 'why', 'detail', 'items', 'lines', 'agent_s', 'verify_s', 'cost')} for at in history]})
     if not ranked:
         o.f['parked'] = ' '.join(('odd cascade: no level verified (%s): %s' % (now()[:10], '; '.join(
             'level %s (%s): %s' % (at['name'], _short(at['cmd']), at['why']) for at in history))).split())
         o.save()
-        raise Fail('parked %s after the last level: no attempt was verified; each one\'s reason is in the table above, '
-                   'in the "parked:" line of %s and in %s. Nothing was applied. To try again, delete the "parked:" line.'
-                   % (o.slug, o.rel, record_path))
+        raise _none_verified('parked %s after the last level: no attempt was verified; each one\'s reason is in the table '
+                             'above, in the "parked:" line of %s and in %s. Nothing was applied. To try again, delete the '
+                             '"parked:" line.' % (o.slug, o.rel, record_path), history, a)
     print('verified at level %s: %s' % (ranked[0]['name'].split('.')[0], _why_won(ranked)))
     _apply(root, o, head, ranked[0], patch, keep)
 
@@ -2423,6 +2482,7 @@ def markdown(f):
         else:
             red = '**%s**: %s' % ({'fail': 'not shown', 'asked': 'waiting for an answer'}.get(o['state'], 'parked'),
                                   _cell(o.get('why', '').split('\n')[0][:200]))
+        red += '; **kind changed from bug**' if o.get('kind_was') else ''
         score = '-'
         if st:
             score = '%d of %d' % (st['killed'], st['killed'] + len(st['survivors']))
@@ -2829,6 +2889,7 @@ def main(argv=None):
             raise CouldNotRun(msg + '. Look at your working tree, then run the command again.')
         return globals()['cmd_' + a.cmd](a, root) or 0
     except Fail as e:
+        sys.stdout.flush()  # so, with both on one pipe (the MCP server), the next: block is the last thing printed
         print('odd: ' + str(e), file=sys.stderr)
         return 1
     except CouldNotRun as e:

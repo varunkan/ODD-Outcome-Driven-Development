@@ -165,7 +165,8 @@ from an earlier level's attempt.
 2. **Escalate with the failure passed on**: when no attempt at a level is verified, the next level's prompt gets, for
    every earlier attempt, the agent command and the whole finding of the check that refused it (up to 1500
    characters each): the proof's failing output, the surviving small breaks with their lines ("calc.py:6 - -> +:
-   return a - b"), the changed lines the proof never ran, an edited test file, a timeout.
+   return a - b"), the changed lines the proof never ran, an edited test file, a timeout; then that attempt's `next:`
+   block (section 4d).
 3. **Park after the last level**: the outcome gets a `parked:` line naming each attempt and the first line of why it
    was refused, nothing is applied, and the full record (command, reason, finding, lines, seconds, cost per attempt)
    is written to `.git/odd/cascade/<slug>/cascade.json` beside the prompts and agent logs; exit 1. To try again,
@@ -439,7 +440,8 @@ written by the agent or a person. Each outcome names the ones it covers with `co
 For every requirements file added or changed in the change, `odd gate` (local and `--recompute`) prints
 `requirements <ticket>: k of n covered; not covered: R2 (<text>)` and, when a requirement listed at the base is gone,
 `removed in this change: R4`; the `--summary` lists each requirement with the outcomes that cover it, and `--json`
-has a `requirements` list. A parked outcome covers nothing. The setting `"coverage"` decides the rest:
+has a `requirements` list. A parked or asked outcome covers nothing (an asked one counts again once its `asked:`
+line is deleted). The setting `"coverage"` decides the rest:
 
 - `"report"` (the default): an uncovered requirement is printed, not a Fail.
 - `"enforce"`: an uncovered requirement is a Fail, with the remedy (cover it, or take it out of the file).
@@ -468,6 +470,14 @@ the same way when one is already written, so it can be sealed after the fix too;
 proof to fail in the tree as it is. A proof that passes at the base is refused by both, exit 1: "the proof does not
 reproduce the bug". `counterfactual: skip` is refused on a bug outcome. Outcomes without `kind:` behave as before.
 
+Giving the rule up by editing `kind: bug` to another kind (for example `kind: refactor` with a skip line) is shown, not
+prevented: a sealed outcome's `sealed:` line ends with `kind@<kind>` when it has a kind, so a sealed bug outcome whose
+kind changes fails `done` and the gate ("the kind (sealed as bug)") until it is resealed; and every `done` and `seal`
+records the kind in local evidence, so the local gate prints `kind changed from bug to <kind>` under the outcome and
+`(N changed kind from bug: <slugs>)` on the verdict line, and `--summary` marks it. Limits: an unsealed outcome that was
+never run as `kind: bug` on this machine leaves no trace, and `--recompute` in CI has no local evidence, so there only
+the seal shows it; seals written before this change carry no `kind@` entry and are not checked for kind.
+
 Where "the take-out" and "the base revision" differ: (1) only the outcome's own product files go back; product files
 of other outcomes, files outside every `in:`, test files and exempt files stay as they are in the tree; (2) a new
 product file the proof imports is removed, so the proof fails with an import error and that counts as reproduced,
@@ -480,11 +490,17 @@ measured: false "done" on bug tasks with and without it (BACKLOG item 5).
 
 `odd new` refuses an outcome sentence that has neither a verb of observation (sees, gets, receives, returns, shows,
 prints, is refused, ...) nor a measurable term (a digit, `%`, a number word, every, each, only, exactly, within,
-under, at most, seconds, errors, ...), exit 1, and suggests the form "<who> <observes> <what>, measurably". The test
-is two English word lists in `odd.py` (`OBSERVE`, `MEASURE`), never a model, and is deliberately wide: it refuses
-"Refactor the billing module." and "Make search better and faster.", and passes every example in the README, the demo
-and the tests. It cannot tell a checkable sentence from one that only contains a listed word ("Users see a nicer
-page." passes), and a sentence in another language is likely refused: set `"ambiguity_stop": false` in
+under, at most, seconds, errors, ...), exit 1, and suggests the form "<who> <observes> <what>, measurably". A state
+predicate ("is disabled", "becomes visible", "keeps", "no longer", "still"), a capability ("can export") and common
+domain verbs (export, split, save, delete, open, close, ...) count as observation. "The tests pass" does not: a phrase
+whose subject is only the tests, the suite, the build or CI passing or succeeding is taken out before the check, so
+"Improve the code so the tests pass." is refused. The test is English word lists in `odd.py` (`OBSERVE`, `MEASURE`,
+`SUITE_PASSES`), never a model, and is meant to be wide: it refuses "Refactor the billing module." and "Make search
+better and faster.", and passes every example in the README, the demo and the tests, plus the ordinary sentences in
+class `AmbiguityStop` ("The login button is disabled while the request is pending.", "A cashier can split a bill
+between guests."). It cannot tell a checkable sentence from one that only contains a listed word ("Users see a nicer
+page." and "Clean the code so it still works." pass), an ordinary sentence built from words not in the lists is
+refused, and a sentence in another language is likely refused: set `"ambiguity_stop": false` in
 `.odd/config.json` to turn the check off (default `true`; the setting needs a tool newer than 0.4.0, and an older tool
 refuses the unknown setting).
 
@@ -521,6 +537,41 @@ exercises the changed code. The refactor sentence still meets the ambiguity stop
 refused, "Every existing test of X still passes after the split." is not. Only the unittest suite command is
 exercised by the tests; the others are not run. Whether the templates lower turns or failed `done` attempts is not
 measured.
+
+### 4d. Failure feedback: the `next:` block
+
+Needs a tool newer than 0.4.0. When `odd done` fails (exit 1), and when `odd race` or `odd cascade` ends with no
+verified attempt, the output ends with a block an agent can act on without reading the prose above it:
+
+```
+next:
+  proof: AssertionError: 0 != 5
+  survived: calc.py:6 - -> +: return a - b
+  not run: calc.py:6
+  refused: tests/test_keep.py
+  rerun: odd done add --base main
+```
+
+One line per item that is present, and nothing else: `proof:` the proof's failing line (the last output line that
+names a reason, as in the "without them the proof said" summary; else its last line), when the proof fails or fails
+on the third run; `survived:` each small break the proof did not notice and `not run:` each changed line the proof
+never executed, when `"strength": "enforce"` turns them into a fail (under `"report"` done passes and prints no
+block); `refused:` each existing test file edited without a `test-change:` reason (R2). `rerun:` is always last: the
+command as given (`--base` and the other options kept). A failed `done` with no such item (the proof passes with the
+change taken out, nothing changed inside `in:`, an empty proof, a skip on a bug outcome) prints no block: rerunning
+the same command would fail the same way, and the remedy (for example `--base <revision>`) is in the message above. Race
+and cascade prefix each item with its attempt (`attempt 1.2 proof: ...`) and rerun the race or cascade command.
+
+The items travel on the exception (`Fail.items`), so there is one formatter (`next_block()`) for all three: `odd done`
+appends it, `_judge()` keeps each attempt's items, the cascade prompt gives every refused attempt its finding then
+its block (rerun `odd done <slug>` in the attempt's worktree), and the final race/cascade failure lists them. The MCP
+server returns the same text in `output` and the lines after the last `next:` line as `structuredContent.next`
+(absent when there is none). odd flushes standard output before it prints the failure, so with both streams on one
+pipe the block is the last thing printed. Following the research note in `docs/evidence/14-research.md` (detailed
+rejection feedback raised evasion of an LLM review panel), the block states facts only and says nothing about how to
+satisfy a check. Exit 2 (could not run) gets no block. Limits: not measured whether the block lowers the turns
+between the first failed `done` and the first passing one (BACKLOG item 8's measure); a third proof run that fails
+after a pass is not covered by a test.
 
 ## 6. Exemptions
 

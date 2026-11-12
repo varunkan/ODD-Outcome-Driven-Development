@@ -1617,6 +1617,18 @@ class Coverage(Repo):
         self.write('.odd/outcomes/add.md', md)
         self.assertIn('add: covers: R9, but', self.no('gate'), 'a parked outcome\'s ids are still checked')
 
+    def test_an_asked_outcome_covers_nothing(self):
+        self.enforce()
+        self.covered(covers='R1')
+        self.ok('new', 'strs', 'A caller of add("a", 1) receives a TypeError.', '--proof', PROOF, '--in', 'calc.py',
+                '--covers', 'R2')
+        self.ok('ask', 'strs', 'Should strings be rejected or concatenated here?')
+        out = self.no('gate')  # asking is not an answer: under enforce, R2 stays uncovered
+        self.assertIn('PROJ-7: 1 of 2 covered', out)
+        self.assertIn('PROJ-7 R2 is covered by no outcome', out)
+        self.commit('work')
+        self.assertIn('R2 is covered by no outcome', self.no('gate', '--recompute'))
+
     def test_a_covers_id_that_does_not_exist_is_refused_even_when_only_reported(self):
         self.covered(covers='R1, R9')
         out = self.no('gate')
@@ -2483,6 +2495,7 @@ class ReproduceFirst(Repo):
         out = self.ok('done', 'add')
         self.assertIn('verified', out)
         self.assertIn('reproduced: FAILED (failures=1)', out)
+        self.assertNotIn('kind changed', out, 'still a bug outcome')
 
     def test_a_proof_that_passes_on_the_base_is_refused_by_seal_and_done(self):
         self.bug()
@@ -2499,6 +2512,30 @@ class ReproduceFirst(Repo):
         self.add_line('add', 'counterfactual: skip - trust me')
         self.solve()
         self.assertIn('a bug outcome cannot skip', self.no('done', 'add'))
+
+    def test_a_sealed_bug_outcome_that_changes_kind_fails_until_resealed(self):
+        self.bug()
+        self.solve()
+        self.ok('seal', 'add')
+        self.assertIn('kind@bug', self.read('.odd/outcomes/add.md'))
+        md = self.read('.odd/outcomes/add.md').replace('kind: bug', 'kind: refactor')
+        self.write('.odd/outcomes/add.md', md)
+        self.assertIn('the kind', self.no('done', 'add'))
+
+    def test_the_gate_says_when_a_bug_outcome_changed_kind(self):
+        self.bug()
+        self.write('tests/test_calc.py', self.PASSES_ON_BASE)
+        self.write('calc.py', FIXED)
+        self.assertIn('does not reproduce', self.no('done', 'add'))
+        md = self.read('.odd/outcomes/add.md').replace('kind: bug', 'kind: refactor\ncounterfactual: skip - refactor')
+        self.write('.odd/outcomes/add.md', md)
+        self.ok('done', 'add')
+        out = self.ok('gate')
+        self.assertIn('kind changed from bug', out)
+        self.assertIn('(1 changed kind from bug: add)', out)
+        md = self.path('.git/s.md')
+        self.ok('gate', '--summary', md)
+        self.assertIn('**kind changed from bug**', self.read('.git/s.md'))
 
     def test_an_unknown_kind_is_refused(self):
         self.outcome()
@@ -2548,6 +2585,20 @@ class AmbiguityStop(Repo):
                                               'Every invoice total equals the sum of its lines.',
                                               'A user who mistypes the password is refused.']):
             self.ok('new', 'c%d' % i, sentence, '--proof', PROOF, '--in', 'calc.py')
+
+    def test_ordinary_state_sentences_pass(self):
+        for s_ in ('The login button is disabled while the request is pending.', 'Users can export invoices as PDF files.',
+                   'A cashier can split a bill between guests.', 'Saving a draft keeps the text after a reload.',
+                   'Deleted orders no longer appear in the kitchen view.', 'The dialog becomes visible after a tap.',
+                   'A guest can tip from the receipt.', 'The banner no longer flickers.'):
+            self.assertTrue(oddmod.observable(s_), s_)
+
+    def test_tests_passing_is_not_an_observable(self):
+        for i, s_ in enumerate(('Improve the code so the tests pass.', 'Make the code cleaner and the tests pass.',
+                                'Refactor utils until the test suite passes.', 'Tidy the module so all tests succeed.')):
+            self.assertFalse(oddmod.observable(s_), s_)
+            self.assertIn('no checkable observable', self.no('new', 't%d' % i, s_, '--proof', PROOF, '--in', 'calc.py'))
+        self.assertTrue(oddmod.observable('A user who enters a wrong PIN sees the login fail.'))
 
     def test_the_stop_can_be_turned_off(self):
         self.write('.odd/config.json', json.dumps({'ambiguity_stop': False}))
@@ -2668,6 +2719,106 @@ class KindTemplates(Repo):
         argv = mod.argv_for('new', {'slug': 'tidy', 'outcome': SENTENCE, 'in': 'calc.py', 'kind': 'refactor'})
         self.assertIn('hint (refactor)', self.ok(*argv))
         self.assertIn('proof: ' + self.SUITE, self.read('.odd/outcomes/tidy.md'))
+
+
+def next_block(out):
+    """The lines of the last "next:" block in odd's output, without their indent: [] when there is none."""
+    lines = out.rstrip('\n').split('\n')
+    at = [i for i, l in enumerate(lines) if l == 'next:']
+    return [l.strip() for l in lines[at[-1] + 1:]] if at else []
+
+
+class FailureFeedback(Repo):
+    """B8: a failed `odd done` ends with "next:", one line per actionable item (the proof's failing line, each
+    surviving break, each changed line the proof never ran, each refused test edit) and the command to rerun."""
+
+    def rerun(self, items, cmd='done add'):
+        self.assertTrue(items and items[-1].startswith('rerun: ') and items[-1].endswith(cmd), items)
+        return items[:-1]
+
+    def test_a_failing_proof_names_its_failing_line_and_nothing_else(self):
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)
+        out = self.no('done', 'add')
+        self.assertEqual(self.rerun(next_block(out)), ['proof: AssertionError: 0 != 5'], out)
+
+    def test_enforce_lists_each_survivor_and_each_line_never_run(self):
+        self.write('.odd/config.json', json.dumps({'strength': 'enforce'}))
+        self.outcome()
+        self.solve()
+        self.write('calc.py', ProofStrength.TWO)
+        out = self.no('done', 'add')
+        self.assertEqual(self.rerun(next_block(out)), ['survived: calc.py:6 - -> +: return a - b',
+                                                       'not run: calc.py:6'], out)
+
+    def test_a_refused_test_edit_is_listed_with_the_base_in_the_rerun(self):
+        self.git('checkout', '-q', 'main')
+        self.write('tests/test_keep.py', KEEP)
+        self.commit('an existing test')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.outcome()
+        self.solve()
+        self.write('tests/test_keep.py', KEEP.replace('assertTrue(True)', 'assertTrue(1)'))
+        out = self.no('done', 'add', '--base', 'main')
+        self.assertEqual(self.rerun(next_block(out), 'done add --base main'), ['refused: tests/test_keep.py'], out)
+
+    def test_a_failure_with_no_such_item_has_no_block(self):
+        self.outcome(proof='true')
+        self.write('calc.py', FIXED)
+        out = self.no('done', 'add')  # rerunning the same command fails the same way: the remedy is the message
+        self.assertIn('still passes with the change taken out', out)
+        self.assertEqual(next_block(out), [], out)
+
+    def test_nothing_changed_has_no_block_and_names_the_remedy(self):
+        self.outcome(in_='other.py')
+        self.solve()
+        out = self.no('done', 'add')
+        self.assertIn('--base <revision>', out)
+        self.assertEqual(next_block(out), [], out)
+
+    def test_a_pass_has_no_block(self):
+        self.outcome()
+        self.solve()
+        self.assertEqual(next_block(self.ok('done', 'add')), [])
+
+    def test_the_mcp_server_returns_the_block(self):
+        self.ok('init', '--mcp')
+        self.write('.odd/config.json', json.dumps({'strength': 'enforce'}))
+        self.outcome()
+        self.solve()
+        self.write('calc.py', ProofStrength.TWO)  # done prints progress first: the block must still come last
+        r = Adoption.mcp(self, {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+                                'params': {'name': 'done', 'arguments': {'slug': 'add'}}}, tool='.odd/odd_mcp.py')[1]['result']
+        self.assertEqual(r['structuredContent']['exit_code'], 1)
+        self.assertEqual(r['structuredContent']['next'][:2], ['survived: calc.py:6 - -> +: return a - b',
+                                                              'not run: calc.py:6'], r)
+        self.assertEqual(len(r['structuredContent']['next']), 3, r)
+        self.assertTrue(r['structuredContent']['next'][-1].startswith('rerun: '), r)
+        self.assertEqual(next_block(r['content'][0]['text']), r['structuredContent']['next'])
+
+
+class AttemptFeedback(Agents):
+    """B8 for race and cascade: a failed attempt's block reaches the next level's prompt and the final output."""
+
+    def test_the_cascade_prompt_carries_the_block_of_the_failed_level(self):
+        keep = os.path.join(self.bin, 'prompt-2.txt')
+        self.config([self.agent('cheap', self.writes(self.TWO)),
+                     self.agent('dear', 'cp "$1" %s\n' % keep + self.writes(FIXED))], strength='enforce')
+        self.ok('cascade', 'add')
+        with open(keep) as f:
+            prompt = f.read()
+        items = next_block(prompt)
+        self.assertEqual(items[:-1], ['survived: calc.py:6 - -> +: return a - b', 'not run: calc.py:6'], prompt)
+        self.assertTrue(items[-1].startswith('rerun: ') and items[-1].endswith(' done add'), prompt)
+
+    def test_a_race_with_no_verified_attempt_ends_with_each_attempts_items(self):
+        self.config([self.agent('broken', self.writes(BROKEN.replace('0', 'a - b'))),
+                     self.agent('cheat', "printf 'import unittest\\n' > tests/test_calc.py\n" + self.writes(FIXED))])
+        out = self.no('race', 'add')
+        items = next_block(out)
+        self.assertEqual(items[:-1], ['attempt 1 proof: AssertionError: -1 != 5'], out)
+        self.assertTrue(items[-1].startswith('rerun: ') and items[-1].endswith('race add'), out)
+        self.no_worktrees_left()
 
 
 if __name__ == '__main__':

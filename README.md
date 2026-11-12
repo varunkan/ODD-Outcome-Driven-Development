@@ -143,10 +143,11 @@ a feature, and does not show that the suite exercises a refactored line. Details
 
 **A vague outcome is stopped, and a question is a valid answer.** `odd new` refuses a sentence with nothing anyone
 would see, get or measure ("Refactor the billing module.") and suggests "<who> <observes> <what>, measurably". It is a
-small English word list, not a model: wide on purpose, so it misses vague sentences that contain a listed word, and
-`"ambiguity_stop": false` turns it off. When the ticket does not say what should be observable, `odd ask <slug>
+small English word list, not a model: wide on purpose (state words such as "is disabled", "keeps", "can export"
+count), so it misses vague sentences that contain a listed word and still refuses ordinary sentences built only from
+unlisted words; "so the tests pass" does not count as an observable. `"ambiguity_stop": false` turns it off. When the ticket does not say what should be observable, `odd ask <slug>
 "<question>"` records the question; the gate reports that outcome as waiting for an answer, not failed, until the
-`asked:` line is deleted. A tool newer than 0.4.0. Details: [DESIGN.md](DESIGN.md) section 4b.
+`asked:` line is deleted; until then it covers no files and no requirement. A tool newer than 0.4.0. Details: [DESIGN.md](DESIGN.md) section 4b.
 
 **A stronger model writes the proof, a cheaper one the code.** `odd spec <slug> --proof-by "<command>"` gives the
 outcome to one agent command to write only the proof, in its own worktree. odd accepts it only if it changes test
@@ -260,7 +261,10 @@ one line of status at session start and stop a turn from ending on unproven work
 
 Optional, for any MCP client: `odd init --mcp` adds odd's MCP server to the project's `.mcp.json` (other servers are
 kept), so an agent calls `new`, `seal`, `done`, `gate`, `park` and `escaped` as tools and gets odd's exit code and
-output back. It is a thin wrapper that runs `.odd/odd.py`; so far it has been driven only by the test suite, not by
+output back; a failed `done` ends with a `next:` block (the proof's failing line, each surviving break, each
+unrun changed line, each refused test edit, the command to rerun; a failure with none of these items has no block,
+since the remedy is in the message; DESIGN.md section 4d, a tool newer than 0.4.0),
+also returned as `structuredContent.next`. It is a thin wrapper that runs `.odd/odd.py`; so far it has been driven only by the test suite, not by
 a real client ([details and limits](DESIGN.md#7-how-it-reaches-each-tool)).
 
 ## Why, and the evidence
