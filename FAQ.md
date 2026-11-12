@@ -208,9 +208,10 @@ is discarded. The winner is the verified attempt whose proof caught the most sma
 the first to finish; it is applied to your tree only if you have no changes inside the boundary, otherwise it is
 written as a patch. Seal the proof first (`odd seal`; `"race_seal": true` makes the race refuse an unsealed one).
 odd calls no model itself. On fake agents the correct attempt won 10 races of 10. On real agents (three Haiku
-attempts per outcome, [16](docs/evidence/16-new-arms.md)) race never claimed DONE falsely, but delivered fewer tasks
-than one plain Haiku session at about five times the cost, for two reasons since found (one fixed in odd, one in how
-the ticket was split): it is not shown to help yet.
+attempts per outcome, [16](docs/evidence/16-new-arms.md#after-the-fixes)), after two defects found by the first run
+were fixed, race never claimed DONE falsely in 48 runs (plain Haiku did twice, plain Sonnet never) and delivered 35 of
+42 doable tasks at about half plain Sonnet's cost; one plain Haiku session delivered all 42 for less. Most of what it
+missed was blocked by a wrong sealed proof that the attempts had correctly named (BACKLOG item 23).
 
 **Can an attempt leave something behind on my machine?**
 Less than in B1 and B2. Each attempt's tree is a `git clone --shared` in a temporary folder outside the repository, so a `git config`, a
@@ -229,8 +230,9 @@ its line, the line the proof never ran) goes into the next agent's prompt; after
 with every reason. You put the agents in order; odd does not know prices. Costs appear only when your agent command
 prints a line `odd-cost: <usd>` at the end. Under `"strength": "report"` an attempt with a surviving break still counts
 as verified and stops the cascade; use `"enforce"` to escalate on it. On real agents (Haiku, then Sonnet,
-[16](docs/evidence/16-new-arms.md)) cascade was cheaper than plain Sonnet but delivered less than plain Haiku, for the
-same two reasons as race: not shown to help yet.
+[16](docs/evidence/16-new-arms.md#after-the-fixes)), after the fixes, cascade delivered 39 of 42 doable tasks at a
+median $0.027, a third of plain Sonnet's cost, with one false DONE (on the contradictory task); plain Haiku delivered
+all 42 for less, with two.
 
 **What does a proven outcome cost me?**
 With a tool newer than 0.4.0, `odd stats` ends with a table of what race, cascade and chain attempts cost: per outcome

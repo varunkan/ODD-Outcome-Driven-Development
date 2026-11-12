@@ -213,3 +213,8 @@ an infrastructure error; the first session's NOT DONE became the arm's claim wit
 to the strong model only after the cheap attempt was not verified; spec had the strong model write the proof. Not
 shown: any arm-supplied agent with the real CLI, real odd race timings under load, or a session killed by the outer
 4 x `--timeout` bound.
+
+**Concurrent runs can see each other's processes (2026-11-12).** With `--jobs` above 1, the runs share one process
+table: in the item-21 rerun two t10 runs listed each other's processes with `ps` and so saw the other's directory
+name and test command (docs/evidence/16-new-arms.md). Neither read the other's files, and the contamination audit
+flagged both, as it should. Isolating process lists (a PID namespace per run, or `--jobs 1`) is not done.

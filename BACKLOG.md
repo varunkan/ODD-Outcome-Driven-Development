@@ -525,7 +525,7 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 ### 19. New arms for the comparison
 - Haiku x 3 race, Haiku-then-Sonnet cascade, and strong-spec / cheap-code, against plain Sonnet and plain Haiku.
 - **Run** 2026-11-12 ([16](docs/evidence/16-new-arms.md)): 288 runs, $21.81. As built and driven, the new arms
-  delivered less than plain Haiku (race 23, cascade 18, spec 22 of 42 doable tasks delivered, plain Haiku 41, plain
+  delivered less than plain Haiku (race 23, cascade 18, spec 22 of 42 doable tasks delivered, plain Haiku 42, plain
   Sonnet 42) at three to thirteen times its cost; they gave an honest NOT DONE on all 6 impossible runs each (plain
   Haiku 4). Two causes, both read from every failure: items 20 and 21.
 
@@ -550,3 +550,30 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   chain`, so the harness exercises odd's own path; then rerun race, cascade and spec on Haiku (about $16, measured
   in 16).
 - **Measure:** delivered doable tasks and cost against plain Haiku and plain Sonnet, as in 16.
+- **Done and run** (commit "bench: the new arms build outcomes in the session's chain order (item 21)"; 144 runs,
+  $10.05, [16](docs/evidence/16-new-arms.md#after-the-fixes)): delivered race 35, cascade 39, spec 30 of 42 (from 23,
+  18, 22); refused correct 0 in every arm (from 11-13); false DONE race 0, cascade 1, spec 5. Cascade came near plain
+  Sonnet's delivery at a third of its cost; neither beat plain Haiku, which delivered all 42 at the lowest cost with
+  two false DONE.
+
+### 22. Other models and agents
+- **Outcome:** the comparison is run with at least one agent that is not Claude Code and one model that is not
+  Claude (for example Codex CLI, Gemini CLI or aider with an open model), as a plain arm and as a race or cascade
+  level.
+- **Why:** odd itself calls no model (an agent is a command line in `"agents"`; the method is in `AGENTS.md`), but
+  every measured run so far used Claude Code with Claude models, so "works with any model" is designed, not shown.
+- **Needs:** the other CLIs installed in the runner and their API keys; `bench/arm_agent.py`'s session command takes
+  only the `claude` CLI today.
+- **Measure:** delivered, false DONE and cost per agent, as in 16.
+
+### 23. A disputed proof goes back to be rewritten
+- **Outcome:** when the attempts at a sealed outcome all fail and say the proof itself is wrong (a line `odd-dispute:
+  <assertion and why>`, as `odd challenge` uses `odd-wrong:`), race and cascade stop spending attempts, keep the
+  disputes, and hand the proof back to its author (`odd spec --proof-by`, or the first session) with them, instead of
+  parking the outcome; the gate never reads a dispute.
+- **Evidence:** in [16](docs/evidence/16-new-arms.md#after-the-fixes), 17 of the 18 runs that ended with no attempt
+  verified had attempts naming a wrong assertion in the sealed proof (one checked by hand: the fixture sums to 4900,
+  the proof asserts 4800): 17 of the 22 doable runs that race, cascade and spec did not deliver in run C. A better
+  attempt cannot deliver them while the proof is wrong.
+- **Measure:** delivered doable tasks on the same harness with disputes sent back, against run C; false DONE must not
+  rise (a rewritten proof is sealed red again, before any code).

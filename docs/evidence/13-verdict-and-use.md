@@ -58,7 +58,8 @@ to 12, reverts from 2.7 to 1.0 a week ([01](01-method-measured.md)). One project
   6, and ODD never edited a visible test (others 1 to 3 times): a hint in six runs, not a finding
   ([15](15-comparison.md)).
 - That race, cascade or a strong model's proof make Haiku as good as Sonnet for less: as first run they delivered
-  fewer tasks than plain Haiku at higher cost, for two reasons since found ([16](16-new-arms.md)).
+  fewer tasks than plain Haiku at higher cost; after two defects were fixed, cascade delivered 39 of 42 at a third of
+  plain Sonnet's cost and race made no false DONE, but neither beat plain Haiku on these tasks ([16](16-new-arms.md)).
 - Review time saved, adoption by other teams, or any agent other than Claude Code running the method.
 
 ## Where it is really useful
