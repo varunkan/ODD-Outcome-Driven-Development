@@ -240,9 +240,12 @@ def sh(cmd, said):
 
 
 def why(output):
-    """odd's reason for a refusal, one line: the first line with the first of `keys` found (most telling first), else
-    its last non-empty line."""
+    """odd's reason for a refusal, one line: a failed gate's first problem (the line after "FAIL"); else the first line
+    with the first of `keys` found (most telling first), else its last non-empty line."""
     lines = [x.strip() for x in output.splitlines() if x.strip()]
+    if 'FAIL' in lines[:-1]:  # a failed gate: its first problem, not an earlier outcome's passing summary
+        lines = lines[lines.index('FAIL') + 1:]
+        return ' '.join(lines[0].split())[:400]
     keys = ('parked', 'no attempt', 'not verified', 'refused', 'could not', 'left as a patch', 'fail', 'error')
     picked = next((x for k in keys for x in lines if k in x.lower()), lines[-1] if lines else 'no output')
     return ' '.join(picked.split())[:400]

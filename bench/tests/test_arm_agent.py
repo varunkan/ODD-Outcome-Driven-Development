@@ -285,5 +285,13 @@ class ArmFilesTest(unittest.TestCase):
         self.assertEqual([x['cost_usd'] for x in s['sessions']], [0.5, None])
 
 
+    def test_a_failed_gate_is_given_by_its_first_problem_not_a_passing_outcomes_summary(self):
+        gate = ('odd gate --recompute: base 1234567890, 4 file(s) changed, 2 outcome(s) in this change\n'
+                '  ok      one: A caller of m.f() receives 1.\n'
+                '          took out 1 file(s), 6 line(s); without them the proof said: AssertionError: 0 != 1 / FAILED\n'
+                'FAIL\n'
+                '  m.py is inside the boundary of one and two: within one change a file belongs to one outcome.\n')
+        self.assertTrue(module('arm_agent').why(gate).startswith('m.py is inside the boundary of one and two'))
+
 if __name__ == '__main__':
     unittest.main()

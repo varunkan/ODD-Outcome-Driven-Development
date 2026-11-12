@@ -511,6 +511,21 @@ product file is inside the boundary of exactly one verified in-play outcome, or 
 
 - A changed product file may match the `in` of only one in-play outcome. Otherwise the gate fails and names both:
   such outcomes become one outcome, or two successive changes.
+- **Successive changes on one branch** (needs a tool newer than 0.4.0; found by the comparison, [16](docs/evidence/16-new-arms.md)).
+  A first-parent commit since the base whose subject is exactly `odd: <slug> proven` (what `odd chain` commits, section
+  3e), not reverted later (`Revert "odd: <slug> proven"`), with the outcome file there identical to the one in force,
+  is that outcome's **checkpoint** (`segments()`). Each checkpointed outcome is its own change: from the checkpoint
+  before it (or the base) to its own. Every other outcome is the change after the last checkpoint, and `done`
+  measures it from there too. Outcomes in different segments may share a file; two in the same segment may not, as
+  above. A checkpointed outcome is verified in a clone of its checkpoint outside the repository, from the commit
+  before its segment (`successive()`, the full section 4 check: take-out, strength, and the rest), so taking it out
+  removes only its own work; its proof must then also pass on the tree as it is now, or the gate fails with "proven
+  as its own change at its checkpoint <commit>, but its proof fails at the head: a later change broke it". The
+  report says `verified as its own change (<from>..<checkpoint>, at its checkpoint)`. A subject proves nothing by
+  itself: an outcome whose checkpoint holds a hollow change fails its own take-out as any outcome would (a later
+  outcome credited by an earlier one's test: "the proof still passes with the change taken out"), and an outcome file
+  edited after its checkpoint loses it. This runs in the local gate too (one clone and its proof runs per
+  checkpointed outcome, then the verification cache). Without checkpoints nothing changes. Tests: `Successive`.
 - A parked outcome covers no files. Its changes are removed, moved to another outcome, or fit the small-change lane.
 - **Locally**, the gate runs no proof. An outcome counts as verified when `odd done` passed on exactly the current
   content (a hash of the proof, the boundary and the files inside it, kept under the git directory). A commit or an
@@ -1086,7 +1101,9 @@ line still loads, and is now counted as one escape against the outcome that carr
 - For the length of the failing run the tree holds base content, so a dev server, hot reload or file sync sees it.
 - A proof that needs a real device, account or secret cannot be recomputed in CI. The tool has no "proven on the real
   system" label.
-- Within one change a file belongs to one outcome.
+- Within one change a file belongs to one outcome; outcomes checkpointed one after another on one branch are
+  successive changes and may share one (section 5). A checkpoint is a commit subject: it gives no credit by itself,
+  but whoever can rewrite the branch's history can reorder what is checked.
 - The regression guard (section 5b) runs an earlier proof only when the change touches a file inside its `in:`; a
   break through any other file is not seen. Deleting or parking a merged outcome reports its proof and never fails
   the gate (the auto lane goes to review).

@@ -89,7 +89,7 @@ BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
-RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert')  # what --json says of a verified outcome
+RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -1775,6 +1775,8 @@ def _describe(o, res):
         text += '\n          reproduced: ' + res['reproduced']
     if res.get('same'):
         text += '\n          ' + res['same']
+    if res.get('checkpoint'):
+        text += '\n          verified as its own change (%s, at its checkpoint), and its proof passes at the head' % res['checkpoint']
     ine = res.get('inert')
     if ine:
         text += '\n          per-file: %d of %d changed file(s) needed by the proof (each taken out on its own)%s; %s s' % (
@@ -1940,6 +1942,56 @@ def survey(root, base_arg=None, recompute=False):
                 stray_lines=sum(sizes(root, base, stray, cfg['trivial_lines']).values()))
 
 
+CHECKPOINT_RE = re.compile(r'^odd: (\S+) proven$')
+REVERTED_RE = re.compile(r'^Revert "odd: (\S+) proven"$')
+
+
+def segments(root, s):
+    """Successive outcomes on one branch: {slug: (from, checkpoint commit or None)} for the change's active outcomes.
+    A checkpoint is a first-parent commit since the base whose subject is "odd: <slug> proven" (what odd chain
+    commits), not reverted later, with the outcome file there identical to the one in force now. Each checkpointed
+    outcome is its own change, from the checkpoint before it (or the base) to its own; every other outcome is the
+    change after the last checkpoint. Without checkpoints: every outcome from the base, as always."""
+    base, active = s['base'], {o.slug: o for o in s['active']}
+    if not base or not active:
+        return {}
+    cps = []
+    for line in git(root, 'log', '--reverse', '--first-parent', '--format=%H %s', '%s..HEAD' % base).splitlines():
+        h, _, subject = line.partition(' ')
+        m, r = CHECKPOINT_RE.match(subject), REVERTED_RE.match(subject)
+        if r or (m and m.group(1) in active):
+            slug = (r or m).group(1)
+            cps = [c for c in cps if c[0] != slug] + ([] if r else [(slug, h)])
+    out, prev = {}, base
+    for slug, h in cps:
+        then = sh(['git', 'show', '%s:%s' % (h, active[slug].rel)], root)
+        if then.returncode == 0 and os.path.isfile(active[slug].path) and then.stdout == read_text(active[slug].path):
+            out[slug], prev = (prev, h), h
+    for slug in active:
+        out.setdefault(slug, (prev, None))
+    return out
+
+
+def successive(root, cfg, o, seg, recompute, say):
+    """A checkpointed outcome verified as its own change: in a clone of its checkpoint, outside the repository, from
+    the commit before its segment, so taking it out removes only its own work; then its proof must still pass on the
+    tree as it is now. Raises Fail or CouldNotRun as verify does."""
+    frm, cp = seg
+    run = _run_dir(root)
+    try:
+        wt = _worktree(root, run, 'checkpoint-' + o.slug, cp, [])
+        Cache.ALIAS[os.path.realpath(wt)] = root
+        res = verify(wt, cfg, Outcome.load(wt, o.slug), frm, changed_files(wt, frm), say, recompute)
+    finally:
+        _drop_run(root, run)
+    rc, tail, secs = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+    if rc != 0:
+        raise Fail('proven as its own change at its checkpoint %s, but its proof %s at the head: a later change broke '
+                   'it.\n%s' % (cp[:10], 'timed out' if rc is None else 'fails (exit %d)' % rc, _indent(tail)),
+                   [('proof', failing(tail))])
+    return dict(res, checkpoint='%s..%s' % (frm[:10], cp[:10]))
+
+
 def held_out(root, s, recompute, problems, facts, say):
     """R8: the target branch's held-out proofs, run only when recomputing, each when the change touches its "in:" (by
     default any product file). Their output is never shown: it is what the agent must not fit the change to.
@@ -1980,8 +2032,10 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
                  exemptions=exempted, control=s['control'], problems=problems)
     fact = lambda o, state, **k: outs.append(dict(slug=o.slug, outcome=o.get('outcome'), proof=o.get('proof'),  # noqa: E731
                                                   state=state, **k))
-    for p in product:  # within one change a file belongs to one outcome
+    segs = segments(root, s)
+    for p in product:  # within one change a file belongs to one outcome; successive outcomes are successive changes
         owners = [o.slug for o in active if o.covers(p)]
+        owners = [x for x in owners if any(segs.get(x) == segs.get(y) for y in owners if y != x)]
         if len(owners) > 1:
             problems.append('%s is inside the boundary of %s: within one change a file belongs to one outcome. Make '
                             'them one outcome, or ship them as successive changes.' % (p, ' and '.join(owners)))
@@ -1991,9 +2045,14 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     lines += ['  cache   ' + note] if note else []
     for o in active:
         try:
-            if recompute:
+            seg = segs.get(o.slug, (base, None))
+            if seg[1]:
+                say('%s: %s (as its own change, at its checkpoint %s)' % (o.slug, o.get('proof'), seg[1][:10]))
+                res = successive(root, cfg, o, seg, recompute, say)
+            elif recompute:
                 say('%s: %s' % (o.slug, o.get('proof')))
-                res = verify(root, cfg, o, base, changed, say, recompute=True)
+                res = verify(root, cfg, o, seg[0], changed_files(root, seg[0]) if seg[0] != base else changed, say,
+                             recompute=True)
             else:
                 check_seal(root, o)
                 res = standing(root, cfg, o, changed)
@@ -2252,7 +2311,8 @@ def prove(root, o, s, say=lambda s: None):
                             cfg['test_globs'])
     if bad:
         raise Fail(bad, [('refused', p) for p in left])
-    return verify(root, cfg, o, base, changed_files(root, base), say)
+    frm = segments(root, s).get(o.slug, (base, None))[0]  # after a checkpoint, the change is what came after it
+    return verify(root, cfg, o, frm, changed_files(root, frm), say)
 
 
 def _verified(root, o, s, res):

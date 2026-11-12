@@ -4124,5 +4124,78 @@ class Challenge(Agents):
         self.assertRegex(self.no('challenge', 'add', code=2), r'verify it first: .* done add')
 
 
+class Successive(Agents):
+    """Outcomes proven one after another on one branch (odd chain's checkpoints) may share a file: each is verified as
+    its own change, from the checkpoint before it, and must still hold at the head."""
+    ONE = 'def f():\n    return 1\n'
+    BOTH = ONE + '\n\ndef g():\n    return 2\n'
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.bin = tempfile.mkdtemp(prefix='odd-agents-')
+        self.addCleanup(shutil.rmtree, self.bin, True)
+        self.write('m.py', 'def f():\n    return 0\n')
+        self.commit('product')
+        for slug, fn, n in (('one', 'f', 1), ('two', 'g', 2)):
+            self.ok('new', slug, 'A caller of m.%s() receives %d.' % (fn, n), '--proof',
+                    '%s -m unittest -q tests.test_%s' % (sys.executable, slug), '--in', 'm.py')
+            self.write('tests/test_%s.py' % slug, 'import unittest\nfrom m import %s\n\n\nclass T(unittest.TestCase):\n'
+                       '    def test_it(self):\n        self.assertEqual(%s(), %d)\n' % (fn, fn, n))
+        self.write('.odd/chains/T-2.md', 'one\ntwo\n')
+
+    def solver(self, two=None):
+        """Writes f for outcome one; for outcome two writes `two` (default: f kept, g added)."""
+        return self.agent('solve', 'if grep -qF "m.f()" "$1"; then printf %%s %s > m.py; fi\n'
+                                   'if grep -qF "m.g()" "$1"; then printf %%s %s > m.py; fi\n'
+                          % (shlex.quote(self.ONE), shlex.quote(two or self.BOTH)))
+
+    def test_a_chain_of_two_outcomes_on_one_file_passes_the_gate(self):
+        self.config([self.solver()])
+        self.commit('config')
+        out = self.ok('chain', 'T-2', '--race', '1')
+        self.assertEqual(self.subjects()[:2], ['odd: two proven', 'odd: one proven'], out)
+        gate = self.ok('gate', '--recompute', '--base', 'main')
+        self.assertIn('PASS', gate)
+        self.assertRegex(gate, r"one: [^\n]*\n(.*\n)*?.*verified as its own change \([0-9a-f]{10}\.\.[0-9a-f]{10}, at its checkpoint\)")
+        self.assertIn('PASS', self.ok('gate', '--base', 'main'))
+
+    def test_a_hollow_later_outcome_credited_by_an_earlier_test_is_still_refused(self):
+        md = self.read('.odd/outcomes/two.md').replace('tests.test_two', 'tests.test_one')  # two's proof: one's test
+        self.write('.odd/outcomes/two.md', md)
+        self.config([self.solver()])
+        self.commit('config')
+        self.no('chain', 'T-2', '--race', '1')  # measured from one's checkpoint, two's own change is not needed
+        self.assertNotIn('odd: two proven', self.subjects())
+
+    def test_a_forged_checkpoint_for_a_hollow_outcome_is_still_refused_by_the_gate(self):
+        md = self.read('.odd/outcomes/two.md').replace('tests.test_two', 'tests.test_one')
+        self.write('.odd/outcomes/two.md', md)
+        self.commit('state both')
+        self.write('m.py', self.ONE)
+        self.commit('odd: one proven')
+        self.write('m.py', self.BOTH)
+        self.commit('odd: two proven')  # written by hand: a subject proves nothing
+        out = self.no('gate', '--recompute', '--base', 'main')
+        self.assertIn('two: the proof still passes with the change taken out', out)
+
+    def test_a_later_outcome_that_breaks_an_earlier_one_fails_the_gate(self):
+        self.config([self.solver(two='def f():\n    return 9\n\n\ndef g():\n    return 2\n')])
+        self.commit('config')
+        self.ok('chain', 'T-2', '--race', '1')
+        out = self.no('gate', '--recompute', '--base', 'main')
+        self.assertRegex(out, r'one: proven as its own change at its checkpoint [0-9a-f]{10}, but its proof fails')
+
+    def test_an_outcome_edited_after_its_checkpoint_is_no_longer_its_own_change(self):
+        self.config([self.solver()])
+        self.commit('config')
+        self.ok('chain', 'T-2', '--race', '1')
+        self.write('.odd/outcomes/one.md', self.read('.odd/outcomes/one.md') + 'a note added later\n')
+        self.commit('edit one after its checkpoint')
+        self.assertIn('one: nothing inside "in: m.py" changed since', self.no('gate', '--recompute', '--base', 'main'))
+
+    def subjects(self):
+        return self.git('log', '--format=%s').splitlines()
+
+
 if __name__ == '__main__':
     unittest.main()
