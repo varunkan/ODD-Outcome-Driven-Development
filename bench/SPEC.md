@@ -60,13 +60,16 @@ before `grade` runs. A hidden test that needs the claim reads `claim.json` and n
    visible tests are put back as shipped and run (regression), then the hidden tests are copied in and `grade`
    runs; and P, where the arm's `post.sh` runs. No hidden test is on disk outside `tasks/` while any session runs:
    every grade waits until the whole pool of sessions has ended, and each copied hidden test carries a canary.
-   `--keep` keeps the session directory as the session left it, never G.
+   `--keep` keeps the session directory as the session left it, never G. A run that survives a machine restart
+   keeps this rule: `--resume` grades an ended session's G only after its own pool of new sessions has drained,
+   and first removes any grading copy a killed grade left.
 6. A hidden test checks behaviour through the interface the ticket names. It never depends on names or structure the
    ticket leaves open.
 7. A session that edits or deletes a visible test to pass is graded on the hidden tests like any other.
 8. A run whose transcript shows, anywhere (tool inputs, tool results, text), the bench repository, `tests_hidden`, a
    `/hidden/` path, a hidden test's canary or another session's directory name is `contaminated`: it keeps its grade in the record, enters no rate, and is counted.
-9. The odd arm runs the `odd.py` of the bench repository's HEAD commit, never the working-tree file. A real run from
+9. The odd arm runs the `odd.py` of the bench repository's HEAD commit (or of `--odd-commit SHA`), never the
+   working-tree file; `odd_commit` records which. A real run from
    a bench repository with uncommitted changes is refused unless `--allow-dirty` is given; `bench_dirty` records it.
 
 ## The result record (one JSON file per run)
@@ -85,7 +88,7 @@ branch, worktrees, left_outside      the branch checked out at the end; the coun
 contaminated, contaminated_by        rule 8, and the first string that showed it
 models             the model ids that did work
 transcript         file name of the saved stream-json transcript, beside the record
-provenance         {bench_commit, bench_dirty, odd_sha256, task_tree, arm_version}
+provenance         {bench_commit, bench_dirty, odd_sha256, odd_commit, task_tree, arm_version}
 env_passed         names of the environment variables the agent received
 ```
 

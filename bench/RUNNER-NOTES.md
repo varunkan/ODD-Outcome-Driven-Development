@@ -157,6 +157,34 @@ variable was needed to reach the API. A machine that logs in with a variable or 
   the user can. Nothing in a session points at them, and a transcript naming the repository is contaminated. No
   sandbox (bwrap, unshare) is used.
 
+## A run survives a machine restart (`--resume`, 2026-11-12)
+
+A 240-session run takes about three hours, and the cloud machine restarted twice mid-run: processes die, files under
+`/tmp` survive. Grades wait for the whole pool (SPEC.md rule 5), so the session-to-copy mapping held only in memory
+was lost and with it every grade. Now:
+
+- When a session ends and P and G are made (and `post.sh` has run), `<out>/<task>.<arm>.<n>.pending.json` is written
+  atomically (temporary file, `os.replace`): the record so far, the errors, the session top, the copy paths. It has no
+  top-level `task`/`arm` key, so `report.py` ignores it. The final record (also written atomically) removes it.
+- The grade runs in a fresh copy of G whose path enters the manifest before any hidden test is copied, so a killed
+  grade leaves G untouched; once graded, the manifest says so and the copies are removed.
+- `--resume --out DIR`: a recorded run is skipped; a run whose manifest is readable and whose G exists (or which
+  was already graded, or never reached a G because its setup or agent failed) is not re-run and is graded after the
+  new sessions drain, its leftover grading copy removed before any session starts; anything else (a transcript and no
+  manifest, a manifest whose G is gone) runs again from scratch, its old transcript moved to
+  `<name>.aborted-<UTC time>`. A session killed by the restart leaks its top directory under `/tmp`; nothing reads it.
+- Ctrl-C now writes only the graded records and leaves the rest for `--resume` (it used to record them as "interrupted
+  before grading", which `--resume` would then have skipped). A session the interrupt stopped gets no manifest.
+- `--odd-commit SHA` makes the odd arm run `git show SHA:odd.py` (cached as `odd-<sha256>.py`); `provenance.odd_commit`
+  is the full commit id either way (HEAD by default).
+
+Proven by `bench/tests/test_resume.py` with fake agents: run.py's process group and every agent's are SIGKILLed once
+the six repeat-1 sessions have ended and the six repeat-2 ones sleep; `--resume` then starts exactly the six repeat-2
+runs plus the one whose copies the test removed, writes 12 graded records matching an uninterrupted run's
+`passed`/`claim`/`false_done`, leaves no manifest and no `tests_hidden` under the temporary directory, and an agent
+searching `../../..` in every session never saw a hidden test. Not shown: a real restart of this machine, or a kill
+landing exactly inside a grade (covered by a unit test of `load_pending`, not by a killed runner).
+
 ## The agent can see a dollar cap, so measured runs do not set one (pilot, 2026-11-11)
 
 `--max-budget-usd` is written into the agent's system prompt: asked to quote any budget, a headless session started

@@ -120,8 +120,8 @@ def module(name):
     return found
 
 
-def run_py(work, args, fake=None, **extra):
-    """Run run.py as a user would. Temporary files and the cache stay under `work`."""
+def run_env(work, fake=None, **extra):
+    """The environment run_py gives run.py: temporary files and the cache under `work`."""
     env = {k: v for k, v in os.environ.items() if k != 'BENCH_FAKE_AGENT'}
     # PWD, OLDPWD and the CLAUDE ones stand for a hosting session's variables: none may reach the agent
     env.update(TMPDIR=os.path.join(work, 'tmp'), BENCH_CACHE=os.path.join(work, 'cache'), PWD='/launch',
@@ -130,8 +130,14 @@ def run_py(work, args, fake=None, **extra):
         os.makedirs(os.path.join(work, d), exist_ok=True)
     if fake:
         env['BENCH_FAKE_AGENT'] = fake
-    args = args + ['--pass-env', 'FAKE_LOG_DIR']
-    return subprocess.run([sys.executable, RUN] + args, env=env, capture_output=True, text=True, timeout=300)
+    return env
+
+
+def run_py(work, args, fake=None, **extra):
+    """Run run.py as a user would. Temporary files and the cache stay under `work`."""
+    args = ['--pass-env', 'FAKE_LOG_DIR'] + args  # first, so a test's own --pass-env (naming it too) wins
+    return subprocess.run([sys.executable, RUN] + args, env=run_env(work, fake, **extra), capture_output=True,
+                          text=True, timeout=300)
 
 
 def read(path):

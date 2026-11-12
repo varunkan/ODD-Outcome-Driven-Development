@@ -3,6 +3,7 @@
 
 usage: run.py --model M [--tasks ID ...] [--arms ARM ...] [--repeats N] [--max-turns T] [--max-budget-usd B]
               [--timeout SECONDS] [--jobs J] [--out DIR] [--keep] [--dry-run] [--pass-env NAME ...] [--allow-dirty]
+              [--resume] [--odd-commit SHA]
 
 One run, in this order:
   1. a fresh copy of tasks/<id>/repo as <temp>/bench-<random>/s/project, a directory of its own outside any git
@@ -18,7 +19,10 @@ One run, in this order:
      visible tests are put back and run (regression), .bench/final.txt and .bench/claim.json are written,
      tasks/<id>/hidden copied in (each *.py with a random canary line) and the task's grade command run; then every
      transcript is audited for contamination and the record written
-Writes <out>/<task>.<arm>.<n>.json and, beside it, the agent's stream-json transcript (.transcript.jsonl). A cap
+Writes <out>/<task>.<arm>.<n>.json and, beside it, the agent's stream-json transcript (.transcript.jsonl). Between
+step 5 and the record, <out>/<task>.<arm>.<n>.pending.json (the durable manifest) holds everything the grade and the
+record need, so a machine restart loses no ended session: --resume grades those, skips recorded runs and re-runs the
+rest (an old transcript of a re-run is moved aside to <name>.aborted-<UTC time>). A cap
 (turns, budget, timeout) or a context overflow is graded and named in stopped_at; no result, or another error result,
 is not graded. SPEC.md is the contract; RUNNER-NOTES.md explains the permission flags.
 
@@ -68,6 +72,7 @@ DRY_AGENT = '%s -c %s' % (shlex.quote(sys.executable), shlex.quote(
 
 LIVE = set()  # process groups now running, so an interrupt can stop every session
 LIVE_LOCK = threading.Lock()
+STOPPING = threading.Event()  # set on an interrupt: a session ending now was stopped, so it gets no manifest
 
 
 def run(cmd, cwd, env, timeout, stdin=None):
@@ -173,12 +178,19 @@ def bench_state(env):
     return head.strip(), status != 0 or bool(changes.strip())
 
 
-def odd_from_head(cache, env):
-    """odd.py as committed at HEAD, written into the cache under its hash: the odd arm runs that, never the
-    working-tree file, so every result names the exact method text it ran. Returns (path, sha256)."""
-    found = subprocess.run(['git', 'show', 'HEAD:odd.py'], cwd=BENCH_REPO, env=env, capture_output=True)
+def odd_from_commit(cache, env, commit='HEAD'):
+    """odd.py as committed at `commit` (HEAD unless --odd-commit names one), written into the cache under its hash:
+    the odd arm runs that, never the working-tree file, so every result names the exact method text it ran.
+    Returns (path, sha256, the full commit id)."""
+    sha = subprocess.run(['git', 'rev-parse', '--verify', '--quiet', commit + '^{commit}'], cwd=BENCH_REPO, env=env,
+                         capture_output=True, text=True)
+    if sha.returncode != 0:
+        raise RuntimeError('no commit %s in %s' % (commit, BENCH_REPO))
+    sha = sha.stdout.strip()
+    found = subprocess.run(['git', 'show', sha + ':odd.py'], cwd=BENCH_REPO, env=env, capture_output=True)
     if found.returncode != 0:
-        raise RuntimeError('no odd.py at HEAD of %s: %s' % (BENCH_REPO, found.stderr.decode(errors='replace').strip()))
+        raise RuntimeError('no odd.py at %s of %s: %s' % (commit, BENCH_REPO,
+                                                          found.stderr.decode(errors='replace').strip()))
     digest = hashlib.sha256(found.stdout).hexdigest()
     path = os.path.join(cache, 'odd-%s.py' % digest)
     if not os.path.isfile(path):
@@ -186,7 +198,94 @@ def odd_from_head(cache, env):
         with open(part, 'wb') as f:
             f.write(found.stdout)
         os.replace(part, path)  # whole or absent, even with two runs starting at once
-    return path, digest
+    return path, digest, sha
+
+
+def write_json(path, value):
+    """value as JSON at path, whole or absent: a temporary file beside it (not ending in .json, so report.py never
+    reads it), flushed to disk, then os.replace."""
+    fd, part = tempfile.mkstemp(dir=os.path.dirname(path), prefix='.%s.' % os.path.basename(path), suffix='.part')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(value, f, indent=2)
+            f.write('\n')
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(part, path)
+    except BaseException:
+        try:
+            os.unlink(part)
+        except OSError:
+            pass
+        raise
+
+
+def run_name(task_id, arm, repeat):
+    return '%s.%s.%d' % (task_id, arm, repeat)
+
+
+def manifest_path(cfg, rec):
+    return os.path.join(cfg['out'], run_name(rec['task'], rec['arm'], rec['repeat']) + '.pending.json')
+
+
+def save_manifest(cfg, pending):
+    """The durable manifest of an ended session: everything finish() and record() need, written atomically. No
+    top-level "task" or "arm" key, so report.py never takes it for a record."""
+    write_json(manifest_path(cfg, pending['rec']), {
+        'manifest': 1, 'task_id': pending['task']['id'], 'rec': pending['rec'], 'errors': pending['errors'],
+        'top': pending['top'], 'copies': pending['copies'], 'grade_copy': pending['grade_copy'],
+        'grading_dir': pending.get('grading_dir'), 'graded': pending['graded']})
+
+
+def drop_manifest(path, manifest=None):
+    """Remove a manifest and every directory it names (the copies, a grading directory)."""
+    if manifest is None:
+        try:
+            with open(path, encoding='utf-8') as f:
+                manifest = json.load(f)
+        except (OSError, ValueError):
+            manifest = {}
+    for d in list(manifest.get('copies') or []) + [manifest.get('grading_dir')]:
+        if isinstance(d, str):
+            shutil.rmtree(d, ignore_errors=True)
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def load_pending(path, task):
+    """The pending run a manifest describes, ready for finish() and record(), or None when it cannot be graded as it
+    stands (unreadable, or its copy G is gone): then its directories are removed and the run starts again. A grading
+    directory a killed grade left (hidden tests in it) is removed here, before any session starts."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        m = None
+    if not isinstance(m, dict) or 'rec' not in m:
+        drop_manifest(path, {})
+        return None
+    if m.get('grading_dir'):
+        shutil.rmtree(m['grading_dir'], ignore_errors=True)
+    usable = m.get('graded') or m.get('grade_copy') is None or os.path.isdir(m['grade_copy'])
+    if not usable:
+        drop_manifest(path, m)
+        return None
+    return {'task': task, 'rec': m['rec'], 'errors': m.get('errors') or [], 'top': m['top'],
+            'copies': m.get('copies') or [], 'grade_copy': m.get('grade_copy'), 'grading_dir': None,
+            'graded': bool(m.get('graded'))}
+
+
+def move_aside(out, name):
+    """A run that starts again keeps its earlier transcript as <transcript>.aborted-<UTC time>."""
+    old = os.path.join(out, name + '.transcript.jsonl')
+    if os.path.exists(old):
+        stamp, dest, n = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()), None, 0
+        while dest is None or os.path.exists(dest):
+            n += 1
+            dest = '%s.aborted-%s%s' % (old, stamp, '' if n == 1 else '-%d' % n)
+        os.replace(old, dest)
 
 
 def tree_hash(directory):
@@ -470,7 +569,8 @@ def one_run(cfg, task, arm, repeat):
     # session sits two levels down, so its own surroundings hold no other session and no hidden tests.
     top = tempfile.mkdtemp(prefix='bench-')
     session = os.path.join(top, 's', 'project')
-    pending = {'task': task, 'rec': rec, 'errors': [], 'top': top, 'copies': [], 'grade_copy': None, 'graded': False}
+    pending = {'task': task, 'rec': rec, 'errors': [], 'top': top, 'copies': [], 'grade_copy': None,
+               'grading_dir': None, 'graded': False, 'manifest': False}
     try:
         session_and_copies(cfg, task, arm, repeat, pending, session)
     except Exception as e:  # one broken run must not stop the others
@@ -479,6 +579,12 @@ def one_run(cfg, task, arm, repeat):
         rec['session_dir'] = session
     else:
         shutil.rmtree(top, ignore_errors=True)
+    if not STOPPING.is_set():  # a session an interrupt stopped is not an ended session: --resume runs it again
+        try:
+            save_manifest(cfg, pending)
+            pending['manifest'] = True
+        except Exception as e:
+            pending['rec']['warnings'].append('manifest not written: %s: %s' % (type(e).__name__, e))
     return pending
 
 
@@ -603,14 +709,25 @@ def measure(rec, result, transcript):
 def finish(cfg, pending, canaries):
     """The grade half, run only once no session is running anywhere: hidden tests reach the disk only now. Never
     raises; the copies are removed whatever happens."""
+    grading = None
     try:
         if pending['grade_copy'] and not pending['errors']:
-            pending['graded'] = grade(pending['task'], pending['grade_copy'], cfg['env'], pending['rec'], canaries)
+            # The grade runs in a fresh copy of G, named in the manifest before any hidden test reaches the disk: a
+            # grade the machine kills leaves G untouched, and --resume removes that copy before a session starts.
+            grading = pending['grading_dir'] = tempfile.mkdtemp(prefix='bench-')
+            if pending['manifest']:
+                save_manifest(cfg, pending)
+            work = copy_of(pending['grade_copy'], grading)
+            pending['graded'] = grade(pending['task'], work, cfg['env'], pending['rec'], canaries)
+            pending['grading_dir'] = None
+            if pending['manifest']:
+                save_manifest(cfg, pending)  # graded: the record no longer needs the copies
     except Exception as e:  # a machine failure: what a session left is handled inside grade()
         pending['errors'].append('grade: %s: %s' % (type(e).__name__, e))
     finally:
-        for d in pending['copies']:
-            shutil.rmtree(d, ignore_errors=True)
+        for d in pending['copies'] + [grading]:
+            if d:
+                shutil.rmtree(d, ignore_errors=True)
 
 
 def record(cfg, pending):
@@ -625,10 +742,11 @@ def record(cfg, pending):
     if not pending['graded'] or errors:
         rec['passed'] = None
     rec['false_done'] = rec['claim'] == 'DONE' and rec['passed'] is False
-    name = '%s.%s.%d.json' % (rec['task'], rec['arm'], rec['repeat'])
-    with open(os.path.join(cfg['out'], name), 'w', encoding='utf-8') as f:
-        json.dump(rec, f, indent=2)
-        f.write('\n')
+    write_json(os.path.join(cfg['out'], run_name(rec['task'], rec['arm'], rec['repeat']) + '.json'), rec)
+    try:
+        os.unlink(manifest_path(cfg, rec))
+    except OSError:
+        pass
     return rec
 
 
@@ -707,7 +825,14 @@ def main(argv=None):
     ap.add_argument('--root', default=HERE, help='directory holding tasks/ and arms/ (default: beside this file)')
     ap.add_argument('--pass-env', nargs='+', default=[], metavar='NAME', help='more variables the agent may inherit')
     ap.add_argument('--allow-dirty', action='store_true', help='run a model even with uncommitted bench changes')
+    ap.add_argument('--resume', action='store_true',
+                    help='continue an interrupted --out: skip recorded runs, grade ended sessions from their manifests, '
+                         'run the rest again')
+    ap.add_argument('--odd-commit', metavar='SHA', default='HEAD',
+                    help='the bench commit whose odd.py the odd arm runs (default: HEAD)')
     a = ap.parse_args(argv)
+    if a.resume and not a.out:
+        ap.error('--resume needs --out: the results directory to continue')
 
     fake = os.environ.get('BENCH_FAKE_AGENT') or (DRY_AGENT if a.dry_run else None)
     if not fake and not a.model:
@@ -746,7 +871,7 @@ def main(argv=None):
     os.makedirs(out, exist_ok=True)
     os.makedirs(cache, exist_ok=True)
     try:
-        odd_py, odd_sha = odd_from_head(cache, env)
+        odd_py, odd_sha, odd_commit = odd_from_commit(cache, env, a.odd_commit)
     except RuntimeError as e:
         sys.exit(str(e))
     try:
@@ -755,7 +880,8 @@ def main(argv=None):
         sys.exit('the claude command was not found; install it, or use --dry-run')
     cfg = {'root': root, 'out': out, 'cache': cache, 'env': env, 'fake': fake, 'keep': a.keep, 'cli': cli,
            'tail': tail, 'pass_env': a.pass_env, 'odd_py': odd_py,
-           'provenance': {'bench_commit': commit, 'bench_dirty': dirty, 'odd_sha256': odd_sha},
+           'provenance': {'bench_commit': commit, 'bench_dirty': dirty, 'odd_sha256': odd_sha,
+                          'odd_commit': odd_commit},
            'trees': {t['id']: tree_hash(t['dir']) for t in tasks},
            'versions': {arm: first_line(os.path.join(root, 'arms', arm, 'VERSION')) for arm in arms},
            'model': 'none (fake agent)' if fake else a.model, 'max_turns': a.max_turns, 'max_budget_usd': a.max_budget_usd,
@@ -764,7 +890,26 @@ def main(argv=None):
     todo = [(task, arm, n) for n in range(1, a.repeats + 1) for task in tasks for arm in arms]
     print('%d run(s): %d task(s) x %d arm(s) x %d repeat(s), %d at a time -> %s'
           % (len(todo), len(tasks), len(arms), a.repeats, a.jobs, out), flush=True)
-    pending, canaries = [], []
+    pending, canaries, skipped = [], [], 0
+    if a.resume:  # decided before any session starts, so a killed grade's hidden tests are gone before one does
+        fresh = []
+        for task, arm, n in todo:
+            name = os.path.join(out, run_name(task['id'], arm, n))
+            if os.path.exists(name + '.json'):
+                skipped += 1
+                if os.path.exists(name + '.pending.json'):  # killed between the record and the manifest's removal
+                    drop_manifest(name + '.pending.json')
+                continue
+            resumed = load_pending(name + '.pending.json', task) if os.path.exists(name + '.pending.json') else None
+            if resumed:
+                resumed['manifest'] = True
+                pending.append(resumed)
+            else:
+                move_aside(out, os.path.basename(name))
+                fresh.append((task, arm, n))
+        print('resume: %d recorded (skipped), %d ended session(s) to grade, %d to run'
+              % (skipped, len(pending), len(fresh)), flush=True)
+        todo = fresh
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs)
     futures = [pool.submit(one_run, cfg, *job) for job in todo]
     try:
@@ -775,23 +920,25 @@ def main(argv=None):
                 r['task'], r['arm'], r['repeat'], ', stopped at %s' % r['stopped_at'] if r['stopped_at'] else ''),
                 flush=True)
         # Every session has ended, so no agent is running anywhere: only now does a hidden test reach the disk.
-        futures = [pool.submit(finish, cfg, p, canaries) for p in pending]
+        futures = [pool.submit(finish, cfg, p, canaries) for p in pending if not p['graded']]
         for future in futures:
             future.result()
     except KeyboardInterrupt:
+        STOPPING.set()
         for future in futures:
             future.cancel()
         with LIVE_LOCK:
             for pid in list(LIVE):
                 kill_group(pid)
         pool.shutdown(wait=True)
-        for p in pending:  # what was not graded is written as such, and its copies removed
-            for d in p['copies']:
-                shutil.rmtree(d, ignore_errors=True)
-            if not p['graded']:
-                p['errors'].append('interrupted before grading')
-            record(cfg, p)
-        print('interrupted: sessions stopped; results so far are in %s' % out, file=sys.stderr)
+        for p in pending:  # graded runs are written; the rest are left for --resume
+            if p['graded']:
+                record(cfg, p)
+            elif not p['manifest']:
+                for d in p['copies']:
+                    shutil.rmtree(d, ignore_errors=True)
+        print('interrupted: sessions stopped; graded runs are in %s; run again with --resume --out %s to grade '
+              'the ended sessions and run the rest' % (out, out), file=sys.stderr)
         return 130
     pool.shutdown(wait=True)
     not_graded = 0
@@ -806,7 +953,8 @@ def main(argv=None):
             'CONTAMINATED by %s ' % r['contaminated_by'] if r['contaminated'] else '', r['error'] or ''), flush=True)
     if a.keep:
         print('session directories kept: each record names its own in session_dir')
-    print('%d run(s) written to %s, %d not graded' % (len(todo), out, not_graded))
+    print('%d run(s) written to %s, %d not graded%s' % (len(pending), out, not_graded,
+                                                      ', %d already recorded' % skipped if a.resume else ''))
     return 1 if not_graded else 0
 
 
