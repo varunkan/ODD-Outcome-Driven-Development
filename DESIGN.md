@@ -43,8 +43,8 @@ files; their sentences and proofs are the specification, and each file is a task
 
 | command | what it does | exit |
 |---|---|---|
-| `odd init [--claude-hooks]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step and the conditions under which CI is the authority | 0 |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file | 0 |
+| `odd init [--claude-hooks] [--mcp]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step, the conditions under which CI is the authority, and a proof suggestion (section 3a); `--mcp` also installs the MCP server (section 7) | 0 |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a) | 0, 1 refused (also: `auto` and no runner detected) |
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
@@ -53,6 +53,28 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd stats` | counts, labelled self-reported, with escaped defects split by kind of proof | 0 |
 
 `odd hook stop|session-start` is an internal entry point called only by the opt-in Claude Code hooks.
+
+### 3a. Proof suggestions
+
+`odd new ... --proof auto` picks a narrow proof from the test runner the repository already uses, prints every
+runner it detected and the command it chose, and writes that command into the outcome file like any other. Nothing
+detected is a refusal (exit 1) that says to give `--proof "<command>"`; it never guesses silently. `odd init` prints
+the same suggestion with `<slug>` in place of a name. Detection, most specific first (the first one found is used):
+
+| runner | shown by | proof (default test path) |
+|---|---|---|
+| pytest | `pytest.ini`, `conftest.py`, `[tool.pytest` in `pyproject.toml`, `[pytest]` in `tox.ini`, `[tool:pytest]` in `setup.cfg` | `python3 -m pytest -q tests/test_<name>.py` |
+| jest, vitest, mocha | the word in `package.json`'s `scripts.test` | `npx jest` / `npx vitest run` / `npx mocha test/<slug>.test.js` |
+| go | `go.mod` | `go test .` (`<name>_test.go`; `go test ./<dir>` for a test path in a directory) |
+| cargo | `Cargo.toml` | `cargo test --test <name>` (`tests/<name>.rs`) |
+| unittest | any `*.py` file outside `.odd/` | `python3 -m unittest -q tests/test_<name>.py` |
+| make | a `test:` target in the Makefile | `make test`, flagged as running the whole target |
+
+`<name>` is the slug with `-` and `.` turned into `_`. `--test PATH` names the test file instead (quoted for the
+shell) and goes with `--proof auto` only. Limits: detection reads file names and a few settings, not how the
+project really runs its tests (a virtualenv, `npm test` flags, a workspace, a Go package that is not the root); the
+command is a starting point for a person or agent to read, and `make test` is not narrow. A proof literally `auto`
+can no longer be written with `--proof` (edit the file).
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
@@ -198,6 +220,21 @@ Opt-in, per developer, never committed: `odd init --claude-hooks` adds two Claud
 `.claude/settings.local.json`. At session start one line of status. At turn end, a block only when this turn changed
 files and either a locally verified outcome has gone stale or more than the lane changed with no outcome in play.
 The hook commands cannot exit non-zero.
+
+**As MCP tools.** `odd init --mcp` copies `odd_mcp.py` (shipped beside `odd.py`, standard library only) into
+`.odd/` and adds `"odd": {"command": "python3", "args": [".odd/odd_mcp.py"]}` under `mcpServers` in the project's
+`.mcp.json`, keeping every other server and key; a `.mcp.json` it cannot read, or whose `mcpServers` is not an
+object, stops `init` with exit 2 before anything is written. `.odd/odd_mcp.py` is a control file. The server speaks
+JSON-RPC 2.0 over stdio and exposes `new`, `seal`, `done`, `gate`, `park` and `escaped`; each call runs `odd.py`
+from beside it as a subprocess in the server's working directory and returns its exit code (in
+`structuredContent.exit_code`, and `isError` when not 0) and everything it printed, so no logic is repeated.
+Arguments of the wrong name or kind are refused (-32602) before odd runs. It is dual-era: it serves the stateless
+MCP revision `2026-07-28` (`server/discover`, the version in each request's `_meta`) and the `initialize` handshake
+of `2025-11-25` and earlier, echoing a requested legacy version it knows. Limits: the relative path in `.mcp.json`
+assumes the client starts the server at the repository root (not checked against Claude Code); only a pipe
+round trip in the tests has driven it, not Claude Code or another client; a call runs as long as odd does
+(`proof_timeout` bounds each proof); the protocol's newer optional parts (subscriptions, tasks, input requests) are
+not implemented. `pip install odd-tool` also installs an `odd-mcp` command.
 
 ## 8. Measurement
 

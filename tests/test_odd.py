@@ -19,6 +19,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ODD = os.path.join(os.path.dirname(HERE), 'odd.py')
+MCP = os.path.join(os.path.dirname(HERE), 'odd_mcp.py')
 sys.path.insert(0, os.path.dirname(HERE))
 import odd as oddmod  # noqa: E402
 
@@ -1261,6 +1262,123 @@ class ReviewSummary(Repo):
         self.assertEqual((js['verdict'], js['exit']), ('COULD NOT RUN', 2))
 
 
+class Adoption(Repo):
+    """Step 5: a proof suggested from the runner the repository already uses, and odd as MCP tools for agents."""
+
+    RUNNERS = [  # files of a fresh repository -> what is detected and the proof chosen for `new add-up --proof auto`
+        ({'pytest.ini': '[pytest]\n', 'calc.py': ''}, 'pytest (pytest.ini)', 'python3 -m pytest -q tests/test_add_up.py'),
+        ({'pyproject.toml': '[tool.pytest.ini_options]\n'}, 'pytest (pyproject.toml)', 'python3 -m pytest -q tests/test_add_up.py'),
+        ({'calc.py': ''}, 'unittest (*.py files)', 'python3 -m unittest -q tests/test_add_up.py'),
+        ({'package.json': '{"scripts": {"test": "jest --ci"}}', 'tool.py': ''}, 'jest (package.json test script)',
+         'npx jest test/add-up.test.js'),
+        ({'package.json': '{"scripts": {"test": "vitest"}}'}, 'vitest (package.json test script)',
+         'npx vitest run test/add-up.test.js'),
+        ({'package.json': '{"scripts": {"test": "mocha test/"}}'}, 'mocha (package.json test script)',
+         'npx mocha test/add-up.test.js'),
+        ({'go.mod': 'module x\n'}, 'go (go.mod)', 'go test .'),
+        ({'Cargo.toml': '[package]\n'}, 'cargo (Cargo.toml)', 'cargo test --test add_up'),
+        ({'Makefile': 'build:\n\ttrue\ntest: build\n\ttrue\n'}, 'make (Makefile test target)', 'make test'),
+    ]
+
+    def fresh(self, files):
+        self.dir = tempfile.mkdtemp(prefix='odd-test-')
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.git('init', '-q', '-b', 'main')
+        for rel, text in files.items():
+            self.write(rel, text)
+
+    def test_auto_proof_names_what_it_detected_and_the_command_for_each_runner(self):
+        said = {}
+        for files, detected, proof in self.RUNNERS:
+            with self.subTest(detected):
+                self.fresh(files)
+                said[detected] = out = self.ok('new', 'add-up', SENTENCE, '--proof', 'auto', '--in', 'calc.py')
+                self.assertIn('detected: ' + detected, out)
+                self.assertIn('proof: ' + proof, out)
+                self.assertIn('proof: %s\n' % proof, self.read('.odd/outcomes/add-up.md'))
+        self.assertIn('unittest (*.py files)', said['jest (package.json test script)'],
+                      'every runner detected is named, not only the one chosen')
+        self.assertIn('whole', said['make (Makefile test target)'], 'a proof that is not narrow says so')
+
+    def test_auto_proof_takes_a_test_path_and_refuses_when_nothing_is_detected(self):
+        self.fresh({'pytest.ini': ''})
+        self.ok('new', 'one', SENTENCE, '--proof', 'auto', '--in', 'calc.py', '--test', 'tests/unit/test_one.py')
+        self.assertIn('proof: python3 -m pytest -q tests/unit/test_one.py\n', self.read('.odd/outcomes/one.md'))
+        self.fresh({'README.md': 'nothing to run\n'})
+        out = self.no('new', 'two', SENTENCE, '--proof', 'auto', '--in', 'calc.py')
+        self.assertIn('no test runner detected', out)
+        self.assertIn('--proof "<command>"', out, 'the refusal says what to do instead')
+        self.assertFalse(os.path.exists(self.path('.odd/outcomes/two.md')))
+        out = self.no('new', 'two', SENTENCE, '--proof', 'pytest -q', '--in', 'calc.py', '--test', 'tests/test_two.py')
+        self.assertIn('--test', out, 'a test path goes with --proof auto only')
+
+    def test_init_suggests_a_proof_or_says_none_was_detected(self):
+        out = self.ok('init')
+        self.assertIn('detected: unittest (*.py files)', out)
+        self.assertIn('python3 -m unittest -q tests/test_<slug>.py', out)
+        self.fresh({'README.md': 'x\n'})
+        self.assertIn('no test runner detected', self.ok('init'))
+        self.assertIn('no test runner detected', self.no('new', 'x', SENTENCE, '--proof', 'auto', '--in', 'a.js'),
+                      "odd's own .odd/odd.py does not make a repository a Python one")
+
+    def mcp(self, *msgs, tool=MCP):
+        r = subprocess.run([sys.executable, tool], cwd=self.dir, capture_output=True, text=True, timeout=300,
+                           input=''.join((m if isinstance(m, str) else json.dumps(m)) + '\n' for m in msgs))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return {m.get('id'): m for m in map(json.loads, r.stdout.splitlines())}
+
+    def test_an_agent_drives_odd_over_mcp(self):
+        self.ok('init', '--mcp')
+        self.write('tests/test_calc.py', TEST)
+        self.write('calc.py', FIXED)
+        call = lambda i, name, **args: {'jsonrpc': '2.0', 'id': i, 'method': 'tools/call',  # noqa: E731
+                                        'params': {'name': name, 'arguments': args}}
+        r = self.mcp({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                      'params': {'protocolVersion': '2025-06-18', 'capabilities': {}, 'clientInfo': {'name': 't', 'version': '1'}}},
+                     {'jsonrpc': '2.0', 'method': 'notifications/initialized'},
+                     {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'},
+                     call(3, 'new', slug='add', outcome=SENTENCE, proof=PROOF, **{'in': 'calc.py'}),
+                     call(4, 'done', slug='add'),
+                     call(5, 'done', slug='nope'),
+                     {'jsonrpc': '2.0', 'id': 6, 'method': 'server/discover', 'params': {}},
+                     {'jsonrpc': '2.0', 'id': 7, 'method': 'no/such'},
+                     'not json',
+                     call(8, 'gate', recompute='yes'),
+                     tool='.odd/odd_mcp.py')
+        self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
+        self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['done', 'escaped', 'gate', 'new', 'park', 'seal'])
+        self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
+        done = r[4]['result']
+        self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)
+        self.assertIn('verified', done['content'][0]['text'])
+        self.assertEqual([r[5]['result']['isError'], r[5]['result']['structuredContent']['exit_code']], [True, 1])
+        self.assertIn('2026-07-28', r[6]['result']['supportedVersions'])
+        self.assertEqual(r[7]['error']['code'], -32601)
+        self.assertEqual(r[None]['error']['code'], -32700, 'a line that is not JSON gets a parse error, and the server goes on')
+        self.assertEqual(r[8]['error']['code'], -32602, 'arguments of the wrong kind are refused before odd runs')
+        self.assertEqual(len(r), 9, 'a notification gets no reply')
+
+    def test_init_mcp_keeps_existing_servers_and_refuses_a_shape_it_does_not_know(self):
+        self.write('.mcp.json', json.dumps({'mcpServers': {'db': {'command': 'db-mcp'}}, 'note': 1}))
+        self.ok('init', '--mcp')
+        out = self.ok('init', '--mcp')
+        cfg = json.loads(self.read('.mcp.json'))
+        self.assertEqual(cfg['mcpServers']['db'], {'command': 'db-mcp'})
+        self.assertEqual(cfg['mcpServers']['odd'], {'command': 'python3', 'args': ['.odd/odd_mcp.py']})
+        self.assertEqual(cfg['note'], 1)
+        self.assertEqual(self.read('.odd/odd_mcp.py'), open(MCP).read())
+        self.assertIn('.mcp.json', out)
+        self.commit('adopt odd with its MCP server')
+        self.assertIn('.odd/odd_mcp.py', self.ok('gate', '--recompute'), 'the server is a control file, named for review')
+        bad = json.dumps({'mcpServers': ['db']})
+        self.write('.mcp.json', bad)
+        os.remove(self.path('.odd/odd_mcp.py'))
+        self.assertIn('mcpServers', self.no('init', '--mcp', code=2))
+        self.assertEqual(self.read('.mcp.json'), bad)
+        self.assertFalse(os.path.exists(self.path('.odd/odd_mcp.py')), 'nothing is written before everything is checked')
+
+
 class Distribution(Repo):
     """The two ways odd reaches people besides the single file: `pip install odd-tool` and the GitHub Action."""
 
@@ -1271,7 +1389,7 @@ class Distribution(Repo):
         self.addCleanup(shutil.rmtree, venv, True)
         src = os.path.join(venv, 'src')  # built from a copy, so nothing is left in the repository
         os.makedirs(src)
-        for name in ('pyproject.toml', 'odd.py', 'README.md', 'LICENSE'):
+        for name in ('pyproject.toml', 'odd.py', 'odd_mcp.py', 'README.md', 'LICENSE'):
             shutil.copy(os.path.join(self.REPO, name), src)
         subprocess.run([sys.executable, '-m', 'venv', venv], check=True)
         r = subprocess.run([os.path.join(venv, 'bin', 'python'), '-m', 'pip', 'install', '-q', '--no-deps',
@@ -1289,6 +1407,12 @@ class Distribution(Repo):
         out = run('done', 'add')
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn('ok      add', out.stdout, 'the closing gate of the installed command')
+        self.assertEqual(run('init', '--mcp').returncode, 0)
+        self.assertEqual(self.read('.odd/odd_mcp.py'), open(MCP).read(), 'the package ships the MCP server too')
+        r = subprocess.run([os.path.join(venv, 'bin', 'odd-mcp')], cwd=self.dir, capture_output=True, text=True,
+                           input=json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+                                             'params': {'name': 'done', 'arguments': {'slug': 'add'}}}) + '\n')
+        self.assertEqual(json.loads(r.stdout)['result']['structuredContent']['exit_code'], 0, r.stdout + r.stderr)
 
     def test_the_launch_demo_still_shows_what_it_claims(self):
         r = subprocess.run(['bash', os.path.join(self.REPO, 'launch', 'demo.sh')], capture_output=True, text=True)

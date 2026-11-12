@@ -85,8 +85,8 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 
 | command | what it does |
 |---|---|
-| `odd init [--claude-hooks]` | set up or repair a project; prints the step to add to CI |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`) |
+| `odd init [--claude-hooks] [--mcp]` | set up or repair a project; prints the step to add to CI and a proof suggestion |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected |
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd gate [--recompute]` | is every changed file inside a verified outcome? (`--recompute` for CI) |
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
@@ -166,6 +166,11 @@ been run with it so far. The command and the gate are the same for every tool an
 
 Optional, for Claude Code only: `odd init --claude-hooks` adds two hooks for your machine (never committed) that give
 one line of status at session start and stop a turn from ending on unproven work.
+
+Optional, for any MCP client: `odd init --mcp` adds odd's MCP server to the project's `.mcp.json` (other servers are
+kept), so an agent calls `new`, `seal`, `done`, `gate`, `park` and `escaped` as tools and gets odd's exit code and
+output back. It is a thin wrapper that runs `.odd/odd.py`; so far it has been driven only by the test suite, not by
+a real client ([details and limits](DESIGN.md#7-how-it-reaches-each-tool)).
 
 ## Why, and the evidence
 

@@ -6,8 +6,8 @@ proof passes on the tree as it is, fails on the same tree with the change taken 
 change is put back. `odd gate` checks that every changed product file is inside the boundary of one verified
 outcome; with --recompute (CI) it trusts nothing recorded.
 
-  odd init [--claude-hooks]                               install or repair
-  odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated>"
+  odd init [--claude-hooks] [--mcp]                       install or repair
+  odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated>"   (--proof auto [--test PATH])
   odd seal <slug> [--base REF]                            optional: the proof fails now; fingerprint its tests
   odd done <slug> [--base REF]                            exit 0 verified, 1 not shown, 2 could not run
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
@@ -25,6 +25,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -50,7 +51,7 @@ DEFAULTS = {
     'strength': 'report',  # small breaks in the changed lines after green-red-green: off, report, or enforce (a survivor fails)
     'mutants': 8,          # at most this many per outcome; each one is one proof run
 }
-CONTROL = ('.odd/odd.py', '.odd/config.json')   # no outcome needed; always reported; read from the target in CI
+CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
 FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
@@ -1050,6 +1051,54 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
 
 # ---------------------------------------------------------------- commands
 
+# what `--proof auto` picks: (runner, command, the test path when none is given); most specific runner first
+PROOFS = (('pytest', 'python3 -m pytest -q {test}', 'tests/test_{name}.py'),
+          ('jest', 'npx jest {test}', 'test/{slug}.test.js'),
+          ('vitest', 'npx vitest run {test}', 'test/{slug}.test.js'),
+          ('mocha', 'npx mocha {test}', 'test/{slug}.test.js'),
+          ('go', 'go test {dir}', '{name}_test.go'),
+          ('cargo', 'cargo test --test {stem}', 'tests/{name}.rs'),
+          ('unittest', 'python3 -m unittest -q {test}', 'tests/test_{name}.py'),
+          ('make', 'make test', ''))
+NO_RUNNER = ('no test runner detected (looked for pytest settings, *.py files, a package.json test script running jest, '
+             'vitest or mocha, go.mod, Cargo.toml, a Makefile test target)')
+
+
+def runners(root):
+    """The test runners this repository already uses, each with the file that shows it, most specific first."""
+    text = lambda rel: read_text(os.path.join(root, rel)) if os.path.isfile(os.path.join(root, rel)) else ''  # noqa: E731
+    try:
+        script = str(((json.loads(text('package.json') or '{}').get('scripts') or {}).get('test')) or '')
+    except (ValueError, AttributeError):
+        script = ''
+    py = any(p.endswith('.py') and not p.startswith('.odd/') for p in zlist(root, 'ls-files', '-z', '-co', '--exclude-standard'))
+    seen = {'pytest': [r for r, mark in (('pytest.ini', ''), ('conftest.py', ''), ('pyproject.toml', '[tool.pytest'),
+                                          ('tox.ini', '[pytest]'), ('setup.cfg', '[tool:pytest]'))
+                       if os.path.isfile(os.path.join(root, r)) and mark in text(r)][:1],
+            'go': ['go.mod'] if os.path.isfile(os.path.join(root, 'go.mod')) else [],
+            'cargo': ['Cargo.toml'] if os.path.isfile(os.path.join(root, 'Cargo.toml')) else [],
+            'unittest': ['*.py files'] if py else [],
+            'make': ['Makefile test target'] if any(re.search(r'(?m)^test\s*:', text(m)) for m in ('Makefile', 'makefile', 'GNUmakefile')) else []}
+    for js in ('jest', 'vitest', 'mocha'):
+        seen[js] = ['package.json test script'] if re.search(r'\b%s\b' % js, script) else []
+    return [(name, seen[name][0]) for name, _, _ in PROOFS if seen[name]]
+
+
+def suggest_proof(root, slug, test=None):
+    """(the proof command, what was detected and chosen), or (None, why not): never a silent guess."""
+    found = runners(root)
+    if not found:
+        return None, NO_RUNNER
+    name, cmd, default = [p for p in PROOFS if p[0] == found[0][0]][0]
+    path = test or default.format(slug=slug, name=re.sub(r'[.-]', '_', slug))
+    q = shlex.quote if test else (lambda x: x)  # a path from the slug needs no quoting; the init placeholder must stay readable
+    proof = cmd.format(test=q(path), dir=q('./' + os.path.dirname(path) if os.path.dirname(path) else '.'),
+                       stem=q(os.path.splitext(os.path.basename(path))[0]))
+    return proof, 'detected: %s\nproof: %s%s' % (', '.join('%s (%s)' % f for f in found), proof, (
+        ' (runs the whole test target: narrow it by hand if the Makefile allows)' if not default else
+        '  (the test goes in %s)' % path))
+
+
 def cmd_new(a, root):
     if not SLUG.match(a.slug):
         raise Fail('slug: lowercase letters, digits, dot, dash, underscore')
@@ -1062,6 +1111,13 @@ def cmd_new(a, root):
     globs = split_globs(','.join(a.in_))
     if not a.proof.strip() or not globs:
         raise Fail('--proof and --in must not be empty')
+    if a.test and a.proof.strip() != 'auto':
+        raise Fail('--test goes with --proof auto only; the test path is already in your proof command')
+    if a.proof.strip() == 'auto':
+        a.proof, said = suggest_proof(root, a.slug, a.test)
+        if a.proof is None:
+            raise Fail('%s.\ngive the command yourself: %s new %s "<outcome>" --proof "<command>" --in "<globs>"' % (said, ODD, a.slug))
+        print(said)
     o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(globs))])
     o.save()
     odd_looking = [g for g in globs if re.search(r'[\s{}]', g)]
@@ -1278,12 +1334,33 @@ HOOK = 'python3 "$(git rev-parse --show-toplevel 2>/dev/null)/.odd/odd.py" hook 
 HOOKS = (('Stop', 'stop'), ('SessionStart', 'session-start'), ('UserPromptSubmit', 'prompt-submit'))
 
 
-def hook_settings(path):
-    """The person's .claude/settings.local.json with odd's hooks added and their own left exactly as they are."""
+def read_json(path):
     try:
-        s = json.loads(read_text(path)) if os.path.isfile(path) else {}
+        return json.loads(read_text(path)) if os.path.isfile(path) else {}
     except ValueError as e:
         raise CouldNotRun('%s is not valid JSON (%s): fix it or move it aside, then run init again' % (path, e))
+
+
+def write_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+
+
+def mcp_settings(path):
+    """The project's .mcp.json with odd's server added and every other server left exactly as it is."""
+    s = read_json(path)
+    servers = s.setdefault('mcpServers', {}) if isinstance(s, dict) else None
+    if not isinstance(servers, dict):
+        raise CouldNotRun('%s: "mcpServers" is not an object; fix it by hand, then run init again' % path)
+    servers['odd'] = {'command': 'python3', 'args': ['.odd/odd_mcp.py']}
+    return s
+
+
+def hook_settings(path):
+    """The person's .claude/settings.local.json with odd's hooks added and their own left exactly as they are."""
+    s = read_json(path)
     hooks = s.setdefault('hooks', {}) if isinstance(s, dict) else None
     if not isinstance(hooks, dict):
         raise CouldNotRun('%s: "hooks" is not an object; fix it by hand, then run init again' % path)
@@ -1306,6 +1383,12 @@ def cmd_init(a, root):
     texts = {r: read_text(os.path.join(root, r)) for r in claude}
     sp = os.path.join(root, '.claude', 'settings.local.json')
     settings = hook_settings(sp) if a.claude_hooks else None
+    mp, server = os.path.join(root, '.mcp.json'), os.path.join(os.path.dirname(os.path.abspath(__file__)), 'odd_mcp.py')
+    servers = mcp_settings(mp) if a.mcp else None
+    if a.mcp and not os.path.isfile(server):
+        raise CouldNotRun('odd_mcp.py is not beside %s: put it there (it ships with odd), then run init --mcp again'
+                          % os.path.abspath(__file__))
+    proof = suggest_proof(root, '<slug>')[1]
 
     os.makedirs(odd_dir(root, 'outcomes'), exist_ok=True)
     cp = odd_dir(root, 'config.json')
@@ -1313,9 +1396,10 @@ def cmd_init(a, root):
         with open(cp, 'w') as f:
             json.dump(DEFAULTS, f, indent=1)
             f.write('\n')
-    me, mine = os.path.abspath(__file__), odd_dir(root, 'odd.py')
-    if not (os.path.exists(mine) and os.path.samefile(me, mine)):
-        shutil.copyfile(me, mine)
+    for me in [os.path.abspath(__file__)] + ([server] if a.mcp else []):
+        mine = odd_dir(root, os.path.basename(me))
+        if not (os.path.exists(mine) and os.path.samefile(me, mine)):
+            shutil.copyfile(me, mine)
     did = ['.odd/odd.py and .odd/config.json (control files: changes to them need a person\'s review)']
     block = BEGIN + '\n' + METHOD.replace('{trivial}', str(cfg['trivial_lines'])).rstrip('\n') + '\n' + END
     if BEGIN in old and END in old:
@@ -1337,11 +1421,12 @@ def cmd_init(a, root):
                 f.write('\n'.join(lines))
     if claude:
         did.append('%s imports AGENTS.md (Claude Code reads that file in place of AGENTS.md)' % claude[0])
+    if servers is not None:
+        write_json(mp, servers)
+        did.append('.mcp.json: the odd MCP server (.odd/odd_mcp.py, a control file), tools new, seal, done, gate, park, '
+                   'escaped; other servers kept')
     if settings is not None:
-        os.makedirs(os.path.dirname(sp), exist_ok=True)
-        with open(sp, 'w') as f:
-            json.dump(settings, f, indent=2)
-            f.write('\n')
+        write_json(sp, settings)
         ex = os.path.join(root, git(root, 'rev-parse', '--git-path', 'info/exclude').strip())
         have = read_text(ex) if os.path.isfile(ex) else ''
         if '.claude/settings.local.json' not in have:
@@ -1359,6 +1444,7 @@ def cmd_init(a, root):
     print('odd %s is set up:\n  ' % VERSION + '\n  '.join(did))
     print(CI_HELP % (VERSION, ODD))
     print('\nstart: %s new <slug> "<outcome>" --proof "<command>" --in "<globs>"' % ODD)
+    print('proof suggestion (--proof auto): ' + proof.replace('\n', '; '))
 
 
 # ---------------------------------------------------------------- opt-in Claude Code hooks (internal)
@@ -1423,11 +1509,15 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog='odd', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--version', action='version', version='odd ' + VERSION)
     sub = p.add_subparsers(dest='cmd', required=True)
-    sub.add_parser('init').add_argument('--claude-hooks', action='store_true')
+    s = sub.add_parser('init')
+    s.add_argument('--claude-hooks', action='store_true')
+    s.add_argument('--mcp', action='store_true', help='also install the MCP server and add it to .mcp.json')
     s = sub.add_parser('new')
     s.add_argument('slug')
     s.add_argument('outcome')
-    s.add_argument('--proof', required=True, help='a command that exits 0 only when the outcome holds')
+    s.add_argument('--proof', required=True, help='a command that exits 0 only when the outcome holds, or "auto": '
+                   'one picked from the test runner the repository uses')
+    s.add_argument('--test', metavar='PATH', help='with --proof auto: the test file the proof runs')
     s.add_argument('--in', dest='in_', required=True, action='append', help='globs, comma-separated (may be repeated)')
     s = sub.add_parser('seal')
     s.add_argument('slug')

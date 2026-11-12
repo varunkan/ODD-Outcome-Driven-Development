@@ -27,9 +27,10 @@ Documentation = "https://github.com/varunkan/ODD-Outcome-Driven-Development/blob
 
 [project.scripts]
 odd = "odd:main"
+odd-mcp = "odd_mcp:main"
 
 [tool.setuptools]
-py-modules = ["odd"]
+py-modules = ["odd", "odd_mcp"]
 
 [tool.setuptools.dynamic]
 version = { attr = "odd.VERSION" }

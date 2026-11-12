@@ -170,6 +170,17 @@ said with the change taken out and how many small breaks it caught, then what pa
 unaffected. We do not yet know how many review minutes it saves; [docs/review-time.md](docs/review-time.md) is how we
 intend to find out.
 
+**I do not know what proof command to write.**
+`odd new <slug> "<outcome>" --in "<globs>" --proof auto` looks for pytest, unittest, a jest/vitest/mocha test script,
+`go.mod`, `Cargo.toml` or a Makefile `test` target, prints what it found and the narrow command it chose (for example
+`python3 -m pytest -q tests/test_<slug>.py`), and refuses if it finds nothing. It reads files, not your setup, so
+read the command before relying on it. `odd init` prints the same suggestion.
+
+**Can my agent call it as tools instead of through a shell?**
+Yes: `odd init --mcp` installs a small MCP server (`.odd/odd_mcp.py`, standard library only) and registers it in
+`.mcp.json` next to any servers you already have. Each tool runs odd itself and returns its exit code and output,
+so the tools can never disagree with the command line. Only the test suite has driven it so far.
+
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).
 2. This week: `odd init` on one repository and use it on your next agent task.
