@@ -589,3 +589,80 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   tool newer than 0.4.0 ([DESIGN 3d1](DESIGN.md)). Tests: `Disputes`. The harness sends a disputed proof back to its
   author once (`odd spec`; the arm's own model for race and cascade, the strong model for spec) and runs the attempts
   again; test `test_a_disputed_proof_goes_back_to_its_author_once_and_the_race_runs_again`. Measure: not yet run.
+
+## From the source projects' session logs (2026-11-12)
+
+The session logs of the projects this method came from (a mobile point of sale on a cloud database, and a booking
+website) were read for corrections and recurring failures that odd does not yet check. Coverage was partial: the logs
+are large, and the evidence below is described in general terms, without project details. Ranked by value against
+cost to build.
+
+### 24. Standing checks: project rules as commands every gate runs
+- **Evidence:** the owner had to restate the same project rules across sessions; a session ran a device command the
+  project forbids; credentials once committed to a repository's history had to be rotated.
+- **Outcome:** `"checks": [{"name", "cmd", "in"}]` in the settings (read from the target in CI), run by `odd gate`
+  (and `--recompute`) when the change touches their `in:`, output shown; one that fails fails the gate. A secrets
+  scan is the documented first example. Shares the held-out proofs' runner.
+- **Done** in the commit "B24-B29: checks, flakes, targets, owed steps, cost, pipes" (`"checks"`; tests `Checks`; [DESIGN 5f](DESIGN.md)).
+
+
+### 25. A flaky proof cannot fake the take-out check
+- **Evidence:** snapshot tests that failed and then passed on rerun; a red that is a flake makes a proof look as if it
+  depends on the change.
+- **Outcome:** `"repeat": N` (default 1): the take-out run must fail N times and the proof pass N times.
+- **Done** in the commit "B24-B29: checks, flakes, targets, owed steps, cost, pipes" (`"repeat"`; tests `Flaky`; [DESIGN 5f](DESIGN.md)).
+
+
+### 26. Target binding: the proof says what it ran against
+- **Evidence:** an agent inspected the default database while the app uses a named one, and drew wrong conclusions; a
+  device was tested without the fixed build; a site's login broke in production with green local tests because the
+  deployed site lacked its settings, and smoke checks hit an older deployment.
+- **Outcome:** `target: <command>` in an outcome prints what the proof runs against; it runs with the proof, and its
+  output must contain the commit under test or the expected text in `target-is:`, else `done` fails.
+- **Done** in the commit "B24-B29: checks, flakes, targets, owed steps, cost, pipes" (`target:`, `target-is:`; tests `Target`; [DESIGN 5f](DESIGN.md)).
+
+
+### 27. Owed real-system steps keep an outcome open
+- **Evidence:** a fully green unit suite while the fix failed on the device; a host proof green while the real
+  service refused the request; work reported done with several owner-only steps still open.
+- **Outcome:** `owed: <step>; <step>` in an outcome: the gate reports it as proven with steps owed and the auto lane
+  never takes it; `odd owed <slug> "<step>" --evidence <file>` closes a step; `"owed": "enforce"` fails the gate.
+- **Done** in the commit "B24-B29: checks, flakes, targets, owed steps, cost, pipes" (`owed:`, `odd owed`, `"owed"`; tests `Owed`; [DESIGN 5f](DESIGN.md)).
+
+
+### 28. A budget in dollars
+- **Evidence:** long sessions that spent heavily on repeated review rounds of the same screens.
+- **Outcome:** `"max_cost": <usd>` parks an outcome once its recorded attempt costs reach it, like `"max_attempts"`.
+- **Done** in the commit "B24-B29: checks, flakes, targets, owed steps, cost, pipes" (`"max_cost"`; tests `AttemptBudget.test_a_dollar_budget_parks_once_the_attempts_cost_reaches_it`; [DESIGN 5f](DESIGN.md)).
+
+
+### 29. Proof commands whose pipe can hide a failure are refused
+- **Evidence:** a recorded lesson: a shell check piped into `grep -q` that stayed green when it should fail.
+- **Outcome:** `odd new` and `done` refuse a proof whose verdict comes from a pass-through stage of a pipe (`| tail`,
+  `| tee`, `| grep -q .`) without `pipefail`, naming the stage.
+- **Done** in the commit "B24-B29: checks, flakes, targets, owed steps, cost, pipes" (`masked()`; tests `MaskedPipe`; [DESIGN 5f](DESIGN.md)).
+
+
+### 30. A proof that reads the changed files as text is not strength
+- **Evidence:** a test asserted a style string read from a component's source; it kills every mutant and proves no
+  behaviour.
+- **Outcome:** proof strength marks a test that opens a file inside `in:` as text, and says the score does not count.
+
+### 31. Look-alike bugs
+- **Evidence:** repeated fix-of-fix entries in one project's fix log (a sibling code path a few lines away had the same
+  defect).
+- **Outcome:** `class: <regex>` on a `kind: bug` outcome: `done` lists every match in the tree and which the proof's
+  run executed (the execution check), so each is covered or named as excluded.
+
+### 32. Verification in the background
+- **Evidence:** the owner asking why work kept stopping while a suite of thousands of tests ran for about 20 minutes.
+- **Outcome:** `odd done --background` returns at once and writes the verdict to the local evidence when it ends.
+
+### 33. Inertness per hunk
+- **Evidence:** a change made for a premise the data later disproved, reverted at the owner's request.
+- **Outcome:** item R7 per changed hunk, not only per file.
+
+### 34. `odd ship`: what is delivered is what was gated
+- **Evidence:** release checks done by hand each time (tree equal to the gated tree, signer, app id, checksum).
+- **Outcome:** `odd ship <artifact>` records the artifact's hash with the commit and that commit's gate verdict, and
+  lists every check not run.

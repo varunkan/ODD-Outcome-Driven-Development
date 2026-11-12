@@ -71,9 +71,13 @@ DEFAULTS = {
     'max_attempts': 0,     # backlog item 15: park an outcome after this many failed attempts (done, race, cascade, chain); 0 is off
     'inert': 'off',        # R7: each changed file taken out on its own; off, report, or enforce (a file the proof does not need fails)
     'held_out': [],        # R8: proofs the agent never sees, [{"name", "proof", "in"}], run only by gate --recompute
+    'max_cost': 0,         # backlog 28: park an outcome once its attempts' reported cost reaches this many dollars; 0 is off
+    'owed': 'report',      # backlog 27: steps owed on the real system: report (never the auto lane) or enforce (fail)
+    'repeat': 1,           # backlog 25: the take-out run must fail, and the proof pass after it, this many times
+    'checks': [],          # backlog 24: standing project rules, [{"name", "cmd", "in"}], run by every gate, output shown
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed')
 KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
 REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
 HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
@@ -89,7 +93,7 @@ BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
-RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint')  # what --json says of a verified outcome
+RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint', 'target')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -196,11 +200,12 @@ def _globs(v):
     return isinstance(v, list) and all(isinstance(g, str) and g.strip() for g in v)
 
 
-def _held_out(v):
-    """R8: each entry names a proof command, and optionally a name and an "in:" boundary (comma-separated globs)."""
+def _commands(key):
+    """R8 and backlog 24: each entry names a command under `key`, and optionally a name and an "in:" boundary
+    (comma-separated globs)."""
     text = lambda e, k: isinstance(e.get(k, 'x'), str) and bool(e.get(k, 'x').strip())  # noqa: E731
-    return isinstance(v, list) and all(isinstance(e, dict) and 'proof' in e and set(e) <= {'name', 'proof', 'in'} and
-                                       all(text(e, k) for k in ('name', 'proof', 'in')) for e in v)
+    return lambda v: isinstance(v, list) and all(isinstance(e, dict) and key in e and set(e) <= {'name', key, 'in'} and
+                                                 all(text(e, k) for k in ('name', key, 'in')) for e in v)
 
 
 SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
@@ -221,7 +226,10 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'cache_file': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
             'max_attempts': lambda v: type(v) is int and v >= 0,
             'inert': lambda v: v in ('off', 'report', 'enforce'),
-            'held_out': _held_out}
+            'held_out': _commands('proof'), 'checks': _commands('cmd'),
+            'repeat': lambda v: type(v) is int and 1 <= v <= 10,
+            'owed': lambda v: v in ('report', 'enforce'),
+            'max_cost': lambda v: type(v) in (int, float) and 0 <= v < float('inf')}
 
 
 def load_config(root, at=None):
@@ -636,8 +644,21 @@ def failures(root, slug):
     return out
 
 
+def spent(root, slug):
+    """Backlog item 28: dollars the agents reported for attempts at an outcome since it was last verified or parked
+    for its budget (local evidence; an attempt that reported no cost counts nothing)."""
+    total = 0.0
+    for e in evidence(root, slug):
+        if e.get('ok') or 'budget' in e:
+            total = 0.0
+        elif 'attempt' in e and isinstance(e.get('cost'), (int, float)):
+            total += e['cost']
+    return round(total, 6)
+
+
 def over_budget(root, cfg, slug):
-    return bool(cfg['max_attempts']) and len(failures(root, slug)) >= cfg['max_attempts']
+    return bool(cfg['max_attempts']) and len(failures(root, slug)) >= cfg['max_attempts'] or \
+        bool(cfg['max_cost']) and spent(root, slug) >= cfg['max_cost']
 
 
 BUDGET_PARK = 'odd: attempt budget reached'
@@ -661,15 +682,18 @@ def budget(root, cfg, o):
     budget made agents skip work, docs/evidence/12-pilot.md). Deleting the "parked:" line starts the count again."""
     if not over_budget(root, cfg, o.slug):
         return ''
-    fails = failures(root, o.slug)
+    fails, usd = failures(root, o.slug), spent(root, o.slug)
     why = '; '.join(('%s: ' % e['failed'] if e.get('failed') else '') + (e.get('why') or '').strip().split('\n')[0][:160]
                     for e in fails)
-    o.f['parked'] = ' '.join((BUDGET_PARK + ' (%d failed attempts, %s): %s' % (len(fails), now()[:10], why)).split())
+    dear = bool(cfg['max_cost']) and usd >= cfg['max_cost']
+    o.f['parked'] = ' '.join((BUDGET_PARK + (' (cost budget reached ($%g of $%g), %s): %s' % (usd, cfg['max_cost'], now()[:10], why)
+                              if dear else ' (%d failed attempts, %s): %s' % (len(fails), now()[:10], why))).split())
     o.save()
-    record(root, o.slug, budget=cfg['max_attempts'], failures=len(fails))
-    return ('attempt budget reached: %d failed attempt(s) at %s; parked with their reasons in the "parked:" line of %s. '
-            'Stop and report it to a person: until they clear that line, odd runs no proof and no agent for %s.'
-            % (len(fails), o.slug, o.rel, o.slug))
+    record(root, o.slug, budget=cfg['max_attempts'], failures=len(fails), spent=usd)
+    return ('%s; parked with the reasons in the "parked:" line of %s. Stop and report it to a person: until they clear '
+            'that line, odd runs no proof and no agent for %s.' % (
+                'cost budget reached: $%g spent on attempts at %s' % (usd, o.slug) if dear else
+                'attempt budget reached: %d failed attempt(s) at %s' % (len(fails), o.slug), o.rel, o.slug))
 
 
 def _state(path):
@@ -691,8 +715,9 @@ def content_hash(root, cfg, o, changed, tests=None):
     h = hashlib.sha256()
     for k in ('proof', 'in', 'counterfactual'):
         h.update((k + '=' + o.get(k) + '\n').encode())
-    if o.get('same'):  # R8; absent, the identity of an outcome verified before it is unchanged
-        h.update(('same=' + o.get('same') + '\n').encode())
+    for k in ('same', 'target', 'target-is'):  # R8, backlog 26; absent, an earlier outcome's identity is unchanged
+        if o.get(k):
+            h.update((k + '=' + o.get(k) + '\n').encode())
     _hash_paths(h, root, sorted(set(tests) | {p for p in product if o.covers(p)}))
     return h.hexdigest()[:20], sorted(tests)
 
@@ -718,7 +743,7 @@ def verify_key(root, cfg, o, base, changed):
         tool = hashlib.sha256(f.read()).hexdigest()
     h = hashlib.sha256(('odd %s %s\nbase=%s\n' % (VERSION, tool, rev(root, base) if base else '')).encode())
     h.update(json.dumps({k: v for k, v in cfg.items() if k != 'cache_file'}, sort_keys=True).encode())
-    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same')]).encode())
+    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is')]).encode())
     _hash_paths(h, root, changed)  # the outcome file and config.json too: changed, or as at the base
     return h.hexdigest()
 
@@ -1595,7 +1620,7 @@ def verify(root, cfg, o, base, changed, say=lambda s: None, recompute=False):
     shown) or CouldNotRun (nothing was established). A verification of byte-identical inputs that passed before is
     reused (backlog item 12): its result, with "cached" set to when it ran."""
     check_seal(root, o)
-    cache = cache_for(root, cfg, recompute)[0]
+    cache = None if o.get('target') else cache_for(root, cfg, recompute)[0]  # a target can change with no edit here
     key = verify_key(root, cfg, o, base, changed) if cache else None
     hit = cache.get(key) if cache else None
     if hit:
@@ -1608,8 +1633,60 @@ def verify(root, cfg, o, base, changed, say=lambda s: None, recompute=False):
     return res
 
 
+PASS_THROUGH = ('tail', 'head', 'tee', 'cat', 'sort', 'uniq', 'cut', 'sed', 'awk', 'wc', 'column', 'less', 'more', 'tr')
+
+
+def masked(cmd):
+    """Backlog item 29: why a proof command hides its own exit code behind a pipe, or ''. Without pipefail a pipe's
+    status is its last stage's, so a test piped into a stage that succeeds on any input (tail, tee, `grep -q .`) is
+    green whether the test passed or not."""
+    if 'pipefail' in cmd:
+        return ''
+    try:
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        words = list(lex)
+    except ValueError:
+        return ''
+    for i, w in enumerate(words[:-1]):
+        if w != '|':
+            continue
+        stage = [x for x in words[i + 1:] if x not in ('(', ')')]
+        end = next((n for n, x in enumerate(stage) if x in ('|', '||', '&&', ';', '&')), len(stage))
+        stage = stage[:end]
+        name = os.path.basename(stage[0]) if stage else ''
+        loose = name in PASS_THROUGH or (name in ('grep', 'egrep') and [x for x in stage[1:] if not x.startswith('-')][:1] in (['.'], ['']))
+        if loose:
+            return ('the proof pipes into `%s`, which succeeds on any input, so the pipe hides the proof\'s own exit code '
+                    '(green whether the test passed or not). Drop the pipe, or run it with pipefail: bash -o pipefail -c '
+                    '\'<command>\'.' % ' '.join(stage)[:80])
+    return ''
+
+
+def target_check(root, cfg, o):
+    """Backlog item 26: the outcome's "target:" command says what the proof runs against (a deployment, an installed
+    build, a database); its output must contain the expected text ("target-is:", by default the commit under test,
+    at least its first 7 characters). Returns the first line it printed. Raises Fail or CouldNotRun."""
+    rc, tail, _ = run_proof(root, o.get('target'), cfg['proof_timeout'])
+    if unrunnable(rc) or rc:
+        raise CouldNotRun('"target:" could not say what the proof runs against (%s): %s\n%s' % (
+            'timeout' if rc is None else 'exit %d' % rc, o.get('target'), _indent(tail)))
+    head = rev(root, 'HEAD') or ''
+    want = o.get('target-is') or head
+    found = want and (want in tail or (not o.get('target-is') and re.search(r'\b%s[0-9a-f]*\b' % re.escape(head[:7]), tail)))
+    if not found:
+        raise Fail('the proof ran against a target that is not the one under test: "target:" printed\n%s\n  expected it '
+                   'to contain: %s. Deploy or install the build of this commit first, or point the proof at the right '
+                   'target.' % (_indent(tail), want or 'the commit under test (there is no commit yet)'))
+    return (tail.strip().splitlines() or [''])[0][:200]
+
+
 def _verify(root, cfg, o, base, changed, say):
+    hidden = masked(o.get('proof'))
+    if hidden:
+        raise Fail(hidden)
     _, _, _, product = classify(changed, cfg)
+    aimed = target_check(root, cfg, o) if o.get('target') else None
     targets = [p for p in product if o.covers(p)]
     lines = sum(sizes(root, base, targets).values())
     rc, tail, s1 = run_proof(root, o.get('proof'), cfg['proof_timeout'])
@@ -1626,6 +1703,8 @@ def _verify(root, cfg, o, base, changed, say):
         raise Fail('the proof exited 0 but %s, so it is not a proof: %s\n%s\n  make the proof run the test that shows '
                    'the outcome; a skip, an empty suite or an early exit 0 shows nothing.' % (empty, o.get('proof'), _indent(tail)))
     res = {'files': len(targets), 'lines': lines, 'seconds': [s1], 'red_says': '', 'skip': o.skip}
+    if aimed is not None:
+        res['target'] = aimed
     if o.get('same') and targets:
         res['same'] = same_behaviour(root, cfg, o, base, targets, say)
     if o.skip and o.bug:
@@ -1656,7 +1735,20 @@ def _verify(root, cfg, o, base, changed, say):
     if unrunnable(crc):
         raise CouldNotRun('with the change taken out the proof did not fail, it could not run (%s). A proof must run '
                           'to completion and exit non-zero.\n%s' % ('timeout' if crc is None else 'exit %d' % crc, _indent(ctail)))
+    for n in range(2, cfg['repeat'] + 1):  # backlog 25: a red that was a flake would pass for a dependence
+        rrc, rtail, rs = without_change(root, cfg, o, base, targets)
+        s2 += rs
+        if rrc == 0 or unrunnable(rrc):
+            raise Fail('the proof %s with the change taken out on run %d of %d ("repeat": %d), so its earlier failure '
+                       'without the change may have been chance, not the change: make the proof deterministic.\n%s'
+                       % ('passed' if rrc == 0 else 'did not run to completion', n, cfg['repeat'], cfg['repeat'],
+                          _indent(rtail)))
     rc3, tail3, s3 = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+    for n in range(2, cfg['repeat'] + 1):
+        if rc3 != 0:
+            break
+        rc3, tail3, more = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+        s3 += more
     if rc3 != 0:
         raise Fail('the proof passed, failed without the change, and then did not pass again with the change put back '
                    '(%s). A proof must give the same answer each time it runs; this one may leave state behind.\n%s'
@@ -1775,6 +1867,8 @@ def _describe(o, res):
         text += '\n          reproduced: ' + res['reproduced']
     if res.get('same'):
         text += '\n          ' + res['same']
+    if res.get('target'):
+        text += '\n          target: ' + res['target']
     if res.get('checkpoint'):
         text += '\n          verified as its own change (%s, at its checkpoint), and its proof passes at the head' % res['checkpoint']
     ine = res.get('inert')
@@ -1866,6 +1960,7 @@ def lane(root, s, facts, skips, allowed):
     for o in outs:
         if o['state'] == 'ok':
             why += _strong(cfg, o)
+            why += ['%s: steps are owed on the real system (%s)' % (o['slug'], '; '.join(o['owed']))] if o.get('owed') else []
         elif o['state'] in ('parked', 'asked'):
             why.append('%s is %s' % (o['slug'], 'parked' if o['state'] == 'parked' else 'waiting for an answer'))
     why += ['%s skipped the take-out check' % k.split(' - ', 1)[0] for k in skips]
@@ -1992,32 +2087,38 @@ def successive(root, cfg, o, seg, recompute, say):
     return dict(res, checkpoint='%s..%s' % (frm[:10], cp[:10]))
 
 
-def held_out(root, s, recompute, problems, facts, say):
+def held_out(root, s, recompute, problems, facts, say, kind='held_out'):
     """R8: the target branch's held-out proofs, run only when recomputing, each when the change touches its "in:" (by
     default any product file). Their output is never shown: it is what the agent must not fit the change to.
-    Returns report lines; a failing one adds a problem; one that cannot run stops the gate (exit 2)."""
-    entries, rows = s['cfg']['held_out'], []
-    if entries and not recompute:
+    With kind 'checks' (backlog 24): the standing checks, run by every gate, their output shown, since it is the
+    reason. Returns report lines; a failing one adds a problem; one that cannot run stops the gate (exit 2)."""
+    hidden = kind == 'held_out'
+    label, cmd_key = ('held-out', 'proof') if hidden else ('check', 'cmd')
+    entries, rows = s['cfg'][kind], []
+    if entries and hidden and not recompute:
         return ['  held-out %d proof(s) run only by %s gate --recompute (in CI), never locally' % (len(entries), ODD)]
     lines = []
     for n, e in enumerate(entries, 1):
         name, where = e.get('name') or str(n), split_globs(e.get('in'))
-        if not any(matches(p, where, tree=True) for p in s['product']) if where else not s['product']:
-            lines.append('  held-out %s: not run, no changed file inside %s' % (name, e.get('in') or 'the product'))
+        if not any(matches(p, where, tree=True) for p in s['product'] + s['tests']) if where else not s['changed']:
+            lines.append('  %s %s: not run, no changed file inside %s' % (label, name, e.get('in') or 'the change'))
             rows.append(dict(name=name, state='not run'))
             continue
-        say('held-out %s' % name)
-        rc, _, secs = run_proof(root, e['proof'], s['cfg']['proof_timeout'])
+        say('%s %s' % (label, name))
+        rc, tail, secs = run_proof(root, e[cmd_key], s['cfg']['proof_timeout'])
         if unrunnable(rc):
-            raise CouldNotRun('held-out proof %s could not run (%s); check the CI step that provides it'
-                              % (name, 'timeout' if rc is None else 'exit %d' % rc))
+            raise CouldNotRun('%s %s could not run (%s)%s' % (
+                'held-out proof' if hidden else 'check', name, 'timeout' if rc is None else 'exit %d' % rc,
+                '; check the CI step that provides it' if hidden else ': %s\n%s' % (e[cmd_key], _indent(tail))))
         rows.append(dict(name=name, state='ok' if rc == 0 else 'fail', seconds=secs))
-        lines.append('  held-out %s: %s, %ss' % (name, 'passes' if rc == 0 else 'FAILS (exit %d)' % rc, secs))
-        if rc:
+        lines.append('  %s %s: %s, %ss' % (label, name, 'passes' if rc == 0 else 'FAILS (exit %d)' % rc, secs))
+        if rc and hidden:
             problems.append('held-out proof %s fails (exit %d). Its output is not shown, so the change cannot be fitted '
                             'to it: make the change do what the outcome says for every input, not only the ones its '
                             'visible proof checks.' % (name, rc))
-    facts['held_out'] = rows
+        elif rc:
+            problems.append('check %s fails (exit %d): %s\n%s' % (name, rc, e[cmd_key], _indent(tail)))
+    facts[kind] = rows
     return lines
 
 
@@ -2066,7 +2167,14 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
                 changed_kind.append(o.slug)
                 lines.append('          kind changed from bug to %s: the proof no longer has to fail at the base'
                              % (o.get('kind') or 'none'))
-            fact(o, 'ok', **dict({k: res[k] for k in RESULT if k in res}, **({'kind_was': 'bug'} if o.slug in changed_kind else {})))
+            owed = [x.strip() for x in o.get('owed').split(';') if x.strip()]
+            if owed:  # backlog 27
+                lines.append('  owed    %s: %d step(s) owed: %s' % (o.slug, len(owed), '; '.join(owed)))
+                if cfg['owed'] == 'enforce':
+                    problems.append('%s owes %d step(s) on the real system ("owed": "enforce"): %s\n    close each with '
+                                    'its evidence: %s owed %s "<step>" --evidence <file>' % (o.slug, len(owed), '; '.join(owed), ODD, o.slug))
+            fact(o, 'ok', **dict({k: res[k] for k in RESULT if k in res}, **dict(
+                {'kind_was': 'bug'} if o.slug in changed_kind else {}, **({'owed': owed} if owed else {}))))
         except Fail as e:
             problems.append('%s: %s' % (o.slug, e))
             fact(o, 'fail', why=str(e))
@@ -2088,6 +2196,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
         else:
             lines.append('  guard   %s now fails: %s (reported only; "guard": "enforce" fails the gate)' % (name, last))
     lines += held_out(root, s, recompute, problems, facts, say)
+    lines += held_out(root, s, recompute, problems, facts, say, 'checks')
     if cache:
         cache.save()  # what a guard's proof wrote to the file after the last verification is dropped too
     facts['guards_skipped'] = s.get('guards_skipped', 0)
@@ -2282,6 +2391,9 @@ def cmd_new(a, root):
             raise Fail('%s.\ngive the command yourself: %s new %s "<outcome>" --proof "<command>" --in "<globs>"' % (said, ODD, a.slug))
         print(said)
     covers = ', '.join('%s:%s' % (k, r) if k else r for k, r in cover_ids(a.covers or ''))
+    hidden = masked(a.proof)
+    if hidden:
+        raise Fail(hidden)
     o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(globs))] +
                ([('covers', covers)] if covers else []) + ([('kind', a.kind)] if a.kind else []) +
                ([('counterfactual', REFACTOR_SKIP)] if a.kind == 'refactor' else []))
@@ -3388,6 +3500,29 @@ def cmd_ask(a, root):
           'the outcome (its sentence, proof or notes), then delete the "asked:" line of %s.' % (a.slug, o.rel))
 
 
+def cmd_owed(a, root):
+    """Backlog item 27: close one owed step of an outcome against an evidence file (a log, a screenshot), whose hash
+    is kept in the outcome's notes."""
+    o = Outcome.load(root, a.slug)
+    owed = [x.strip() for x in o.get('owed').split(';') if x.strip()]
+    step = ' '.join(a.step.split())
+    if step not in owed:
+        raise Fail('no owed step "%s" in %s (owed: %s)' % (step, o.rel, '; '.join(owed) or 'none'))
+    path = os.path.join(root, a.evidence)
+    if not os.path.isfile(path):
+        raise Fail('no such evidence file: %s (a log, a screenshot or a checksum file that shows the step done)' % a.evidence)
+    with open(path, 'rb') as f:
+        digest = hashlib.sha256(f.read()).hexdigest()
+    owed.remove(step)
+    if owed:
+        o.f['owed'] = '; '.join(owed)
+    else:
+        del o.f['owed']
+    o.notes = o.notes.rstrip('\n') + '\n- paid %s: %s (evidence %s, sha256 %s)\n' % (now()[:10], step, a.evidence, digest[:12])
+    o.save()
+    print('%s: "%s" closed with %s; %s' % (a.slug, step, a.evidence, ('%d step(s) still owed' % len(owed)) if owed else 'nothing owed'))
+
+
 def cmd_escaped(a, root):
     what = ' '.join(a.what.split())
     if len(what) < 10:
@@ -3812,6 +3947,10 @@ def main(argv=None):
     s = sub.add_parser('ask')
     s.add_argument('slug')
     s.add_argument('question', help='one precise question; delete the "asked:" line once it is answered')
+    s = sub.add_parser('owed')
+    s.add_argument('slug')
+    s.add_argument('step')
+    s.add_argument('--evidence', required=True, help='a file that shows the step done (a log, a screenshot)')
     s = sub.add_parser('escaped')
     s.add_argument('slug')
     s.add_argument('what', help='what went wrong, and where it was found')

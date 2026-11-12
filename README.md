@@ -232,6 +232,12 @@ each changed file out on its own after the main check; a file whose removal leav
 fails the check under `"enforce"`. Smaller changes, nothing riding along unproven. Details: [DESIGN.md](DESIGN.md)
 section 4f.
 
+**Checks earned from real projects** (a tool newer than 0.4.0; [DESIGN.md](DESIGN.md) section 5f): standing
+project rules as commands every gate runs (`"checks"`, a secrets scan for example); `"repeat"` so a flaky proof
+cannot fake the take-out check; `target:` so a proof must show it ran against this commit's deploy or build;
+`owed:` and `odd owed` for steps still owed on the real system, closed only with evidence; `"max_cost"`, a budget in
+dollars; and proofs piped into `tail` or `grep -q .` refused, since the pipe hides their exit code.
+
 **Refactors checked by comparison, not skipped.** `same: <command>` in an outcome (a tool newer than 0.4.0) runs the
 command with the change and with it taken out; its exit code and whole output must be identical, or `done` names the
 first differing line. Details: [DESIGN.md](DESIGN.md) section 4e.

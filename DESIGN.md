@@ -760,6 +760,34 @@ command itself writes there (odd prints nothing of it; a test runner run with `-
 held-out proofs are not take-out checked: they show the code meets them, not that the change caused it. They cost
 one more run per proof per gate. The outcome's own proof still has to pass the take-out check first.
 
+### 5f. From the source projects' logs: checks, flakes, targets, owed steps, cost, pipes
+
+All need a tool newer than 0.4.0 (backlog items 24 to 29, with the evidence, in [BACKLOG](BACKLOG.md)).
+
+- **Standing checks (`"checks"`).** `[{"name", "cmd", "in"}]` in the settings, read from the target in CI: project
+  rules as commands (a secrets scan, a forbidden-command scan, the project's own gates). Every gate runs each one whose
+  `in:` the change touches (default: any changed file), locally too, and shows its output, since that is the reason;
+  a failing one fails the gate; one that cannot run is exit 2. They share the held-out proofs' runner
+  (`held_out(kind='checks')`); held-out proofs stay recompute-only and silent.
+- **Flaky proofs (`"repeat"`).** Default 1. With N, the take-out run must fail N times and the proof pass N times
+  after it; a take-out run that passes is "may have been chance, not the change". The test shows the hole at 1: a
+  proof that ignores the code and fails only on its second run passes the default check.
+- **Targets (`target:`, `target-is:`).** An outcome line naming a command that says what the proof runs against (a
+  deployment's commit, an installed build's version, a database id). It runs before the proof; its output must
+  contain `target-is:` or, by default, the commit under test (its first 7 characters or more), else `done` fails with
+  what it printed; a command that fails is could not run. Its first line is in the result. An outcome with a target is
+  never served from the verification cache, because the target can change with no edit here. Present-only in the
+  verification's identity.
+- **Owed steps (`owed:`, `odd owed`).** `owed: <step>; <step>` lists what is still owed on the real system (a device
+  install, an owner's sign-in, a browser check). The gate prints `owed <slug>: N step(s) owed`, the auto lane never
+  takes the change, and `"owed": "enforce"` fails it. `odd owed <slug> "<step>" --evidence <file>` closes one step
+  only against an existing file, whose sha256 goes into the outcome's notes with the date.
+- **Dollar budget (`"max_cost"`).** Default 0, off. Parks an outcome, as `"max_attempts"` does, once the costs its
+  attempts reported (`odd-cost:`) since it was last verified reach the amount; the parked line says which budget.
+- **Masked pipes.** `odd new` and `done` refuse a proof that pipes into a stage that succeeds on any input (`tail`,
+  `head`, `tee`, `cat`, `sort`, `sed`, `awk`, `wc`, `grep -q .` and the like) without `pipefail`, since the pipe's
+  status is that stage's. This closes the `| grep -q .` case section 4 named as not detected.
+
 ### 5d. Verification cache and affected guards
 
 `odd done`, `race`, `cascade`, `chain` and `gate --recompute` all verify through one function, `verify()`. Before

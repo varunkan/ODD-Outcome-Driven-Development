@@ -3689,6 +3689,14 @@ class AttemptBudget(Agents):
         self.assertIn('attempt budget reached (3 failed attempts', self.parked())
         self.assertIn('the proof fails', self.parked(), 'the collected reasons are in the parked line')
 
+    def test_a_dollar_budget_parks_once_the_attempts_cost_reaches_it(self):
+        dear = self.agent('dear', self.writes(BROKEN.replace('0', 'a - b')) + '\necho odd-cost: 0.6')
+        self.config([dear], max_cost=1.0)
+        self.assertNotIn('budget', self.no('race', 'add', '--n', '1'))
+        out = self.no('race', 'add', '--n', '1')
+        self.assertIn('cost budget reached: $1.2 spent on attempts at add', out)
+        self.assertIn('cost budget reached ($1.2 of $1', self.parked())
+
     def test_deleting_the_parked_line_resets_and_a_verified_done_resets(self):
         self.budget(2)
         self.no('done', 'add')
@@ -4258,6 +4266,130 @@ class Disputes(ProofAuthors, Agents):
         self.config([self.agent('fixer', self.writes(FIXED))])
         self.ok('race', 'add', '--n', '1')
         self.assertEqual(self.read('calc.py'), FIXED)
+
+
+class Checks(Repo):
+    """Backlog item 24: standing project rules as commands every gate runs, read from the target in CI."""
+
+    def adopt(self, *checks):
+        self.git('checkout', '-q', 'main')
+        self.ok('init')
+        self.write('.odd/config.json', json.dumps({'checks': list(checks)}))
+        self.commit('adopt odd with standing checks')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add', '--base', 'main')
+
+    def test_a_failing_check_fails_the_gate_locally_and_in_ci_and_shows_its_output(self):
+        secrets = {'name': 'no secrets', 'cmd': "! git diff main -- . ':!.odd' | grep -n 'API_KEY='"}
+        self.adopt(secrets)
+        self.assertRegex(self.ok('gate', '--base', 'main'), r'check +no secrets: passes')
+        self.write('calc.py', FIXED + '\nAPI_KEY="sk-live-123"\n')
+        self.ok('done', 'add', '--base', 'main')
+        out = self.no('gate', '--base', 'main')
+        self.assertIn('check no secrets fails (exit 1)', out)
+        self.assertIn('API_KEY="sk-live-123"', out, 'a standing check is not hidden: its output is the reason')
+        self.commit('leak')
+        self.assertIn('check no secrets fails', self.no('gate', '--recompute', '--base', 'main'))
+
+    def test_a_change_cannot_drop_its_own_checks_in_ci_and_in_scopes_them(self):
+        self.adopt({'name': 'never', 'cmd': 'false', 'in': 'docs/**'}, {'name': 'always', 'cmd': 'exit 3'})
+        self.write('.odd/config.json', '{}')
+        self.commit('drop the checks')
+        out = self.no('gate', '--recompute', '--base', 'main')
+        self.assertIn('check always fails (exit 3)', out)
+        self.assertIn('check never: not run, no changed file inside docs/**', out)
+
+
+class Flaky(Repo):
+    """Backlog item 25: a proof that fails by chance must not pass for one that depends on the change."""
+
+    def test_a_proof_failing_only_by_chance_fools_one_take_out_run_and_not_repeat_2(self):
+        counter = os.path.join(tempfile.mkdtemp(), 'n')
+        self.addCleanup(shutil.rmtree, os.path.dirname(counter), True)
+        flaky = ('%s -c "import sys; p=%r; n=int(open(p).read()) if __import__(\'os\').path.exists(p) else 0; '
+                 'open(p,\'w\').write(str(n+1)); sys.exit(1 if n == 1 else 0)"' % (sys.executable, counter))
+        self.outcome(proof=flaky)
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')  # the hole: run 2, the take-out run, happens to be the failing one
+        os.remove(counter)
+        self.write('.odd/config.json', json.dumps({'repeat': 2}))
+        out = self.no('done', 'add')
+        self.assertIn('passed with the change taken out on run 2 of 2', out)
+
+
+class Target(Repo):
+    """Backlog item 26: a proof says what it ran against (a deploy, a device build, a database), and it must be the
+    tree under test or the stated target."""
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.outcome()
+        self.solve()
+        self.commit('the fix')
+
+    def test_a_target_that_is_not_the_commit_under_test_fails_done(self):
+        self.add_line('add', 'target: echo deployed commit 0000000')
+        out = self.no('done', 'add', '--base', 'main')
+        self.assertIn('the proof ran against a target that is not the one under test', out)
+        self.assertIn('deployed commit 0000000', out)
+
+    def test_a_target_naming_the_head_commit_passes_and_is_reported(self):
+        self.add_line('add', 'target: echo deployed commit $(git rev-parse HEAD)')
+        self.assertIn('target: deployed commit ' + self.git('rev-parse', 'HEAD').strip()[:7],
+                      self.ok('done', 'add', '--base', 'main'))
+        self.assertNotIn('inputs unchanged since', self.ok('done', 'add', '--base', 'main'),
+                         'a target is outside the tree: its check is never served from the cache')
+
+    def test_target_is_names_the_expected_text(self):
+        self.add_line('add', 'target: echo database "(default)"')
+        self.add_line('add', 'target-is: orders-prod')
+        self.assertIn('expected it to contain: orders-prod', self.no('done', 'add', '--base', 'main'))
+
+
+class Owed(Repo):
+    """Backlog item 27: steps owed on the real system keep a proven outcome open until evidence closes them."""
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.outcome()
+        self.solve()
+        self.add_line('add', 'owed: install on the tablet; owner signs in with the real account')
+        self.ok('done', 'add')
+
+    def test_owed_steps_are_reported_keep_the_auto_lane_closed_and_enforce_fails(self):
+        self.write('.odd/config.json', json.dumps({'auto_lane': True}))
+        out = self.ok('gate')
+        self.assertIn('owed    add: 2 step(s) owed: install on the tablet; owner signs in with the real account', out)
+        self.assertIn('steps are owed on the real system', out)
+        self.write('.odd/config.json', json.dumps({'owed': 'enforce'}))
+        self.assertIn('add owes 2 step(s)', self.no('gate'))
+
+    def test_a_step_closes_only_with_evidence_that_exists(self):
+        self.assertIn('no such evidence file', self.no('owed', 'add', 'install on the tablet', '--evidence', 'nope.png'))
+        self.write('evidence/tablet.log', 'installed: md5 abc\n')
+        self.ok('owed', 'add', 'install on the tablet', '--evidence', 'evidence/tablet.log')
+        md = self.read('.odd/outcomes/add.md')
+        self.assertRegex(md, r'(?m)^owed: owner signs in with the real account$')
+        self.assertRegex(md, r'paid \d{4}-\d{2}-\d{2}: install on the tablet \(evidence evidence/tablet\.log, sha256 [0-9a-f]{12}')
+        self.assertIn('no owed step "fly to the moon"', self.no('owed', 'add', 'fly to the moon', '--evidence', 'evidence/tablet.log'))
+        self.ok('owed', 'add', 'owner signs in with the real account', '--evidence', 'evidence/tablet.log')
+        self.assertNotIn('owed:', self.read('.odd/outcomes/add.md'))
+
+
+class MaskedPipe(Repo):
+    """Backlog item 29: a proof whose verdict is the exit code of a pass-through stage of a pipe hides failures."""
+
+    def test_a_pipe_into_a_pass_through_stage_is_refused_by_new_and_done(self):
+        for tail in ('| tail -5', '| tee /tmp/odd-log', '| grep -q .', '| head -n 3 && true'):
+            out = self.no('new', 'p%d' % len(tail), SENTENCE, '--proof', PROOF + ' 2>&1 ' + tail, '--in', 'calc.py')
+            self.assertIn('hides the proof\'s own exit code', out)
+        self.ok('new', 'piped', SENTENCE, '--proof', "bash -o pipefail -c '%s 2>&1 | tail -5'" % PROOF, '--in', 'calc.py')
+        self.ok('new', 'plain', SENTENCE, '--proof', PROOF + ' || exit 1', '--in', 'calc.py')
+        self.write('.odd/outcomes/hand.md', '---\noutcome: %s\nproof: %s | tail -3\nin: calc.py\n---\n' % (SENTENCE, PROOF))
+        self.solve()
+        self.assertIn('hides the proof\'s own exit code', self.no('done', 'hand'))
 
 
 if __name__ == '__main__':
