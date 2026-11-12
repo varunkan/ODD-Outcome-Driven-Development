@@ -2545,6 +2545,8 @@ def _verified(root, o, s, res):
 def cmd_done(a, root):
     o, s = Outcome.load(root, a.slug), survey(root, a.base)
     cfg, base = s['cfg'], s['base']
+    if getattr(a, 'background', False):
+        return background(root, o, s)
     try:
         res = prove(root, o, s, print)
     except Parked:
@@ -2559,6 +2561,53 @@ def cmd_done(a, root):
     print('%s: verified. %s' % (a.slug, _describe(o, res)))
     code, lines = gate(root, a.base)  # a failing gate's lines end with its problems
     print('\n'.join(['', 'the change as a whole:'] + lines + ([] if code else [DONE_NEXT])))
+
+
+def background(root, o, s):
+    """Backlog item 32: snapshot the tree (HEAD plus every changed file, deletions too) into a clone outside the
+    repository and verify it there in a detached process (`_bg`), so the user's tree is never taken apart while they
+    keep working. The verdict goes to this repository's local evidence keyed by the snapshot's content, so the local
+    gate accepts it only while the files still match."""
+    head = rev(root, 'HEAD')
+    if not head:
+        raise CouldNotRun('a background verification starts from a commit and there is none yet: commit first')
+    run = os.path.join(_runs(root), 'bg-%s-%d' % (o.slug, os.getpid()))
+    keep = [p for p in s['changed'] if os.path.isfile(os.path.join(root, p)) and not os.path.islink(os.path.join(root, p))]
+    wt = _worktree(root, run, 'tree', head, keep)
+    for p in s['changed']:
+        if not os.path.lexists(os.path.join(root, p)) and os.path.lexists(os.path.join(wt, p)):
+            git(wt, 'rm', '-q', '--', p)
+    if any(os.path.lexists(os.path.join(wt, p)) for p in s['changed'] if not os.path.lexists(os.path.join(root, p))):
+        shutil.rmtree(run, ignore_errors=True)
+        raise CouldNotRun('could not snapshot the deletions in this change; verify in the foreground: %s done %s' % (ODD, o.slug))
+    os.makedirs(state_dir(root, 'bg'), exist_ok=True)
+    log = state_dir(root, 'bg', o.slug + '.log')
+    with open(log, 'wb') as out:
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), '_bg', o.slug, wt, s['base'] or '', run], cwd=root,
+                         stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+    print('%s: verifying in the background on a snapshot of this tree (log: %s). The local gate sees the verdict when it '
+          'ends; an edit inside the boundary meanwhile makes it stale.' % (o.slug, log))
+    return 0
+
+
+def cmd__bg(a, root):
+    """The detached half of done --background: verify the snapshot in its clone, record into this repository."""
+    wt = a.tree
+    try:
+        Cache.ALIAS[os.path.realpath(wt)] = root
+        o, s = Outcome.load(wt, a.slug), survey(wt, a.base or None)
+        try:
+            res = prove(wt, o, s, print)
+        except Fail as e:
+            record(root, a.slug, ok=False, why=str(e)[:300], background=True, **_kind(o))
+            print('%s: not shown (background): %s' % (a.slug, e))
+            return 1
+        h, tests = content_hash(wt, s['cfg'], o, changed_files(wt, s['base']))
+        record(root, a.slug, ok=True, hash=h, tests=tests, background=True, **dict(res, **_kind(o)))
+        print('%s: verified (background). %s' % (a.slug, _describe(o, res)))
+        return 0
+    finally:
+        shutil.rmtree(a.run, ignore_errors=True)
 
 
 def cmd_seal(a, root):
@@ -4050,6 +4099,12 @@ def main(argv=None):
     s.add_argument('slug')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s.add_argument('--no-cache', action='store_true', help='verify in full even when nothing changed since a verification')
+    s.add_argument('--background', action='store_true', help='verify a snapshot of the tree in a clone and return at once')
+    s = sub.add_parser('_bg')  # internal: the background half of done --background
+    s.add_argument('slug')
+    s.add_argument('tree')
+    s.add_argument('base')
+    s.add_argument('run')
     s = sub.add_parser('race')
     s.add_argument('slug')
     s.add_argument('--n', type=int, help='how many attempts (default: one per configured agent, or 3 for one agent)')

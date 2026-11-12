@@ -661,6 +661,8 @@ cost to build.
 ### 32. Verification in the background
 - **Evidence:** the owner asking why work kept stopping while a suite of thousands of tests ran for about 20 minutes.
 - **Outcome:** `odd done --background` returns at once and writes the verdict to the local evidence when it ends.
+- **Done** in the commit "B32: verification in the background" (`background()`, `cmd__bg`; tests `Background`; [DESIGN 5f](DESIGN.md)).
+
 
 ### 33. Inertness per hunk
 - **Evidence:** a change made for a premise the data later disproved, reverted at the owner's request.

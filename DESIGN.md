@@ -795,6 +795,14 @@ All need a tool newer than 0.4.0 (backlog items 24 to 29, with the evidence, in 
   lane will not take it, and under `"strength": "enforce"` it fails. A test that imports the code names a module, not
   a path. Limits: a path built at run time is not seen; a test that names a product file for another reason (a
   fixture path) is flagged too.
+- **Verification in the background (`odd done --background`, item 32).** For slow suites: the tree as it is (HEAD
+  plus every changed file, deletions too) is copied into a clone outside the repository, a detached process verifies
+  that snapshot there (the internal `_bg` command, the full section 4 check), and the command returns at once with the
+  log's path. The verdict goes to this repository's local evidence keyed by the snapshot's content hash, so the local
+  gate accepts it only while the files still match; an edit inside the boundary meanwhile makes it stale, and the user's
+  tree is never taken apart while they keep working. `gate --recompute` is unchanged (it verifies everything itself).
+  Limits: the log is kept under the git directory and overwritten by the next background run of the same outcome; no
+  command waits for it (the gate is how to look); a snapshot it could not make is could not run.
 - **Inertness per block (item 33).** Under `"inert"` (section 4f), after the per-file check, each changed block of a
   file with more than one block (`difflib` against the base) is put back as at the base on its own, the rest kept,
   through the same journalled swap the strength mutants use (`_swap()`), and the proof run: a block whose return

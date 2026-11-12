@@ -4488,5 +4488,41 @@ class InertHunks(Repo):
         self.assertIn('calc.py:9', self.no('done', 'add'))
 
 
+class Background(Repo):
+    """Backlog item 32: odd done --background verifies a snapshot of the tree in a clone and returns at once; the local
+    gate sees the verdict when it ends, and only while the files still match the snapshot."""
+
+    def wait_for(self, text, timeout=60):
+        end = time.time() + timeout
+        while time.time() < end:
+            out = self.odd('gate')[1]
+            if text in out:
+                return out
+            time.sleep(0.3)
+        self.fail('the gate never said %r; last: %s' % (text, out))
+
+    def test_a_background_verification_returns_at_once_and_the_gate_sees_it_later(self):
+        self.outcome()
+        self.solve()
+        t0 = time.time()
+        out = self.ok('done', 'add', '--background')
+        self.assertIn('in the background', out)
+        self.assertLess(time.time() - t0, 20)
+        self.assertIn('PASS', self.wait_for('PASS'))
+        self.write('calc.py', FIXED + '\n# edited after the snapshot\n')
+        self.assertIn('run: ', self.no('gate'), 'an edit after the snapshot makes the verdict stale')
+
+    def test_a_failing_background_verification_leaves_its_reason_in_the_log(self):
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)  # the code is still broken
+        out = self.ok('done', 'add', '--background')
+        log = re.search(r'log: ([^\s)]+)', out).group(1)
+        end = time.time() + 60
+        while time.time() < end and 'the proof fails' not in (open(log).read() if os.path.exists(log) else ''):
+            time.sleep(0.3)
+        self.assertIn('the proof fails', open(log).read())
+        self.assertIn('FAIL', self.no('gate'))
+
+
 if __name__ == '__main__':
     unittest.main()
