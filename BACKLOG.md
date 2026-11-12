@@ -11,6 +11,64 @@ The aim: make development **quicker, cheaper and more accurate**, not only check
 a trustworthy verifier, and a trustworthy verifier is what lets cheap models, parallel attempts and less human review
 be used safely.
 
+## From the research: do these first
+
+The research synthesis ([14](docs/evidence/14-research.md)) found these the best supported by evidence and among the
+cheapest. Each cites its papers there, with a skeptic's verdict.
+
+### R1. Measure trust directly
+- **Outcome:** the comparison reports, per arm, the cheat rate and park rate on impossible tasks, claim precision
+  (how often "done" is true), silent failures, and the gap between the arm's own proof and the hidden tests by diff
+  size, so ODD's trust claim becomes a number.
+- **Evidence:** ImpossibleBench (arXiv 2510.20270); claim precision 64% to 96% and Haiku-class silent failures 21% to
+  3% with a claim contract (arXiv 2611.10063).
+
+### R2. Fail closed on changed tests and empty proofs
+- **Outcome:** a change that edits or deletes a test that existed at the base fails the gate unless its outcome says
+  why (`test-change: <reason>`), and a proof that skips its tests, runs none, or exits 0 early fails too.
+- **Evidence:** harness hardening cut exploits from 6.5% to 0.8% with no loss of success (arXiv 2605.02964); read-only
+  tests stopped test edits, the main route Claude models used to cheat (ImpossibleBench); exit(0) and skip were the
+  systemic hacks (arXiv 2503.11926). About 110 lines, no extra run time.
+
+### R3. Make parking the sanctioned answer
+- **Outcome:** the installed method tells the agent plainly to stop and explain with `odd park` when the task cannot
+  be done as asked, instead of forcing a pass.
+- **Evidence:** an abort option took GPT-5 cheating from 54% to 9% and o3 from 49% to 12% (ImpossibleBench). One
+  paragraph, no code. Expected effect is small on current Claude models, large on models that cheat.
+
+### R4. Proof strength done well (refines the step being built)
+- **Outcome:** one mutant per changed line, a check that every changed line actually runs under the proof, the
+  wording "proof strength k of n" (never "verified"), and print-only proofs refused.
+- **Evidence:** 64.8% of Python agent PRs execute no changed line (arXiv 2607.18057); coupled mutants on covered lines
+  for 70% of serious bugs (arXiv 2103.07189); mutation score is not correctness (arXiv 2607.22880).
+
+### R5. An independent author for the proof
+- **Outcome:** the proof can be written by a different, stronger model (`--proof-by <cmd>`) and sealed before the
+  implementer starts, with about three attempts before parking.
+- **Evidence:** stronger-model tests raised resolution from 61.2% to 65.3%; weak-model tests lowered it to 57.3%
+  (arXiv 2609.09133). The likeliest place for a correctness gain on a weaker implementer. Merges with item 3 below.
+
+### R6. `odd challenge` (advisory)
+- **Outcome:** a second model tries to write a plausible but wrong variant that still passes the proof; if it
+  succeeds, the proof is too weak.
+- **Evidence:** 19.7% of passing patches rejected by such checks (arXiv 2603.00520); 29.6% of passing patches diverge
+  in behaviour (arXiv 2503.15223). The only measured way, without a reference patch, to catch special-casing.
+
+### R7. Per-file inertness (opt-in)
+- **Outcome:** each changed file is taken out on its own, and a file whose removal leaves the proof green is flagged.
+- **Evidence:** arXiv 2606.28430, one task only; prevalence unknown.
+
+### R8. A proof the agent never sees
+- **Outcome:** an optional held-out proof run only by `gate --recompute`, plus a base-against-head behaviour diff for
+  "no behaviour change" outcomes.
+- **Evidence:** visible-only checks scored 97% against 0% held-out on a lookup-table solution (arXiv 2605.21384).
+
+### What the research says not to build
+An LLM judge as the arbiter of done; chain-of-thought monitoring as a control; prompt-only "do not modify the tests";
+requiring agents to write more tests; coverage or mutation score presented as correctness; whole-file exhaustive
+mutation; random small holdouts; auto-adding generated tests to the proof; full formal verification for ordinary
+repositories. Reasons and sources: [14](docs/evidence/14-research.md).
+
 ## Accuracy and productivity
 
 ### 1. `odd race`: parallel attempts, the proof picks the winner
