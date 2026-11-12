@@ -63,7 +63,8 @@ DEFAULTS = {
     'coverage': 'report',  # requirements no outcome in the change covers: off, report, or enforce (an uncovered one fails)
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind')
+KINDS = ('bug',)  # kind: bug, the proof must fail at the base revision (reproduce first)
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
@@ -358,6 +359,8 @@ class Outcome:
         for k in ('outcome', 'proof', 'in'):
             if not o.f.get(k):
                 raise Fail('%s: missing "%s:"' % (o.rel, k))
+        if o.get('kind') and o.get('kind') not in KINDS:
+            raise Fail('%s: unknown kind "%s" (the kinds are: %s)' % (o.rel, o.get('kind'), ', '.join(KINDS)))
         return o
 
     def get(self, k):
@@ -373,6 +376,10 @@ class Outcome:
     @property
     def parked(self):
         return self.get('parked')
+
+    @property
+    def bug(self):
+        return self.get('kind') == 'bug'
 
     @property
     def skip(self):
@@ -1364,6 +1371,9 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
         raise Fail('the proof exited 0 but %s, so it is not a proof: %s\n%s\n  make the proof run the test that shows '
                    'the outcome; a skip, an empty suite or an early exit 0 shows nothing.' % (empty, o.get('proof'), _indent(tail)))
     res = {'files': len(targets), 'lines': lines, 'seconds': [s1], 'red_says': '', 'skip': o.skip}
+    if o.skip and o.bug:
+        raise Fail('a bug outcome cannot skip the run at the base revision: the proof must reproduce the bug there. '
+                   'Take the "counterfactual:" line out of %s, or drop "kind: bug" if this is not a bug fix.' % o.rel)
     if o.skip:
         return res
     if not targets:
@@ -1378,6 +1388,8 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
                    '"counterfactual: skip - <reason>" to %s.' % (o.get('in'), (base or 'the first commit')[:10], where, o.rel))
     say('  proof passed in %ss; two more runs (without the change, then with it again), about %ss' % (s1, round(2 * s1, 1)))
     crc, ctail, s2 = without_change(root, cfg, o, base, targets)
+    if crc == 0 and o.bug:
+        raise Fail(NO_REPRO % (o.get('proof'), ', '.join(targets[:8])))
     if crc == 0:
         raise Fail('the proof still passes with the change taken out, so it does not depend on the change.\n'
                    '  taken out: %s\n  usual causes: the proof asserts nothing the change does; the result comes '
@@ -1393,10 +1405,21 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
                    '(%s). A proof must give the same answer each time it runs; this one may leave state behind.\n%s'
                    % ('timeout' if rc3 is None else 'exit %d' % rc3, _indent(tail3)))
     res.update(seconds=[s1, s2, s3], red_says=says(ctail))
+    if o.bug:
+        res['reproduced'] = last_line(ctail)
     if cfg['strength'] != 'off':
         res['strength'] = strength(root, cfg, o, base, targets, say, [s1, s2, s3])
         weak(cfg, o, res)
     return res
+
+
+NO_REPRO = ('the proof does not reproduce the bug: it passes at the base revision (%s), so it cannot show the fix.\n'
+            '  base for: %s\n  write a proof that fails on the unfixed code with the reported symptom.')
+
+
+def last_line(tail):
+    """The last non-blank line of a proof's output: how a bug outcome's proof failed at the base."""
+    return next((x.strip() for x in reversed((tail or '').split('\n')) if x.strip()), '(no output)')
 
 
 WHY = re.compile(r'Error\b|Exception\b|[Cc]annot |[Aa]ssert|[Ee]xpected|\u2715|\u2717|^not ok|panicked|No such file')
@@ -1430,6 +1453,8 @@ def _describe(o, res):
             res['skip'].split('-', 1)[-1].strip() or 'no reason', res['lines'], res['files'])
     text = 'took out %d file(s), %d line(s); without them the proof said: %s; %s s' % (
         res['files'], res['lines'], res['red_says'], '+'.join(str(s) for s in res['seconds']))
+    if res.get('reproduced'):
+        text += '\n          reproduced: ' + res['reproduced']
     st = res.get('strength')
     if st:
         text += '\n          proof strength %d of %d (small breaks in the changed lines the proof caught)%s%s; %s s' % (
@@ -1636,7 +1661,7 @@ def cmd_new(a, root):
         print(said)
     covers = ', '.join('%s:%s' % (k, r) if k else r for k, r in cover_ids(a.covers or ''))
     o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(globs))] +
-               ([('covers', covers)] if covers else []))
+               ([('covers', covers)] if covers else []) + ([('kind', a.kind)] if a.kind else []))
     o.save()
     odd_looking = [g for g in globs if re.search(r'[\s{}]', g)]
     print('%s created (paths and the proof are relative to the repository root).%s\n'
@@ -1683,10 +1708,16 @@ def cmd_seal(a, root):
     if not tests:
         raise Fail('no test file has changed since %s, so there is nothing to seal: write the proof as a test under a '
                    'test path first' % (base or 'the first commit')[:10])
-    rc, tail, _ = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+    targets = [p for p in classify(changed_files(root, base), cfg)[3] if o.covers(p)] if o.bug else []
+    if targets:  # a bug: the proof runs at the base revision of the outcome's files, the fix taken out
+        rc, tail, _ = without_change(root, cfg, o, base, targets)
+    else:
+        rc, tail, _ = run_proof(root, o.get('proof'), cfg['proof_timeout'])
     if unrunnable(rc):
         raise CouldNotRun('the proof did not run to completion (%s), so it is not red. A proof must run and exit '
                           'non-zero before the change.\n%s' % ('timeout' if rc is None else 'exit %d' % rc, _indent(tail)))
+    if rc == 0 and o.bug:
+        raise Fail(NO_REPRO % (o.get('proof'), ', '.join(targets[:8]) or 'no file changed yet, the tree is the base'))
     if rc == 0:
         raise Fail('the proof already passes, so it cannot be sealed red first: %s. Seal it before the change, or '
                    'take the change out first.' % o.get('proof'))
@@ -1696,6 +1727,8 @@ def cmd_seal(a, root):
     print('%s: sealed; the proof fails now (%s). Sealed: %s. Now write the code; a later edit to these files fails '
           '%s done and the gate until it is resealed.' % (a.slug, says(tail),
                                                         ', '.join(tests), ODD))
+    if o.bug:
+        print('reproduced: ' + last_line(tail))
 
 
 # ---------------------------------------------------------------- race: N attempts, the proof picks the winner
@@ -2651,6 +2684,8 @@ def main(argv=None):
     s.add_argument('--in', dest='in_', required=True, action='append', help='globs, comma-separated (may be repeated)')
     s.add_argument('--covers', metavar='IDS', help='the requirements this outcome covers, comma-separated: R1, R3 (from '
                    '.odd/requirements/<ticket>.md), or <ticket>:R1')
+    s.add_argument('--kind', choices=KINDS, help='bug: seal and done require the proof to fail at the base revision '
+                   '(reproduce first)')
     s = sub.add_parser('seal')
     s.add_argument('slug')
     s.add_argument('--base', help='measure from this revision instead of the target branch')

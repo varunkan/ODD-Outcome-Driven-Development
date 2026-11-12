@@ -86,7 +86,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | command | what it does |
 |---|---|
 | `odd init [--claude-hooks] [--mcp]` | set up or repair a project; prints the step to add to CI and a proof suggestion |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected; `--covers R1,R3` names the ticket requirements it covers (a tool newer than 0.4.0) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected; `--covers R1,R3` names the ticket requirements it covers; `--kind bug` requires the proof to fail on the unfixed code (both a tool newer than 0.4.0) |
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd race <slug> [--n N] [--agent CMD]` | run N agent attempts in parallel, each in its own git worktree; the verified one with the strongest proof and fewest changed lines is applied to your tree (a tool newer than 0.4.0) |
 | `odd cascade <slug> [--agents C1,C2] [--race N]` | try the agents in order, cheapest first, each attempt in its own worktree; stop at the first verified one and apply it, else escalate with the failure in the next prompt, and park after the last (a tool newer than 0.4.0) |
@@ -126,6 +126,12 @@ covered; not covered: R2 (...)`, and a `covers:` id that is not in the file fail
 newer than 0.4.0). It catches "works, but not what was asked" only as far as the list is complete and each proof tests
 what its outcome says; odd checks neither. Not measured: requirements missed with and without it (BACKLOG item 4).
 Details: [DESIGN.md](DESIGN.md) section 5a.
+
+**Bugs are reproduced first.** `odd new <slug> ... --kind bug` marks a bug fix. Then `odd seal` and `odd done` require
+the proof to fail on the unfixed code (the outcome's changed files put back to the base) and print
+`reproduced: <last line of the failure>`; a proof that passes there is refused ("the proof does not reproduce the
+bug"). A tool newer than 0.4.0. odd shows the failure line; whether it is the reported symptom is for the reviewer
+(a missing new file also fails). Details: [DESIGN.md](DESIGN.md) section 4a.
 
 **A stronger model writes the proof, a cheaper one the code.** `odd spec <slug> --proof-by "<command>"` gives the
 outcome to one agent command to write only the proof, in its own worktree. odd accepts it only if it changes test

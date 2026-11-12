@@ -49,7 +49,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | command | what it does | exit |
 |---|---|---|
 | `odd init [--claude-hooks] [--mcp]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step, the conditions under which CI is the authority, and a proof suggestion (section 3a); `--mcp` also installs the MCP server (section 7) | 0 |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0); `--kind bug` writes `kind: bug` (section 4a; needs a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
@@ -454,6 +454,25 @@ not that the list is the whole ticket: whoever writes the list can leave a requi
 in the change is printed but not refused (review reads the list). Requirements files are exempt only through the
 default `**/*.md` exemption; a custom `"exempt"` list without it makes them product files. Not measured: requirements
 missed per task with and without the check (BACKLOG item 4).
+
+### 4a. Reproduce first: `kind: bug`
+
+An outcome may carry `kind: bug` (`odd new ... --kind bug`; needs a tool newer than 0.4.0; the only kind so far, any
+other value is refused). For a bug outcome `odd seal` and `odd done` (and so `odd gate --recompute`) require the proof
+to fail at the base revision, and print how it failed as `reproduced: <last line of its output>`. The base run is the
+take-out of section 4, unchanged: taking out every changed product file inside the outcome's `in:` puts back exactly
+the base version of those files (a file the change added is removed). `odd seal` on a bug outcome takes the fix out
+the same way when one is already written, so it can be sealed after the fix too; plain outcomes still require the
+proof to fail in the tree as it is. A proof that passes at the base is refused by both, exit 1: "the proof does not
+reproduce the bug". `counterfactual: skip` is refused on a bug outcome. Outcomes without `kind:` behave as before.
+
+Where "the take-out" and "the base revision" differ: (1) only the outcome's own product files go back; product files
+of other outcomes, files outside every `in:`, test files and exempt files stay as they are in the tree; (2) a new
+product file the proof imports is removed, so the proof fails with an import error and that counts as reproduced,
+though it is not the reported symptom: the `reproduced:` line shows it, and a reviewer reads it; (3) the proof
+itself is the tree's version, since a test written for the bug did not exist at the base. odd cannot tell whether the
+failure is the reported behaviour; it shows the line. Measured: `tests/test_odd.py` class `ReproduceFirst`. Not
+measured: false "done" on bug tasks with and without it (BACKLOG item 5).
 
 ## 6. Exemptions
 

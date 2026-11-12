@@ -2465,5 +2465,65 @@ class Spec(Agents):
         self.assertIn('sealed:', self.read('.odd/outcomes/add.md'))
 
 
+class ReproduceFirst(Repo):
+    """Backlog item 5: a bug outcome's proof must fail at the base revision, and says how it failed."""
+    PASSES_ON_BASE = ('import unittest\nfrom calc import add\n\n\nclass T(unittest.TestCase):\n    def test_add(self):\n'
+                      '        self.assertIsNotNone(add(2, 3))\n')
+
+    def bug(self):
+        self.ok('new', 'add', SENTENCE, '--proof', PROOF, '--in', 'calc.py', '--kind', 'bug')
+
+    def test_a_reproducing_proof_is_sealed_and_done_says_how_it_reproduced(self):
+        self.bug()
+        self.assertRegex(self.read('.odd/outcomes/add.md'), r'(?m)^kind: bug$')
+        self.solve()  # the fix is already written: seal still measures the base, not the tree
+        out = self.ok('seal', 'add')
+        self.assertIn('reproduced: FAILED (failures=1)', out)
+        self.assertEqual(self.read('calc.py'), FIXED, 'the fix is put back after the base run')
+        out = self.ok('done', 'add')
+        self.assertIn('verified', out)
+        self.assertIn('reproduced: FAILED (failures=1)', out)
+
+    def test_a_proof_that_passes_on_the_base_is_refused_by_seal_and_done(self):
+        self.bug()
+        self.write('tests/test_calc.py', self.PASSES_ON_BASE)
+        self.write('calc.py', FIXED)
+        self.assertIn('the proof does not reproduce the bug', self.no('seal', 'add'))
+        self.assertNotIn('sealed:', self.read('.odd/outcomes/add.md'))
+        out = self.no('done', 'add')
+        self.assertIn('the proof does not reproduce the bug', out)
+        self.assertNotIn('verified', out)
+
+    def test_a_bug_outcome_cannot_skip_the_base_run(self):
+        self.bug()
+        self.add_line('add', 'counterfactual: skip - trust me')
+        self.solve()
+        self.assertIn('a bug outcome cannot skip', self.no('done', 'add'))
+
+    def test_an_unknown_kind_is_refused(self):
+        self.outcome()
+        self.add_line('add', 'kind: bgu')
+        self.solve()
+        self.assertIn('kind', self.no('done', 'add'))
+
+    def test_outcomes_without_a_kind_are_unchanged(self):
+        self.outcome()
+        self.solve()
+        self.assertIn('already passes', self.no('seal', 'add'))
+        out = self.ok('done', 'add')
+        self.assertNotIn('reproduced:', out)
+        self.assertNotIn('kind:', self.read('.odd/outcomes/add.md'))
+
+    def test_the_mcp_new_tool_passes_the_kind(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('odd_mcp_for_kind', MCP)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        argv = mod.argv_for('new', {'slug': 'add', 'outcome': SENTENCE, 'proof': PROOF, 'in': 'calc.py', 'kind': 'bug'})
+        self.assertIn('--kind', argv)
+        self.ok(*argv)
+        self.assertIn('kind: bug', self.read('.odd/outcomes/add.md'))
+
+
 if __name__ == '__main__':
     unittest.main()

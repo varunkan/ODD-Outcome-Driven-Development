@@ -235,6 +235,12 @@ prints it, and `"off"` turns the check off. Outcomes without `covers:` behave as
 list is the whole ticket or whether a proof tests the requirement it claims to cover; a reviewer reads both. Whether
 this lowers missed requirements is not measured yet.
 
+**For a bug fix, how do I know the test reproduces the bug and does not just pass?**
+Create the outcome with `odd new ... --kind bug` (a tool newer than 0.4.0). `odd seal` and `odd done` then run the
+proof on the unfixed code, the outcome's changed files put back to the base, require it to fail there, and print
+`reproduced: <last line>`; a proof that passes on the unfixed code is refused. The line shows how it failed; odd
+cannot tell whether that is the reported symptom (an import of a file the fix added also fails), so read it.
+
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).
 2. This week: `odd init` on one repository and use it on your next agent task.

@@ -210,6 +210,14 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   is written.
 - **How:** an outcome kind `bug` whose seal requires the proof to fail at the base revision with the reported symptom.
 - **Measure:** pass rate and false "done" on the bugfix and trap tasks, with and without.
+- **Done** in the commit "B5: reproduce first for bugs ..." (`git log --grep '^B5:'`): the outcome field `kind: bug`,
+  `odd new --kind bug`, the MCP `new` tool's `kind`; DESIGN.md section 4a. The base run is the existing take-out
+  (`without_change`): `verify()` refuses a bug proof that passes there and records `reproduced:`; `odd seal` takes an
+  already-written fix out the same way. Measured with `tests/test_odd.py` class `ReproduceFirst` (6 tests; 4 seen RED
+  on the missing `--kind`; the unknown-kind test and the unchanged-outcome control passed before the code, the first
+  for the wrong reason, the field being unknown) and 13 hand-made mutants of the new code in odd.py and odd_mcp.py,
+  each turning a `ReproduceFirst` test red. Not measured: pass rate and false "done" on bug tasks with and without;
+  odd cannot tell whether the failure is the reported symptom.
 
 ### 6. Ambiguity stop
 - **Outcome:** when the outcome cannot be made checkable from the ticket, the agent asks one precise question instead
