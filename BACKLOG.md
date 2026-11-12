@@ -391,6 +391,17 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Outcome:** the agent is given the outcome's file boundary up front, so it explores less of the repository.
 - **How:** `odd new` and the MCP server return the boundary and the relevant files for the agent to read first.
 - **Measure:** turns and tokens per task.
+- **Done** in the commit "B13: boundary as context" (`git log --grep '^B13:'`), a tool newer than 0.4.0, no setting:
+  `read_first()` lists, under `read these first`, the files inside `in:` that exist (never `.odd/`), at most ten
+  (`READ_FIRST`), the largest change against the base first (`sizes()`; a binary counts as no lines), then the
+  largest file, with `and N more`, and `the proof runs: <files>` (`proof_runs()`). `odd new` prints it (so the MCP
+  `new` tool returns it) and `_prompt()` puts it in the race, cascade and chain prompt file. Measured with
+  `tests/test_odd.py` classes `BoundaryContext` and `BoundaryPrompt` (7 tests; 5 seen RED for the missing heading
+  before the code, 2 added after): 12 hand-made mutants of the new code each turned a new test red (one survived
+  first, a changed binary ranked as 10^6 lines; fixed and covered). Cost on a clone of this repository (362 files,
+  `--in "bench/**"`, one machine, Python 3.13): `odd new` 0.16-0.25 s against 0.11-0.14 s before. Not done: turns
+  and tokens per task (the item's measure) are not measured; the list is a reading order, not a closure (imports
+  and callers outside the boundary are not listed); the `changed, not text` label is not asserted by a test.
 
 ### 14. Stop when proven
 - **Outcome:** the method tells the agent to stop as soon as the outcome is proven and strong, with no further planning

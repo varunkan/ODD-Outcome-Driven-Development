@@ -84,6 +84,7 @@ HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome fi
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
+READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
 RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
@@ -1749,6 +1750,27 @@ def lane(root, s, facts, skips, allowed):
 OUTCOME_FILE = re.compile(r'^\.odd/outcomes/[^/]+\.md$')
 
 
+def read_first(root, o, base, cap=READ_FIRST):
+    """The files to read before changing anything for `o`: the files inside its boundary that exist (at most `cap`,
+    the largest change against the base first, then the largest file) and the files its proof names (proof_runs),
+    under the heading "read these first". Printed by new and put in the race, cascade and chain prompt, so an agent
+    starts from the boundary instead of exploring the repository. Nothing outside the boundary or under .odd/ is
+    listed as a boundary file."""
+    files = [p for p in zlist(root, 'ls-files', '-z', '-co', '--exclude-standard')
+             if not p.startswith('.odd/') and os.path.isfile(os.path.join(root, p))]
+    inside = [p for p in files if o.covers(p)]
+    n = sizes(root, base, sorted(set(changed_files(root, base)) & set(inside)))
+    lines = lambda p: n.get(p, 0) if n.get(p, 0) < BIG else 0  # noqa: E731 (a binary file is not text to read)
+    inside.sort(key=lambda p: (-lines(p), -os.path.getsize(os.path.join(root, p)), p))
+    out = ['read these first (inside "%s", the largest change first, then the largest file):' % o.get('in')]
+    out += ['  %s (%s)' % (p, '%d changed line(s)' % lines(p) if lines(p) else 'changed, not text' if p in n
+                             else 'unchanged') for p in inside[:cap]]
+    out += ['  and %d more' % (len(inside) - cap)] if len(inside) > cap else []
+    out += [] if inside else ['  (no file inside the boundary exists yet)']
+    tests = proof_runs(o.get('proof'), files)
+    return '\n'.join(out + ['the proof runs: %s' % (', '.join(tests[:cap]) if tests else 'no file it names exists yet')]) + '\n'
+
+
 def survey(root, base_arg=None, recompute=False):
     """Everything the gate and the hooks need to know about the change, computed once."""
     cfg = load_config(root)
@@ -2043,6 +2065,11 @@ def cmd_new(a, root):
                      % odd_looking[0]) if odd_looking else '', o.get('in'), ODD, a.slug))
     if a.kind:
         print('hint (%s): %s' % (a.kind, HINTS[a.kind]))
+    try:
+        base = find_base(root, load_config(root))[0]
+    except CouldNotRun:
+        base = None  # no target branch to measure from: every file counts as changed
+    print(read_first(root, o, base), end='')
 
 
 def prove(root, o, s, say=lambda s: None):
@@ -2124,6 +2151,7 @@ Proof (a command that exits 0 only when the outcome holds): %(proof)s
 Change only files inside: %(ins)s (new test files are allowed too)
 Leave alone: %(fixed)s. An attempt that edits them is discarded.
 
+%(read)s
 When you have finished, exit. odd then checks this copy as `odd done %(slug)s` would: the proof passes, fails with the
 change taken out and passes again, and small breaks in the changed lines make it fail. Do not commit, push or run
 `odd park` here; if the outcome cannot honestly be reached, say why in your output and exit.
@@ -2322,9 +2350,9 @@ def _keep(root, cmd, slug):
     return keep
 
 
-def _prompt(o, cfg, fixed):
+def _prompt(root, o, cfg, base, fixed):
     return RACE_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), fixed=', '.join(fixed),
-                              slug=o.slug) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
+                              slug=o.slug, read=read_first(root, o, base)) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
 
 
 def _worktree(root, run, name, head, fixed):
@@ -2488,7 +2516,7 @@ def _race_run(root, cfg, slug, base_arg, agents, n):
           % (ODD, o.slug, n, head[:10], ODD))
     attempts, ranked, patch, overhead = _attempts(root, cfg, o, base, head, fixed,
                                                   [agents[i % len(agents)] for i in range(n)], keep,
-                                                  _prompt(o, cfg, fixed), [str(i) for i in range(1, n + 1)])
+                                                  _prompt(root, o, cfg, base, fixed), [str(i) for i in range(1, n + 1)])
     _table(attempts, ranked)
     print('setup and clean-up: %s s per attempt (worktree, copies, start commit, removal); prompts and agent logs: %s'
           % (round(overhead / n, 2), keep))
@@ -2540,7 +2568,7 @@ def _cascade_run(root, cfg, slug, base_arg, levels, n):
     keep = _keep(root, 'cascade', o.slug)
     print('%s cascade %s: %d level(s), %d attempt(s) per level from %s; the next level runs only when no attempt at this '
           'one is verified as %s done would' % (ODD, o.slug, len(levels), n, head[:10], ODD))
-    base_text, before, history = _prompt(o, cfg, fixed), [], []
+    base_text, before, history = _prompt(root, o, cfg, base, fixed), [], []
     more = (('agent', lambda at: _short(at['cmd'])),
             ('cost', lambda at: 'not reported' if at['cost'] is None else '$%g' % at['cost']))
     for lv, cmd in enumerate(levels, 1):

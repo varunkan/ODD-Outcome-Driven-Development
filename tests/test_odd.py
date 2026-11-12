@@ -3479,5 +3479,95 @@ class RaceCache(Agents):
         self.assertNotIn('x', json.load(open(cache))['entries'])
 
 
+class BoundaryContext(Repo):
+    """Backlog item 13: new (and the MCP new tool) prints the files inside the boundary, largest change first and
+    capped, and the test files the proof names, under "read these first"; race, cascade and chain prompts carry it."""
+
+    def setUp(self):
+        Repo.setUp(self)
+        for i in range(12):  # committed at the base, sizes rising with i
+            self.write('shop/m%02d.py' % i, 'x = 1\n' * (i + 1))
+        self.write('elsewhere/huge.py', 'y = 2\n' * 500)
+        self.write('tests/test_calc.py', TEST)
+        self.commit('shop')
+        self.git('branch', '-f', 'main')
+        self.write('shop/m00.py', 'x = 1\n' * 40)   # the largest change against the base
+        self.write('shop/new.py', 'z = 3\n' * 3)    # untracked, inside: its 3 lines are its change
+
+    def listing(self, out):
+        self.assertIn('read these first', out)
+        return out[out.index('read these first'):]
+
+    def test_new_lists_the_boundary_largest_change_first_capped_and_the_proofs_test_files(self):
+        out = self.listing(self.ok('new', 'shop', 'A shopper who checks out sees the right total.', '--proof', PROOF,
+                                   '--in', 'shop/**'))
+        names = re.findall(r'(?m)^  (\S+\.py)\b', out)
+        self.assertEqual(names[:3], ['shop/m00.py', 'shop/new.py', 'shop/m11.py'], out)
+        self.assertEqual(len([n for n in names if n.startswith('shop/')]), oddmod.READ_FIRST, out)
+        self.assertIn('and %d more' % (13 - oddmod.READ_FIRST), out)
+        self.assertNotIn('shop/m01.py', out, 'the smallest unchanged files fall past the cap')
+        self.assertRegex(out, r'(?m)^the proof runs: tests/test_calc\.py$', out)
+        listed = re.findall(r'(?m)^  (\S+) \(', out)
+        self.assertTrue(listed and all(p.startswith('shop/') for p in listed), 'nothing outside the boundary is listed')
+        for outside in ('elsewhere/huge.py', 'README.md', '.odd/'):
+            self.assertNotIn(outside, out)
+
+    def test_odds_own_files_are_never_listed(self):
+        self.ok('init')
+        out = self.listing(self.ok('new', 'all', 'A shopper who checks out sees the right total.', '--proof', PROOF,
+                                   '--in', '**'))
+        self.assertIn('shop/m00.py', out)
+        self.assertNotIn('.odd/', out)
+
+    def test_a_changed_binary_file_is_not_ranked_as_a_big_change(self):
+        with open(self.path('shop/logo.bin'), 'wb') as f:
+            f.write(b'\0\1' * 10)
+        out = self.listing(self.ok('new', 'shop', 'A shopper who checks out sees the right total.', '--proof', PROOF,
+                                   '--in', 'shop/**'))
+        self.assertEqual(re.findall(r'(?m)^  (\S+) ', out)[:2], ['shop/m00.py', 'shop/new.py'], out)
+        self.assertNotIn('logo.bin', out, 'a 20-byte binary falls past the cap')
+
+    def test_a_boundary_with_no_file_yet_says_so(self):
+        out = self.listing(self.ok('new', 'pay', 'A shopper who pays sees a receipt number.', '--proof',
+                                   'python3 -m unittest tests.test_pay', '--in', 'pay/**'))
+        self.assertIn('no file inside the boundary exists yet', out)
+        self.assertIn('the proof runs: no file it names exists yet', out)
+
+    def test_the_mcp_new_tool_returns_the_list(self):
+        msg = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'new', 'arguments': {
+            'slug': 'shop', 'outcome': 'A shopper who checks out sees the right total.', 'proof': PROOF,
+            'in': 'shop/**'}}}
+        r = subprocess.run([sys.executable, MCP], cwd=self.dir, capture_output=True, text=True, timeout=120,
+                           input=json.dumps(msg) + '\n')
+        text = json.loads(r.stdout.splitlines()[0])['result']['content'][0]['text']
+        out = self.listing(text)
+        self.assertIn('shop/m00.py', out)
+        self.assertNotIn('elsewhere/huge.py', out)
+
+
+class BoundaryPrompt(Agents):
+    """Backlog item 13: the prompt file of race, cascade and chain carries the same "read these first" list."""
+
+    def test_the_race_prompt_lists_the_boundary_and_the_proofs_test_files(self):
+        keep = os.path.join(self.bin, 'prompt.txt')
+        self.write('elsewhere.py', 'q = 1\n')
+        self.config([self.agent('correct', 'cp "$1" %s\n' % keep + self.writes(FIXED))])
+        self.ok('race', 'add', '--n', '1')
+        with open(keep) as f:
+            prompt = f.read()
+        out = prompt[prompt.index('read these first'):]
+        self.assertRegex(out, r'(?m)^  calc\.py\b', out)
+        self.assertRegex(out, r'(?m)^the proof runs: tests/test_calc\.py$', out)
+        for outside in ('elsewhere.py', 'README.md'):
+            self.assertNotIn(outside, out)
+
+    def test_the_cascade_prompt_carries_it_too(self):
+        keep = os.path.join(self.bin, 'prompt.txt')
+        self.config([self.agent('correct', 'cp "$1" %s\n' % keep + self.writes(FIXED))])
+        self.ok('cascade', 'add')
+        with open(keep) as f:
+            self.assertIn('read these first', f.read())
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -27,7 +27,8 @@ NOCACHE = ('no-cache', B, 'verify in full even when the inputs match an earlier 
 POSITIONAL = ('slug', 'ticket', 'outcome', 'reason', 'what', 'question')
 TOOLS = (  # name, description, arguments (name, schema, description), the required ones
     ('new', 'State an outcome before the code: writes .odd/outcomes/<slug>.md. proof "auto" picks a narrow command '
-            'from the test runner the repository uses and says what it detected.',
+            'from the test runner the repository uses and says what it detected. Ends with "read these first": the files '
+            'inside the boundary (largest change first, at most ten) and the files the proof names.',
      [SLUG, ('outcome', S, 'one sentence: who observes what result'),
       ('proof', S, 'a command that exits 0 only when the outcome holds, or "auto" (optional with kind "refactor": '
                    'the whole suite)'),

@@ -50,7 +50,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | command | what it does | exit |
 |---|---|---|
 | `odd init [--claude-hooks] [--mcp]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step, the conditions under which CI is the authority, and a proof suggestion (section 3a); `--mcp` also installs the MCP server (section 7) | 0 |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0); `--kind bug|feature|refactor` writes `kind:` and prints a hint (sections 4a, 4c; needs a tool newer than 0.4.0); `--proof` may be left out only with `--kind refactor` (exit 2 otherwise, as before); refuses a sentence with no observable (section 4b; a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0); `--kind bug|feature|refactor` writes `kind:` and prints a hint (sections 4a, 4c; needs a tool newer than 0.4.0); `--proof` may be left out only with `--kind refactor` (exit 2 otherwise, as before); refuses a sentence with no observable (section 4b; a tool newer than 0.4.0); after creating the file prints "read these first" (section 3f; a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
@@ -269,6 +269,22 @@ whose proof or `in:` was edited after its checkpoint is not re-proven by the cha
 guard of section 5b still judge it). Commit hooks of the repository run on every checkpoint. Outcomes run one after
 another; nothing runs two outcomes of one chain in parallel. Measured (fake agents, this machine): see BACKLOG
 item 10.
+
+### 3f. Boundary as context: "read these first"
+
+A tool newer than 0.4.0 (backlog item 13; no setting). After `odd new` writes the outcome file (also through the MCP
+`new` tool, which returns odd's output) it prints, under the heading `read these first`, the files inside the
+outcome's `in:` boundary that exist (tracked or untracked and not ignored, never under `.odd/`), at most ten
+(`READ_FIRST`), the largest change against the base first (changed lines from `sizes()`, the helper the small-change
+lane uses; a binary counts as no lines), then the largest file, then by path, with `and N more` past the cap; and
+`the proof runs: <files>`, the repository files the proof command names (`proof_runs()`, the reader the
+take-out check uses). The prompt file of `race`, `cascade` and `chain` (`_prompt()`) carries the same block, computed
+in the user's tree from the same base, so an agent starts from the boundary instead of exploring the repository.
+Without a target branch to measure from (no `main`, `master` or `--base`), `new` lists against the empty tree, so
+every file counts its whole length as changed. Limits: the list is a reading order, not a closure (imports of a
+listed file and callers outside the boundary are not listed); a proof that reaches its tests through `cd` or a
+script is read as text, as in the take-out check; whether the list cuts an agent's turns and tokens (the item's
+measure) is not measured.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 

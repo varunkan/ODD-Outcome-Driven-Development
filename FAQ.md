@@ -172,6 +172,12 @@ the target branch sets `"cache_file"` to a path outside the repository, and only
 wrote count; restore that file on pull requests and save it only from the target branch, so a pull request cannot
 plant an entry. Ignored files, installed packages and the environment are not in the key (DESIGN.md section 5d).
 
+**Does odd tell the agent where to look?** Yes (a tool newer than 0.4.0). `odd new` and the MCP `new` tool end with
+`read these first`: the files inside the outcome's boundary that exist, at most ten, the largest change first, and
+the test files the proof names; race, cascade and chain put the same list in the agent's prompt. It lists nothing
+outside the boundary, so a file the change needs outside it is still the agent's to find (and to add to `in:`).
+Whether this saves turns or tokens is not measured (DESIGN.md section 3f).
+
 **Can a pull request's code get the comment token or forge odd's comment?** Not through the environment: the gate
 step, which runs the proofs, gets no token; a later step posts the comment. Only a comment by the bot (input
 `author`) starting with the marker is updated, and text from the change is escaped. A proof runs as the same user,

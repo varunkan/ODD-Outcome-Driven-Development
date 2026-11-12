@@ -86,7 +86,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | command | what it does |
 |---|---|
 | `odd init [--claude-hooks] [--mcp]` | set up or repair a project; prints the step to add to CI and a proof suggestion |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected; `--covers R1,R3` names the ticket requirements it covers; `--kind bug` requires the proof to fail on the unfixed code; `--kind feature` and `--kind refactor` fill their defaults and hints (all a tool newer than 0.4.0) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected; `--covers R1,R3` names the ticket requirements it covers; `--kind bug` requires the proof to fail on the unfixed code; `--kind feature` and `--kind refactor` fill their defaults and hints; prints the files to read first (all a tool newer than 0.4.0) |
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd race <slug> [--n N] [--agent CMD]` | run N agent attempts in parallel, each in its own git worktree; the verified one with the strongest proof and fewest changed lines is applied to your tree (a tool newer than 0.4.0) |
 | `odd cascade <slug> [--agents C1,C2] [--race N]` | try the agents in order, cheapest first, each attempt in its own worktree; stop at the first verified one and apply it, else escalate with the failure in the next prompt, and park after the last (a tool newer than 0.4.0) |
@@ -160,6 +160,12 @@ what an earlier `--recompute` wrote; restore it on pull requests and save it onl
 also says how many earlier proofs the regression guard skipped as unaffected. Measured on the test fixture: a second
 `done` 0.22 s against 0.91 s, a second `gate --recompute` 0.16 s against 0.73 s (5.66 s with a proof that sleeps 1 s).
 Ignored files, installed packages and the environment are not in the key. Details: [DESIGN.md](DESIGN.md) section 5d.
+
+**The agent starts from the boundary.** After `odd new` (and the MCP `new` tool) writes the outcome, it prints
+`read these first`: the files inside `in:` that exist, at most ten, the largest change against the base first, then
+the largest file, and the files the proof names. The race, cascade and chain prompt carries the same list (a tool
+newer than 0.4.0, no setting). Whether it saves an agent turns or tokens is not measured yet. Details:
+[DESIGN.md](DESIGN.md) section 3f.
 
 **An auto-merge lane, off by default.** With `"auto_lane": true` (a tool newer than 0.4.0) the gate also says
 `"lane": "auto"` or `"lane": "review"` with its reasons: auto only when the gate passed, every outcome in the change
