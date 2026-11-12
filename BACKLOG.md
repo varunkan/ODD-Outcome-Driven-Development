@@ -577,3 +577,7 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   attempt cannot deliver them while the proof is wrong.
 - **Measure:** delivered doable tasks on the same harness with disputes sent back, against run C; false DONE must not
   rise (a rewritten proof is sealed red again, before any code).
+- **Done** in the commit "B23: a disputed proof waits for an answer instead of parking" (`git log --grep '^B23:'`), a
+  tool newer than 0.4.0 ([DESIGN 3d1](DESIGN.md)). Tests: `Disputes`. The harness sends a disputed proof back to its
+  author once (`odd spec`; the arm's own model for race and cascade, the strong model for spec) and runs the attempts
+  again; test `test_a_disputed_proof_goes_back_to_its_author_once_and_the_race_runs_again`. Measure: not yet run.

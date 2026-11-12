@@ -231,6 +231,25 @@ reviewer reading the proof are the defences). A kill during the author's run lea
 worktree is removed on the next race, cascade or spec); a kill between bringing the proof back and sealing it can
 leave the unsealed test files in your tree. The author can write outside its worktree, as in race.
 
+### 3d1. A disputed proof: `odd-dispute:`
+
+Needs a tool newer than 0.4.0 (backlog item 23). A sealed proof can be wrong, and then no attempt can pass it
+honestly; in the comparison's rerun the attempts said so, precisely, in 17 of 18 such runs
+([16](docs/evidence/16-new-arms.md#after-the-fixes)). The race prompt (also cascade's and chain's) tells an attempt:
+if the proof itself is wrong (an assertion contradicts the outcome, the request or the proof's own data), do not
+change it or work around it, print one line `odd-dispute: <the assertion, and why it is wrong>` and exit. odd reads
+the last such line from a refused attempt's log (`_said()`, as for `odd-cost:`). When no attempt is verified and at
+least one disputed (`disputed()`), the outcome is neither parked nor failed blind: its `asked:` line becomes `Is the
+proof right? <k> of <n> attempt(s) dispute it: <each distinct dispute>`, the waiting-for-an-answer state of section
+4b (the gate reports it as waiting; `done` refuses it), and the command exits 1 naming the first dispute. Cascade
+runs no dearer level once any attempt at a level disputes. Race, cascade and chain refuse an outcome that waits for
+an answer (exit 2) and spend no attempt. Answering: a person corrects the proof and reseals it, or keeps it, and
+deletes the `asked:` line; or `odd spec <slug> --proof-by <cmd>` rewrites it: on a disputed outcome it may replace a
+sealed proof, its prompt carries the disputes, the new proof must fail before the code and is sealed again, and then
+the `asked:` line is removed. A wrong dispute loosens nothing; the attempt budget (section 3g) wins over a dispute.
+Limits: one disputing attempt is enough, so a lazy attempt can stop a race for a person's review (it costs a review,
+never a false DONE); odd does not judge whether a dispute is right.
+
 ### 3e. `odd chain`: a long task as a chain of proven outcomes
 
 `odd chain <ticket> [--race N] [--cascade] [--agents C1,C2] [--base REF]` reads `.odd/chains/<ticket>.md`: one outcome

@@ -322,6 +322,15 @@ def odd_flow(mode, prompt):
             cmd = odd + ['race', slug, '--n', '3' if mode == 'race' else '1', '--agent',
                          session_command(cheap, 'attempt'), '--base', 'main']
         code, out = sh(cmd, said)
+        if code and (outcome_field(path, 'asked') or '').startswith('Is the proof right?'):
+            # backlog item 23: the disputed proof goes back to its author once, then the same attempts run again
+            author = strong if mode == 'spec' else cheap
+            fixed, again = sh(odd + ['spec', slug, '--proof-by', session_command(author, 'proof'), '--base', 'main'], said)
+            if fixed == 0:
+                commit('odd: %s proof rewritten after a dispute' % slug)
+                code, out = sh(cmd, said)
+            else:
+                out = again
         if code:
             return refuse('odd %s %s: %s' % (cmd[2], slug, why(out)))
         code, out = sh(odd + ['done', slug, '--base', 'main'], said)
@@ -347,6 +356,9 @@ def main(argv=None):
         status, result = session(sys.stdin.read(), a.model, a.name)
         if result is not None:
             print(json.dumps(result))
+            for line in (result.get('result') if isinstance(result.get('result'), str) else '').splitlines():
+                if line.startswith(('odd-dispute:', 'odd-wrong:')):  # the protocol lines odd reads from an agent
+                    print(line)
             if isinstance(result.get('total_cost_usd'), (int, float)):
                 print('odd-cost: %.6f' % result['total_cost_usd'])  # the line odd cascade and odd stats read
         return 0 if status == 0 and result is not None else (status or 1)

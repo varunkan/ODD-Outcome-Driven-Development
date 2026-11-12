@@ -61,7 +61,7 @@ if role == 'outcome':
     else:
         sh(odd + " new add-sum 'add(2, 3) returns 5, the sum' --proof 'python3 -m unittest tests.test_sum' --in calc.py")
         if 'odd seal' in prompt:  # the arm asks this session for the proof too
-            open('tests/test_sum.py', 'w').write(PROOF)
+            open('tests/test_sum.py', 'w').write(PROOF.replace('add(2, 3), 5', 'add(2, 3), 6') if mode == 'dispute' else PROOF)
             sh(odd + ' seal add-sum --base main')
         text = 'Outcome stated.\nRESULT: DONE'
 elif role == 'proof':
@@ -73,8 +73,12 @@ elif role in ('attempt', 'plain'):
     if mode == 'peek' and role == 'attempt':
         tool['input'] = {'command': 'cat ../tests_hidden/test_add.py'}
     wrong = mode == 'weak' and model == 'haiku'
-    open('calc.py', 'w').write('def add(a, b):\n    return %s\n' % ('a * b' if wrong else 'a + b'))
-    text = 'Fixed.\nRESULT: DONE' if role == 'plain' else 'Fixed.'
+    if mode == 'dispute' and role == 'attempt' and 'add(2, 3), 6' in open('tests/test_sum.py').read():
+        text = 'The proof is wrong.\nodd-dispute: tests/test_sum.py expects add(2, 3) == 6, the outcome says 5'
+        tool['input'] = {'command': 'cat tests/test_sum.py'}
+    else:
+        open('calc.py', 'w').write('def add(a, b):\n    return %s\n' % ('a * b' if wrong else 'a + b'))
+        text = 'Fixed.\nRESULT: DONE' if role == 'plain' else 'Fixed.'
 name = 'claude-%s-fake' % model
 cost = {'haiku': 0.01, 'sonnet': 0.1}[model] * {'outcome': 1, 'proof': 2, 'attempt': 3, 'plain': 1}[role]
 for event in ({'type': 'system', 'subtype': 'init', 'model': name},
@@ -159,6 +163,15 @@ class ArmAgentTest(unittest.TestCase):
         self.assertEqual(sorted(roles), [('attempt', 'haiku'), ('attempt', 'sonnet'), ('outcome', 'haiku')])
         self.assertAlmostEqual(r['cost_usd'], 0.01 + 0.03 + 0.3)
         self.assertEqual(r['models'], ['claude-haiku-fake', 'claude-sonnet-fake'])
+
+    def test_a_disputed_proof_goes_back_to_its_author_once_and_the_race_runs_again(self):
+        done, recs = self.run_arms(['odd-race'], mode='dispute')
+        r = recs['odd-race']
+        self.assertEqual((r['passed'], r['claim'], r['error']), (True, 'DONE', None), r['final'])
+        self.assertIn('odd spec add-sum', r['final'])
+        roles = sorted((c['role'], c['model']) for c in self.calls())
+        self.assertEqual(roles, [('attempt', 'haiku')] * 6 + [('outcome', 'haiku'), ('proof', 'haiku')],
+                         'the race arm\'s proof author is its own (cheap) model')
 
     def test_spec_has_the_strong_model_write_the_proof_and_one_cheap_attempt_write_the_code(self):
         done, recs = self.run_arms(['odd-spec'])
