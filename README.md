@@ -31,7 +31,7 @@ ODD keeps the one part that does not depend on the model agreeing: "done" is dec
 It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
 the model. Questions and objections: [FAQ](FAQ.md).
 
-> **Status: early (0.4.0).** The tool passes its own tests (120), including the ways an agent could fake "done". It
+> **Status: early (0.4.0).** The tool passes its own tests (126), including the ways an agent could fake "done". It
 > has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
 >
 > **Does it work better? Not claimed yet.** A same-task comparison is running: 16 tasks with hidden acceptance tests,
@@ -118,6 +118,14 @@ or a sealed test file changes afterwards, `odd done` and the gate fail until it 
 outcome file, so it shows in the diff. It makes fitting the test to the code visible; it does not stop it. A reseal
 needs the proof red again, so take the product change out first. Unsealed outcomes work as before.
 
+**Changed tests and empty proofs fail closed.** A change that edits or deletes a test file that existed at the base
+fails `odd done` and the gate unless an outcome in the change says why with `test-change: <reason>`; the gate and the
+review comment print the reason. New test files need none. A proof that exits 0 but ran no test, skipped every test
+it ran, or stopped before its runner printed its summary (`sys.exit(0)` at import, an empty suite, `go test` with no
+test files) is refused, for unittest, pytest, jest and go test, read from the proof's own output and deliberately
+conservative ([DESIGN](DESIGN.md) section 4 lists what is not detected). On seeded fixtures of the systemic hacks,
+0.4.0 accepted 6 of 8 and this version refuses all 8; three honest fixes still pass.
+
 **Escaped defects.** When a defect gets past a verified outcome, run `odd escaped <slug> "<what went wrong, where it
 was found>"`. It appends a dated entry to that outcome's `escaped:` line and tells you the next step: a new outcome
 whose proof fails on the escaped behaviour. `odd stats` then counts escapes against outcomes that were sealed or not,
@@ -138,6 +146,8 @@ It fetches the history it needs, judges the change with the action's own pinned 
 pull request carries) and reads the settings at the tip of the target branch. Pin a tag or a commit, and make the step
 a required check. Other CI systems use the two lines `odd init` prints; they do the same. The `strength` and
 `mutants` settings and the `sealed:` field need the Action at 0.4.0 or later: an older pinned Action refuses them.
+The `test-change:` field needs a tool newer than 0.4.0 (the next release): the Action at v0.4.0 refuses it as an
+unknown field, and does not enforce the changed-test and empty-proof rules.
 
 The result is written for the reviewer: per outcome its sentence, its proof, what the proof said with the change
 taken out and its strength score, then the exemptions and any control files changed. It goes to the job's step

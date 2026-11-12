@@ -140,8 +140,9 @@ Superpowers, three times each, on two models. It measures whether the work is re
 | "We already use Spec Kit or BMAD." | Keep them. They plan; ODD checks the result. |
 | "Does it make agents better?" | Not proven. The comparison will say, and it will be published either way. |
 | "What if the work cannot be done?" | `odd park <slug> "<why>"`. An honest "blocked" is a valid result. |
-| "Can the agent just rewrite the test to fit its code?" | Only visibly, if the outcome is sealed. `odd seal <slug>` before the code checks the proof fails and fingerprints the test files in the outcome file; editing them later fails `done` and the gate until a reseal, which changes the outcome file in the diff. Optional; a reviewer still has to look. |
+| "Can the agent just rewrite the test to fit its code?" | Not silently. Editing or deleting a test that existed at the base fails `done` and the gate unless the outcome says why (`test-change: <reason>`), and the review comment prints that reason. A test the change adds is covered only if the outcome is sealed. `odd seal <slug>` before the code checks the proof fails and fingerprints the test files in the outcome file; editing them later fails `done` and the gate until a reseal, which changes the outcome file in the diff. Optional; a reviewer still has to look. |
 | "What happens when a bug gets through anyway?" | `odd escaped <slug> "<what, where found>"` records it on the outcome it got past, and you write a new outcome whose proof fails on that bug. `odd stats` splits recorded escapes by sealed, take-out skipped and proof strength, so a team sees which kinds of proof leak. Only what someone records is counted, and strength only where it was measured locally. |
+| "Can the proof just skip its test or exit 0 early?" | Not for unittest, pytest, jest or go test: a proof that exits 0 having run no test, skipped every test, or stopped before the runner's summary (`sys.exit(0)` at import) is refused. It reads the output and is conservative: a multi-step proof, a script run directly or a quieted runner is not checked (DESIGN section 4). |
 | "Does it check that my test is thorough?" | Partly. It checks that the proof depends on the change, then makes up to eight small breaks in the changed lines and names each one the proof misses (`"strength": "enforce"` fails on them). Under enforce a break whose run did not complete (exit 126, 127, 129-192, a timeout) fails too. No survivor is not proof of thoroughness; a person should still read the outcome sentence and the proof. |
 
 Full limits: [DESIGN.md](DESIGN.md#10-limits).
@@ -161,7 +162,7 @@ On GitHub Actions, one step at the end of your test job, made a required check:
 ```yaml
 - uses: varunkan/ODD-Outcome-Driven-Development@v0.4.0
 ```
-Other CI systems use the two lines `odd init` prints. The `strength`/`mutants` settings and `sealed:` need 0.4.0 or later.
+Other CI systems use the two lines `odd init` prints. The `strength`/`mutants` settings and `sealed:` need 0.4.0 or later; `test-change:` needs a tool newer than 0.4.0 (v0.4.0 refuses it as an unknown field).
 
 **Can a pull request's code get the comment token or forge odd's comment?** Not through the environment: the gate
 step, which runs the proofs, gets no token; a later step posts the comment. Only a comment by the bot (input

@@ -34,7 +34,9 @@ Free notes: questions asked and answered, decisions and why.
 - `in`: globs of the product files this outcome may change (its boundary).
 - Paths, globs and the proof are relative to the repository root.
 - Optional lines: `counterfactual: skip - <reason>`, `parked: <reason>`, `escaped: ...` (written by `odd escaped`,
-  section 9), `sealed: ...` (written by `odd seal`, section 4).
+  section 9), `sealed: ...` (written by `odd seal`, section 4), `test-change: <reason>` (why this change edits or
+  deletes a test that existed at the base, section 5; needs a tool newer than 0.4.0, the next release:
+  a pinned Action at 0.4.0 or older refuses the unknown field).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -153,6 +155,29 @@ evidence; `odd stats` counts an outcome as sealed only when that event matches i
 `unseen` otherwise (a hand-written line, or a seal made on another machine). CI cannot check that the seal came
 first; what it does check, with the sealed test files in place, is the take-out: the proof fails over the base.
 
+**A proof that ran no test is not a proof.** Before anything else, a proof that exited 0 is read for the signs
+that it showed nothing, and refused (exit 1) when one is there. This applies under `counterfactual: skip` too, where
+the take-out check would not catch it. What is read, from the last 20 lines of the proof's own output:
+
+- unittest: `Ran 0 tests`, or `OK (skipped=N)` where N is every test it ran.
+- pytest: `no tests ran`, or a summary with skipped tests and none passed, xpassed or failed.
+- jest: `Tests: ... 0 total`, `Tests:` with skipped and none passed, or `No tests found, exiting with code 0`.
+- go test: every package line `[no test files]` or `[no tests to run]` (only when the output is under 20 lines,
+  so no earlier `ok` line can have been cut off).
+- A summary that says the tests took more than a second longer than the whole proof ran: a run did not print it.
+- An early exit 0: a proof that is one command calling `python -m unittest`, `pytest` (or `python -m pytest`) or
+  `go test`, and whose output lacks the summary that runner always prints when it finishes (`Ran N tests in`, the
+  pytest count line or its `[100%]` progress mark, which `-qq` in `addopts` still prints, a go package line). This is how `sys.exit(0)` at import shows: the runner never reaches its
+  summary.
+
+It is deliberately conservative: a proof of several steps (`&&`, `;`, a pipe), a runner told to print less (`-qq`,
+`--json`, `-p no:terminal`, a custom reporter), a script run directly (`python3 tests/check.py`), jest's missing
+summary, and a test run where some tests are skipped and others pass are not refused. Not detected: `sys.exit(0)`
+inside a script or a test file run directly, `os._exit(0)` after a fake summary printed by the code itself, a test
+that passes because it asserts nothing (the take-out check catches that unless the outcome is a skip), and runners
+not named here (mocha, rspec, cargo, ctest and the rest). The jest patterns are written from jest's known summary
+lines and have not been run against jest here; unittest, pytest and go test were.
+
 **A skip is an exemption with a reason, not a verification.** `counterfactual: skip - <reason>` is for a change
 where nothing can fail first: a pure refactor, a dependency bump, a removal, a submodule pointer. The proof must
 still pass. Every skip is named in the gate's result with its reason and its changed-line count.
@@ -174,8 +199,16 @@ product file is inside the boundary of exactly one verified in-play outcome, or 
 
 The gate report is written for the person who reviews the change. Per outcome: the files and lines taken out, the
 last line the proof printed when it failed, the seconds. Per change: the lines that passed under each exemption (the
-small-change lane, exempt paths, each skip with its reason), test files that existed at the base and were modified or
-deleted, and control files changed.
+small-change lane, exempt paths, each skip with its reason), the test files changed, and control files changed.
+
+**An edit to an existing test fails closed.** A test file (under `test_globs`, read from the target branch under
+`--recompute`) that existed at the base and is modified or deleted fails `odd done` and the gate, naming the files,
+unless an in-play outcome that is not parked carries `test-change: <reason>`. The gate's test-files line and the
+review comment then show `test-change (<slug>): <reason>`, so a reviewer reads why. Rewriting the test is the
+easiest way to make a proof pass, and the main route models used to cheat on impossible tasks (ImpossibleBench,
+[docs/evidence/14-research.md](docs/evidence/14-research.md) 2.2). New test files need no reason. A change with no
+outcome (the small-change lane) that edits an existing test needs one now. The reason is text written by the party
+being checked: it makes the edit visible, it does not judge it.
 
 **CI is the authority only when** (1) the gate is a required check on the target branch, (2) the tool, its settings
 and the CI configuration cannot change without a person's review, and (3) the agent cannot merge or push to the
@@ -306,4 +339,6 @@ line still loads, and is now counted as one escape against the outcome that carr
   "could not run". Editing a merged outcome file puts it back in play.
 - Windows, Git LFS and `autocrlf` are untested. A submodule change needs a skip.
 - Only Claude Code has been run with it. The other tools' paths rest on their documentation.
+- The empty-proof check reads output, so a proof that prints a convincing summary and exits 0 by itself gets past
+  it; it covers four runners, conservatively (section 4). `test-change:` takes any reason.
 - Every effectiveness figure is unmeasured until the comparison runs.

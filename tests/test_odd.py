@@ -513,6 +513,87 @@ class ProofStrength(Repo):
         self.assertEqual(oddmod.pick([1, 2], 0), [])
 
 
+KEEP = 'import unittest\n\n\nclass K(unittest.TestCase):\n    def test_keep(self):\n        self.assertTrue(True)\n'
+
+
+class FailClosed(Repo):
+    """R2: an edit to a test that existed at the base needs a stated reason, and a proof that ran no test is no proof."""
+
+    def _old_test(self):
+        self.git('checkout', '-q', 'main')
+        self.write('tests/test_keep.py', KEEP)
+        self.commit('an existing test')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.outcome()
+        self.solve()
+
+    def test_editing_an_existing_test_fails_done_and_the_gate_until_the_outcome_says_why(self):
+        self._old_test()
+        self.write('tests/test_keep.py', KEEP.replace('assertTrue(True)', 'assertTrue(1)'))
+        for out in (self.no('done', 'add'), self.no('gate')):
+            self.assertIn('tests/test_keep.py', out)
+            self.assertIn('test-change: <reason>', out)
+        self.add_line('add', 'test-change: the old test pinned the bug')
+        self.ok('done', 'add')
+        md = os.path.join(self.dir, '.git', 'summary.md')
+        out = self.ok('gate', '--summary', md)
+        self.assertIn('test-change (add): the old test pinned the bug', out)
+        self.assertIn('test-change (add): the old test pinned the bug', self.read('.git/summary.md'))
+
+    def test_deleting_an_existing_test_fails_done_and_recompute(self):
+        self._old_test()
+        os.remove(self.path('tests/test_keep.py'))
+        self.assertIn('test-change: <reason>', self.no('done', 'add'))
+        self.commit('work')
+        self.assertIn('tests/test_keep.py', self.no('gate', '--recompute', '--base', 'main'))
+
+    def test_a_parked_outcome_cannot_give_the_reason(self):
+        self._old_test()
+        self.write('tests/test_keep.py', KEEP + '# edited\n')
+        self.ok('new', 'later', 'Someone later sees something.', '--proof', 'true', '--in', 'other.py')
+        self.add_line('later', 'test-change: not mine to give')
+        self.add_line('later', 'parked: waiting')
+        self.assertIn('test-change: <reason>', self.no('done', 'add'))
+
+    def test_a_proof_whose_code_exits_0_at_import_ran_no_test(self):
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)
+        self.write('calc.py', BROKEN + 'import sys\nsys.exit(0)\n')
+        out = self.no('done', 'add')
+        self.assertIn('is not a proof', out)
+        self.assertIn('Ran N tests', out)
+
+    def test_a_skipped_test_is_not_a_proof_even_under_a_skip(self):
+        self.outcome()
+        self.write('calc.py', FIXED)
+        self.write('tests/test_calc.py', TEST.replace('    def test_add', '    @unittest.skip("later")\n    def test_add'))
+        self.add_line('add', 'counterfactual: skip - a refactor')
+        self.assertIn('skipped every test it ran', self.no('done', 'add'))
+
+    def test_hollow_reads_the_common_runners_conservatively(self):
+        h = oddmod.hollow
+        py, pt, gt, js = 'python3 -m unittest -q t', 'python3 -m pytest -q t.py', 'go test ./...', 'npx jest'
+        refused = [(py, 'Ran 0 tests in 0.000s\n\nOK', 0.1), (py, 'Ran 2 tests in 0.001s\n\nOK (skipped=2)', 0.1),
+                   (py, '', 0.1), ('PYTHONPATH=. python3 -m unittest t', 'all good', 0.1),
+                   (py, 'Ran 1 test in 9.000s\n\nOK', 0.2), (pt, 'no tests ran in 0.01s', 0.5),
+                   (pt, '2 skipped in 0.01s', 0.5), (pt, '1 skipped, 3 deselected in 0.02s', 0.5), (pt, '', 0.5),
+                   (gt, '?   \tx\t[no test files]\n?   \tx/y\t[no test files]', 0.3), (gt, '', 0.3),
+                   (gt, 'ok  \tx\t0.002s [no tests to run]', 0.3),
+                   (js, 'Tests:       0 total\nTime: 0.2 s', 1.0), (js, 'Tests:       2 skipped, 2 total', 1.0),
+                   (js, 'No tests found, exiting with code 0', 1.0)]
+        legit = [(py, 'Ran 2 tests in 0.001s\n\nOK (skipped=1)', 0.1), (py, 'Ran 1 test in 0.4s\n\nOK', 0.4),
+                 (pt, '3 passed, 1 skipped in 0.10s', 0.5), ('python3 -m pytest -qq t.py', '.s  [100%]', 0.5),
+                 ('python3 -m pytest t.py', '..  [100%]', 0.5),
+                 (gt, '?   \tx\t[no test files]\nok  \tx/y\t0.002s', 0.3), (gt, 'ok  \tx\t(cached)', 0.1),
+                 (js, 'Tests:       1 skipped, 2 passed, 3 total', 1.0), ('npx jest --json', '{}', 1.0),
+                 ('sh check.sh', '', 0.0), ('python3 check.py', '', 0.0),
+                 (py + ' && sh more.sh', 'done', 0.1), ('cd sub && python3 -m unittest t', '', 0.1)]
+        for proof, tail, sec in refused:
+            self.assertTrue(h(proof, tail, sec), (proof, tail))
+        for proof, tail, sec in legit:
+            self.assertEqual(h(proof, tail, sec), '', (proof, tail))
+
+
 class Exemptions(Repo):
     def test_a_few_lines_need_no_outcome_and_more_do(self):
         self.write('calc.py', BROKEN + '# note\n')
@@ -533,7 +614,9 @@ class Exemptions(Repo):
         self.commit('a test')
         self.git('checkout', '-q', '-B', 'feat')
         self.write('tests/test_calc.py', TEST.replace('self.assertEqual(add(2, 3), 5)', 'pass'))
-        self.assertIn('existed before and were modified or deleted: tests/test_calc.py', self.ok('gate'))
+        out = self.no('gate')
+        self.assertIn('existed before and were modified or deleted: tests/test_calc.py', out)
+        self.assertIn('test-change: <reason>', out)
 
     def test_markdown_and_lockfiles_are_exempt_and_counted(self):
         self.write('README.md', 'words\n' * 200)

@@ -29,6 +29,13 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
 - **Evidence:** harness hardening cut exploits from 6.5% to 0.8% with no loss of success (arXiv 2605.02964); read-only
   tests stopped test edits, the main route Claude models used to cheat (ImpossibleBench); exit(0) and skip were the
   systemic hacks (arXiv 2503.11926). About 110 lines, no extra run time.
+- **Done** in the commit "R2: fail closed on changed tests and empty proofs" (`git log --grep '^R2:'`): field
+  `test-change:`, the empty-proof check in `hollow()`, 74 lines added and 8 removed in `odd.py`. Measured on seeded fixtures (exit(0)
+  at import, with and without a skip; unittest.skip on an existing test, with and without a skip; unittest.skip on a
+  new test under a skip; deleting the old test; an empty unittest suite under a skip; go test with no test files under
+  a skip): 0.4.0 accepted 6 of 8 in both `done` and `gate --recompute`, this version refuses 8 of 8, and three honest
+  controls (unittest, pytest, go) pass in both (Python 3.13, where an empty unittest suite already exits 5, so 0.4.0
+  refused that one; on 3.11 and older it exits 0, not measured). Not measured: the share of impossible-task cheats caught (needs R1).
 
 ### R3. Make parking the sanctioned answer
 - **Outcome:** the installed method tells the agent plainly to stop and explain with `odd park` when the task cannot

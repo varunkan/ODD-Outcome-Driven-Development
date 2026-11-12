@@ -52,7 +52,7 @@ DEFAULTS = {
     'mutants': 8,          # at most this many per outcome; each one is one proof run
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
@@ -319,7 +319,7 @@ class Outcome:
         key, n = None, 1
         while n < len(lines) and lines[n].strip() != '---':
             line = lines[n]
-            m = re.match(r'^([a-z_]+):\s?(.*)$', line)
+            m = re.match(r'^([a-z][a-z_-]*):\s?(.*)$', line)
             if m:
                 key = m.group(1)
                 if key not in FIELDS:
@@ -465,6 +465,24 @@ def standing(root, cfg, o, changed):
     return e if e and e.get('ok') and e.get('hash') == content_hash(root, cfg, o, changed, e.get('tests'))[0] else None
 
 
+def test_change(root, base, tests, outcomes):
+    """(touched, problem or '', what the reviewer reads or ''): test files that existed at the base and this change modified
+    or deleted, allowed only by a `test-change: <reason>` line in one of the given (in-play, not parked) outcomes.
+    A new test file needs no reason."""
+    old = set(zlist(root, 'ls-tree', '-r', '--name-only', '-z', base)) if base else set()
+    touched = [p for p in tests if p in old]
+    if not touched:
+        return touched, '', ''
+    named = ', '.join(touched[:8]) + (', ...' if len(touched) > 8 else '')
+    why = ['test-change (%s): %s' % (o.slug, o.get('test-change')) for o in outcomes if o.get('test-change')]
+    if why:
+        return touched, '', '; '.join(why)
+    return touched, ('%s existed at the base and %s modified or deleted. A change that edits or deletes an existing test fails '
+            'closed: rewriting the test is the easiest way to make a proof pass. If the edit is right, say why in the '
+            'outcome with the line "test-change: <reason>"; the gate and the review comment show it.'
+            % (named, 'was' if len(touched) == 1 else 'were')), ''
+
+
 # ---------------------------------------------------------------- proofs, and taking the change out
 
 def run_proof(root, cmd, timeout):
@@ -517,6 +535,46 @@ def proof_runs(proof, targets):
                 for n in range(1, len(parts) + 1):
                     names.update(['/'.join(parts[:n]) + '.py', '/'.join(parts[:n]) + '/__init__.py'])
     return sorted(set(targets) & {os.path.normpath(w) for w in names if w})
+
+
+SUMMARY = (  # (runner, how a proof command calls it, the summary line it prints when it completes)
+    ('unittest', re.compile(r'(^|\s)-m\s+unittest\b'), re.compile(r'(?m)^Ran \d+ tests? in ')),
+    ('pytest', re.compile(r'(^|\s|/)(py\.test|pytest)(\s|$)'), re.compile(r'(?m)(\d+ (passed|failed|skipped|errors?|deselected|xfailed|xpassed)\b.* in [\d.]+s|no tests ran|\[100%\])')),  # -qq in addopts: progress only
+    ('go test', re.compile(r'(^|\s|/)go\s+test\b'), re.compile(r'(?m)^(ok|\?|FAIL|PASS)\b')))
+QUIET = re.compile(r'(^|\s)(-qq+|-p\s*no:terminal|--json|-json|--reporter\S*|--junit\S*|--result-log\S*)(\s|=|$)')
+
+
+def hollow(proof, tail, seconds):
+    """Why a proof that exited 0 showed nothing, or '': it ran no test, skipped every test it ran, or ended before
+    its runner printed the summary it always prints. Read from the proof's own output for unittest, pytest, jest and
+    go test; conservative, so a proof it cannot read is never refused (DESIGN.md, section 4)."""
+    tail = tail or ''
+    m = re.findall(r'(?m)^Ran (\d+) tests? in ([\d.]+)s\s*\n\s*OK(?: \(.*?skipped=(\d+))?', tail)
+    if m and m[-1][0] == '0' or re.search(r'(?m)NO TESTS RAN|^no tests ran\b|=+ no tests ran|No tests found, exiting with code 0', tail):
+        return 'it ran no test'
+    if m and m[-1][2] and m[-1][2] == m[-1][0]:
+        return 'it skipped every test it ran (%s)' % m[-1][2]
+    pt = re.findall(r'(?m)^=*\s*((?:\d+ \w+(?:, )?)+) in ([\d.]+)s', tail)
+    count = lambda text, w: sum(int(n) for n in re.findall(r'(\d+) (?:%s)\b' % w, text))  # noqa: E731
+    if pt and count(pt[-1][0], 'skipped') and not count(pt[-1][0], 'passed|xpassed|failed'):
+        return 'it skipped every test it ran (%d)' % count(pt[-1][0], 'skipped')
+    js = re.findall(r'(?m)^Tests:\s+(.*\btotal)', tail)
+    if js and (re.search(r'\b0 total', js[-1]) or count(js[-1], 'skipped') and not count(js[-1], 'passed|failed')):
+        return 'it ran no test (jest: Tests: %s)' % js[-1].strip()
+    pk = re.findall(r'(?m)^(ok|\?)\s+\S+\s+(.*)$', tail)
+    if pk and len(tail.splitlines()) < 20 and all('[no test' in rest for _, rest in pk):
+        return 'it ran no test (go: %s)' % pk[-1][1].strip()
+    took = [float(t) for _, t, _ in m] + [float(t) for _, t in pt]
+    if took and max(took) > seconds + 1:
+        return 'its output says the tests took %ss, longer than the whole proof ran (%ss), so a run did not print it' % (
+            max(took), seconds)
+    if re.search(r'&&|\|\||[;|`\n]|\$\(', proof) or QUIET.search(proof):
+        return ''  # several steps, or a runner told not to print its summary: what printed what is not read
+    words = ' '.join(w for w in proof.split() if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', w))
+    for name, call, summary in SUMMARY:
+        if call.search(words) and not summary.search(tail):
+            return 'it exited 0 before %s printed its summary (for unittest "Ran N tests"), so no test ran to the end' % name
+    return ''
 
 
 def _bump(path, after):
@@ -903,6 +961,10 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
             '\n  it ran no tests: the runner may be wrong for these tests (pytest exits 5 when it collects none; '
             'unittest finds only unittest.TestCase classes); pick the runner in the proof yourself.')
             if rc == 5 or re.search(r'NO TESTS RAN|no tests ran|collected 0 items|Ran 0 tests', tail or '') else ''))
+    empty = hollow(o.get('proof'), tail, s1)
+    if empty:
+        raise Fail('the proof exited 0 but %s, so it is not a proof: %s\n%s\n  make the proof run the test that shows '
+                   'the outcome; a skip, an empty suite or an early exit 0 shows nothing.' % (empty, o.get('proof'), _indent(tail)))
     res = {'files': len(targets), 'lines': lines, 'seconds': [s1], 'red_says': '', 'skip': o.skip}
     if o.skip:
         return res
@@ -1064,10 +1126,11 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
         exempted.append('exempt paths: %d file(s), %s line(s)' % (
             len(s['exempt']), sum(min(v, 10 ** 5) for v in sizes(root, base, s['exempt']).values())))
     if s['tests']:
-        old = set(zlist(root, 'ls-tree', '-r', '--name-only', '-z', base)) if base else set()
-        touched = [p for p in s['tests'] if p in old]
-        exempted.append('test files: %d changed%s' % (len(s['tests']), ('; existed before and were modified or deleted: '
-                                                                       + ', '.join(touched[:8])) if touched else ''))
+        touched, bad, why = test_change(root, base, s['tests'], active)
+        exempted.append('test files: %d changed%s%s' % (len(s['tests']), ('; existed before and were modified or deleted: '
+                                                                         + ', '.join(touched[:8])) if touched else '',
+                                                        '; allowed by ' + why if why else ''))
+        problems += [bad] if bad else []
     lines += ['  ' + e for e in exempted]
     exempted += ['skip: ' + k for k in skips]
     if s['control']:
@@ -1166,9 +1229,12 @@ def cmd_new(a, root):
 
 
 def cmd_done(a, root):
-    o, cfg = Outcome.load(root, a.slug), load_config(root)
-    base, _ = find_base(root, cfg, a.base)
+    o, s = Outcome.load(root, a.slug), survey(root, a.base)
+    cfg, base = s['cfg'], s['base']
     try:
+        _, bad, _ = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug])
+        if bad:
+            raise Fail(bad)
         res = verify(root, cfg, o, base, changed_files(root, base), print)
     except Fail as e:
         record(root, a.slug, ok=False, why=str(e)[:300])
