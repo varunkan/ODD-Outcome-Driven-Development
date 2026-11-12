@@ -1072,6 +1072,58 @@ class RedTeam(Repo):
         self.assertIn('@AGENTS.md', self.read('CLAUDE.local.md'))
 
 
+class ReviewSummary(Repo):
+    """`odd gate --summary FILE` (Markdown) and `--json FILE`: what a reviewer reads instead of the diff."""
+    TWO = ProofStrength.TWO
+
+    def gate_files(self, *a, code=0):
+        md, js = self.path('.git/s.md'), self.path('.git/s.json')
+        out = self.no('gate', '--summary', md, '--json', js, *a, code=code)
+        with open(md) as f, open(js) as g:
+            return out, f.read(), json.load(g)
+
+    def test_the_summary_names_each_outcome_its_proof_what_it_said_and_the_verdict(self):
+        self.outcome(proof=PROOF + ' || false')
+        self.solve()
+        self.write('calc.py', self.TWO)
+        self.ok('done', 'add')
+        out, md, js = self.gate_files()
+        self.assertIn('PASS', out, 'the printed report is unchanged by the summary options')
+        self.assertTrue(md.startswith(oddmod.MARKER + '\n'), 'the hidden marker finds the comment again')
+        self.assertIn('odd gate: PASS', md.split('\n')[1])
+        self.assertIn(SENTENCE, md)
+        self.assertIn('\\|\\| false`', md, 'a pipe in the proof does not break the table row')
+        self.assertIn('FAILED (failures=1)', md, 'what the proof said with the change taken out')
+        self.assertIn('caught 1 of 2', md)
+        self.assertIn('calc.py:6 - -> +', md, 'each survivor is named')
+        self.assertEqual((js['verdict'], js['exit']), ('PASS', 0))
+        o = js['outcomes'][0]
+        self.assertEqual((o['slug'], o['state'], o['proof']), ('add', 'ok', PROOF + ' || false'))
+        self.assertEqual(o['strength']['killed'], 1)
+
+    def test_a_failing_change_lists_its_problems_exemptions_and_control_files(self):
+        self.outcome()
+        self.solve()
+        self.write('.odd/config.json', json.dumps({'trivial_lines': 25}))
+        self.write('notes.md', 'x\n')
+        self.write('big.py', ''.join('x%d = %d\n' % (i, i) for i in range(300)))
+        out, md, js = self.gate_files(code=1)
+        self.assertIn('odd gate: FAIL', md.split('\n')[1])
+        self.assertIn('run: ', md, 'the outcome not verified yet says what to run')
+        self.assertIn('outside every outcome', md)
+        self.assertIn('.odd/config.json', md)
+        self.assertIn('exempt paths', md)
+        self.assertEqual(js['outcomes'][0]['state'], 'fail')
+        self.assertEqual(js['control'], ['.odd/config.json'])
+        self.assertEqual((js['verdict'], js['exit']), ('FAIL', 1))
+
+    def test_could_not_run_is_written_too_and_never_a_pass(self):
+        out, md, js = self.gate_files('--base', 'no-such-branch', code=2)
+        self.assertIn('odd gate: COULD NOT RUN', md)
+        self.assertIn('no-such-branch', md)
+        self.assertEqual((js['verdict'], js['exit']), ('COULD NOT RUN', 2))
+
+
 class Distribution(Repo):
     """The two ways odd reaches people besides the single file: `pip install odd-tool` and the GitHub Action."""
 
@@ -1115,14 +1167,16 @@ class Distribution(Repo):
         body = text.split('      run: |\n', 1)[1]
         return '\n'.join(l[8:] for l in body.split('\n') if l.startswith('        ') or not l.strip())
 
-    def ci(self, target='main'):
+    def ci(self, target='main', **more):
         """A pull request's checkout as CI sees it: a depth-1 clone of the feature branch, then the Action's step."""
         d = tempfile.mkdtemp(prefix='odd-ci-')
         self.addCleanup(shutil.rmtree, d, True)
         subprocess.run(['git', 'clone', '-q', '--depth', '1', '--branch', 'feat', 'file://' + self.dir, d], check=True,
                        capture_output=True)
-        env = dict(os.environ, TARGET=target, GITHUB_ACTION_PATH=self.REPO)
-        env.pop('ODD_BASE', None)
+        env = dict(os.environ, TARGET=target, GITHUB_ACTION_PATH=self.REPO, **more)
+        for k in ('ODD_BASE', 'GITHUB_STEP_SUMMARY', 'GITHUB_EVENT_NAME', 'ODD_COMMENT'):
+            if k not in more:
+                env.pop(k, None)
         r = subprocess.run(['bash', '-c', self.action_step()], cwd=d, env=env, capture_output=True, text=True)
         return r.returncode, r.stdout + r.stderr
 
@@ -1151,6 +1205,97 @@ class Distribution(Repo):
         rc, out = self.ci()
         self.assertEqual(rc, 1, out)
         self.assertIn('CONTROL FILES CHANGED', out)
+
+    def github(self, refuse=False):
+        """A fake GitHub REST API for one pull request (#7 of o/r) that already carries a comment of someone else's."""
+        import http.server
+        import threading
+        comments, seen = [{'id': 1, 'body': 'looks good'}], []
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def reply(self, code, data):
+                body = json.dumps(data).encode()
+                self.send_response(code)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def body(self):
+                return json.loads(self.rfile.read(int(self.headers['Content-Length'])))['body']
+
+            def handle_one(self):
+                seen.append((self.command, self.path.split('?')[0], self.headers.get('Authorization')))
+                if refuse and self.command != 'GET':
+                    return self.reply(403, {'message': 'Resource not accessible by integration'})
+                if self.command == 'GET' and self.path.startswith('/repos/o/r/issues/7/comments'):
+                    return self.reply(200, comments)
+                if self.command == 'POST' and self.path == '/repos/o/r/issues/7/comments':
+                    comments.append({'id': len(comments) + 1, 'body': self.body()})
+                    return self.reply(201, comments[-1])
+                m = re.match(r'/repos/o/r/issues/comments/(\d+)$', self.path)
+                if self.command == 'PATCH' and m:
+                    c = [c for c in comments if c['id'] == int(m.group(1))][0]
+                    c['body'] = self.body()
+                    return self.reply(200, c)
+                self.reply(404, {'message': 'Not Found'})
+            do_GET = do_POST = do_PATCH = handle_one
+
+        srv = http.server.HTTPServer(('127.0.0.1', 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        event = self.path('.git/event.json')
+        with open(event, 'w') as f:
+            json.dump({'pull_request': {'number': 7}}, f)
+        summary = self.path('.git/step-summary.md')
+        env = dict(GITHUB_API_URL='http://127.0.0.1:%d' % srv.server_port, GITHUB_REPOSITORY='o/r',
+                   GITHUB_EVENT_NAME='pull_request', GITHUB_EVENT_PATH=event, GITHUB_STEP_SUMMARY=summary,
+                   ODD_TOKEN='t0ken')
+        return comments, seen, env, summary
+
+    def test_the_action_writes_the_step_summary_and_one_pull_request_comment_it_updates(self):
+        comments, seen, env, summary = self.github()
+        self.outcome()
+        self.solve()
+        self.commit('proven')
+        rc, out = self.ci(**env)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(len(comments), 2, out)
+        self.assertTrue(comments[1]['body'].startswith(oddmod.MARKER) and 'odd gate: PASS' in comments[1]['body'])
+        self.assertTrue(all(a == 'Bearer t0ken' for _, _, a in seen), seen)
+        self.write('big.py', ''.join('x%d = %d\n' % (i, i) for i in range(300)))
+        self.commit('unproven')
+        rc, out = self.ci(**env)
+        self.assertEqual(rc, 1, out)
+        self.assertEqual(len(comments), 2, 'the comment is updated, never duplicated: ' + out)
+        self.assertIn('odd gate: FAIL', comments[1]['body'])
+        self.assertEqual(comments[0]['body'], 'looks good', 'nobody else\'s comment is touched')
+        self.assertIn('PATCH', [c for c, _, _ in seen])
+        with open(summary) as f:
+            self.assertEqual(f.read().count(oddmod.MARKER), 2, 'each run appends its summary to the step summary')
+
+    def test_a_comment_that_cannot_be_posted_never_changes_the_verdict(self):
+        comments, seen, env, summary = self.github(refuse=True)
+        self.outcome()
+        self.solve()
+        self.commit('proven')
+        rc, out = self.ci(**env)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('could not comment on the pull request', out)
+        self.assertIn('pull-requests: write', out)
+        self.assertEqual(len(comments), 1)
+        del seen[:]
+        rc, out = self.ci(ODD_COMMENT='false', **env)
+        self.assertEqual((rc, seen), (0, []), 'comment: false makes no request')
+        env.pop('GITHUB_EVENT_NAME')
+        rc, out = self.ci(**env)
+        self.assertEqual((rc, seen), (0, []), 'by default only a pull_request event comments')
+        with open(summary) as f:
+            self.assertEqual(f.read().count('odd gate: PASS'), 3, 'the step summary is written always')
 
 
 if __name__ == '__main__':

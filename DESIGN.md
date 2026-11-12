@@ -45,7 +45,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd init [--claude-hooks]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step and the conditions under which CI is the authority | 0 |
 | `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file | 0 |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
-| `odd gate [--base REF] [--recompute]` | checks the whole change (section 5) | 0 pass, 1 fail, 2 could not run |
+| `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd stats` | counts, labelled self-reported | 0 |
 
@@ -139,6 +139,17 @@ target branch. Without all three the gate is advisory. On GitHub Actions the ste
 git show "refs/remotes/origin/$TARGET:.odd/odd.py" > "$TMP/odd.py" 2>/dev/null || cp .odd/odd.py "$TMP/odd.py"
 python3 "$TMP/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET"
 ```
+
+**The review comment.** `odd gate --summary FILE` writes the same result as Markdown for the person who reviews
+the change, and `--json FILE` as data: the verdict first, then per outcome its sentence, its proof, the last line the
+proof printed with the change taken out, the strength score and each survivor, then every exemption, the control
+files changed and why it did not pass. A result of "could not run" is written too, never left blank. The Action
+appends it to the job's step summary always and, on `pull_request` events (input `comment`: `auto`, `true`,
+`false`), creates or updates one pull-request comment, found again by the hidden line `<!-- odd-gate -->`. That needs
+`permissions: pull-requests: write`; a refused or failed comment is logged and never changes the exit code. A pull
+request from a fork gets a read-only token, so it gets the step summary and no comment. Only the first 100 comments
+are searched for the marker; the comment is cut at 60,000 characters. Whether the comment saves review time is not
+measured; the protocol is [`docs/review-time.md`](docs/review-time.md).
 
 It needs full history (not a depth-1 checkout) and the toolchain the proofs use, so it belongs at the end of the
 project's existing test job. On GitHub, do not move it to `pull_request_target`. Without CI, fetch the target

@@ -124,6 +124,21 @@ It fetches the history it needs, judges the change with the action's own pinned 
 pull request carries) and reads the settings at the tip of the target branch. Pin a tag or a commit, and make the step
 a required check. Other CI systems use the two lines `odd init` prints; they do the same.
 
+The result is written for the reviewer: per outcome its sentence, its proof, what the proof said with the change
+taken out and its strength score, then the exemptions and any control files changed. It goes to the job's step
+summary always, and on a pull request into one comment that each run updates. To allow the comment, give the job:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+```
+
+Without it (or on a pull request from a fork, whose token is read-only) the log says the comment could not be posted
+and the check's result is unchanged. `with: comment: false` turns the comment off. Elsewhere, `odd gate --summary
+FILE` writes the same Markdown and `--json FILE` the same result as data. Whether it saves review time is not yet
+measured ([protocol](docs/review-time.md)).
+
 ## Works with
 
 `odd init` writes the method (about twenty lines) into the root `AGENTS.md`.

@@ -9,6 +9,17 @@ inputs:
     description: The branch the change will merge into. Defaults to the pull request's base, else the default branch.
     required: false
     default: ''
+  comment:
+    description: >-
+      Post the gate's result as one pull-request comment, updated on every run. "auto" (default) comments on
+      pull_request events only; "true" or "false" force it. Needs `permissions: pull-requests: write`. A comment that
+      cannot be posted is logged and never changes the check's result.
+    required: false
+    default: auto
+  token:
+    description: The token used to comment. Defaults to the workflow's GITHUB_TOKEN.
+    required: false
+    default: ${{ github.token }}
 runs:
   using: composite
   steps:
@@ -16,10 +27,41 @@ runs:
       shell: bash
       env:
         TARGET: ${{ inputs.target || github.base_ref || github.event.repository.default_branch }}
+        ODD_COMMENT: ${{ inputs.comment }}
+        ODD_TOKEN: ${{ inputs.token }}
       # The tool that judges the change is this action's own copy, pinned by the workflow, never the copy the change
       # carries. Its settings are read at the tip of the target branch, so a pull request cannot loosen its own gate.
+      # The result is also written as Markdown to the step summary and, on a pull request, to one comment found again
+      # by its hidden marker. Commenting is best effort: its failure is logged, and the exit code is the gate's.
       run: |
         set -euo pipefail
         if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --quiet --unshallow --no-tags origin; fi
         git fetch --quiet --no-tags origin "+refs/heads/$TARGET:refs/remotes/origin/$TARGET"
-        python3 "$GITHUB_ACTION_PATH/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET"
+        summary="$(mktemp)"
+        rc=0
+        python3 "$GITHUB_ACTION_PATH/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET" --summary "$summary" || rc=$?
+        if [ ! -s "$summary" ]; then
+          printf '<!-- odd-gate -->\n### odd gate: COULD NOT RUN\nThe tool stopped (exit %s) before it wrote a result; see the log.\n' "$rc" > "$summary"
+        fi
+        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat "$summary" >> "$GITHUB_STEP_SUMMARY"; fi
+        comment() {
+          local pr api id body
+          pr="$(python3 -c 'import json,os; print(json.load(open(os.environ["GITHUB_EVENT_PATH"]))["pull_request"]["number"])')" || return 1
+          api="${GITHUB_API_URL:-https://api.github.com}/repos/$GITHUB_REPOSITORY/issues"
+          set -- -fsS --max-time 30 -H "Authorization: Bearer $ODD_TOKEN" -H "Accept: application/vnd.github+json"
+          id="$(curl "$@" "$api/$pr/comments?per_page=100" | python3 -c 'import json,sys; print(next((c["id"] for c in json.load(sys.stdin) if "<!-- odd-gate -->" in (c.get("body") or "")), ""))')" || return 1
+          body="$(python3 -c 'import json,sys; print(json.dumps({"body": open(sys.argv[1]).read()[:60000]}))' "$summary")" || return 1
+          if [ -n "$id" ]; then curl "$@" -X PATCH -d "$body" "$api/comments/$id" > /dev/null
+          else curl "$@" -X POST -d "$body" "$api/$pr/comments" > /dev/null; fi
+        }
+        case "${ODD_COMMENT:-auto}" in
+          true) want=1 ;;
+          auto) [ "${GITHUB_EVENT_NAME:-}" = pull_request ] && want=1 || want=0 ;;
+          *) want=0 ;;
+        esac
+        if [ "$want" = 1 ]; then
+          if (comment); then echo "odd: the result is in the pull request's odd comment"
+          else echo "odd: could not comment on the pull request (the workflow needs 'permissions: pull-requests: write'; a pull request from a fork gets a read-only token). The check's result is unchanged."
+          fi
+        fi
+        exit "$rc"

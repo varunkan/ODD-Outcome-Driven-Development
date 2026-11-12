@@ -53,6 +53,8 @@ FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
+MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
+RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 
 
@@ -927,11 +929,17 @@ def survey(root, base_arg=None, recompute=False):
                 stray_lines=sum(sizes(root, base, stray, cfg['trivial_lines']).values()))
 
 
-def gate(root, base_arg=None, recompute=False, say=lambda s: None):
-    """(exit code, report lines). Raises CouldNotRun."""
+def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
+    """(exit code, report lines). Raises CouldNotRun. A dict passed as facts is filled with the same result as data,
+    for the --json and --summary renderings."""
     s = survey(root, base_arg, recompute)
     cfg, base, changed, product, active, stray = s['cfg'], s['base'], s['changed'], s['product'], s['active'], s['stray']
-    lines, problems, skips = [], [], []
+    lines, problems, skips, outs, exempted = [], [], [], [], []
+    facts = {} if facts is None else facts
+    facts.update(base=base, recompute=recompute, changed=len(changed), in_play=len(s['inplay']), outcomes=outs,
+                 exemptions=exempted, control=s['control'], problems=problems)
+    fact = lambda o, state, **k: outs.append(dict(slug=o.slug, outcome=o.get('outcome'), proof=o.get('proof'),  # noqa: E731
+                                                  state=state, **k))
     for p in product:  # within one change a file belongs to one outcome
         owners = [o.slug for o in active if o.covers(p)]
         if len(owners) > 1:
@@ -950,11 +958,14 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None):
             if res.get('skip'):
                 skips.append('%s - %s, %d line(s)' % (o.slug, res['skip'].split('-', 1)[-1].strip(), res['lines']))
             lines += ['  ok      %s: %s' % (o.slug, o.get('outcome')[:100]), '          ' + _describe(o, res)]
+            fact(o, 'ok', **{k: res[k] for k in RESULT if k in res})
         except Fail as e:
             problems.append('%s: %s' % (o.slug, e))
+            fact(o, 'fail', why=str(e))
     for o in s['inplay']:
         if o.parked:
             lines.append('  parked  %s: %s (a parked outcome covers no files)' % (o.slug, o.parked))
+            fact(o, 'parked', why=o.parked)
     n = s['stray_lines']
     if stray and n > cfg['trivial_lines']:
         un = set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z'))
@@ -969,16 +980,18 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None):
                ', '.join(sorted({p.split('/')[0] + '/**' if '/' in p else p for p in stray})[:6]),
                ('\n    untracked: %s. If that is build output, add it to .gitignore instead.' % ', '.join(hint[:4])) if hint else ''))
     elif stray:
-        lines.append('  small-change lane: %d line(s) outside any outcome (%s); the budget is %d'
-                     % (n, ', '.join(stray[:5]), cfg['trivial_lines']))
+        exempted.append('small-change lane: %d line(s) outside any outcome (%s); the budget is %d'
+                        % (n, ', '.join(stray[:5]), cfg['trivial_lines']))
     if s['exempt']:
-        lines.append('  exempt paths: %d file(s), %s line(s)' % (
+        exempted.append('exempt paths: %d file(s), %s line(s)' % (
             len(s['exempt']), sum(min(v, 10 ** 5) for v in sizes(root, base, s['exempt']).values())))
     if s['tests']:
         old = set(zlist(root, 'ls-tree', '-r', '--name-only', '-z', base)) if base else set()
         touched = [p for p in s['tests'] if p in old]
-        lines.append('  test files: %d changed%s' % (len(s['tests']), ('; existed before and were modified or deleted: '
-                                                                    + ', '.join(touched[:8])) if touched else ''))
+        exempted.append('test files: %d changed%s' % (len(s['tests']), ('; existed before and were modified or deleted: '
+                                                                       + ', '.join(touched[:8])) if touched else ''))
+    lines += ['  ' + e for e in exempted]
+    exempted += ['skip: ' + k for k in skips]
     if s['control']:
         lines.append('  CONTROL FILES CHANGED (a person must review; in CI the tool and settings are read from the target): '
                      + ', '.join(s['control']))
@@ -1032,9 +1045,70 @@ def cmd_done(a, root):
 
 
 def cmd_gate(a, root):
-    code, lines = gate(root, a.base, a.recompute, print)
+    facts = {}
+    try:
+        code, lines = gate(root, a.base, a.recompute, print, facts)
+    except (Fail, CouldNotRun) as e:  # written too, so a reader never mistakes a missing summary for a pass
+        bad = isinstance(e, Fail)
+        facts.update(exit=1 if bad else 2, verdict='FAIL' if bad else 'COULD NOT RUN',
+                     problems=facts.get('problems', []) + [str(e)])
+        report(a, facts)
+        raise
+    facts.update(exit=code, verdict='FAIL' if code else 'PASS')
+    report(a, facts)
     print('\n'.join(lines))
     return code
+
+
+def report(a, facts):
+    for path, text in ((a.json, lambda: json.dumps(facts, indent=1, sort_keys=True) + '\n'), (a.summary, lambda: markdown(facts))):
+        if path:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(text())
+
+
+def _cell(text, code=False, table=True):
+    """One line of Markdown text; in a table cell a pipe would end the cell, a newline the row."""
+    t = ' '.join(str(text).split())
+    t = t.replace('|', '\\|') if table else t
+    return ('`` %s ``' if '`' in t else '`%s`') % t if code and t else t
+
+
+def markdown(f):
+    """The gate's result for a person reviewing the change: the verdict, then per outcome its sentence, its proof,
+    what the proof said with the change taken out and how many small breaks it caught."""
+    md = [MARKER, '### odd gate: %s' % f['verdict']] + (['%s base %s, %s file(s) changed, %s outcome(s) in this change.' % (
+        'Every proof run again (`--recompute`);' if f['recompute'] else 'Recorded local results;',
+        _cell((f['base'] or 'none')[:10], True), f['changed'], f['in_play'])] if 'changed' in f else [])
+    outs, survived = f.get('outcomes', []), []
+    if outs:
+        md += ['', '| outcome | proof | with the change taken out | strength |', '|---|---|---|---|']
+    for o in outs:
+        st = o.get('strength')
+        if o['state'] == 'ok' and o.get('skip'):
+            red = 'not taken out (skip: %s); %s line(s) not verified' % (_cell(o['skip'].split('-', 1)[-1]), o.get('lines'))
+        elif o['state'] == 'ok':
+            red = 'the proof failed: %s (%s file(s), %s line(s))' % (_cell(o.get('red_says') or '(no output)', True),
+                                                                  o.get('files'), o.get('lines'))
+        else:
+            red = '**%s**: %s' % ('not shown' if o['state'] == 'fail' else 'parked',
+                                  _cell(o.get('why', '').split('\n')[0][:200]))
+        score = '-'
+        if st:
+            score = 'caught %d of %d' % (st['killed'], st['killed'] + len(st['survivors']))
+            score += ''.join('; %d %s' % (len(st[k]), w) for k, w in (('survivors', 'survived'), ('unrun', 'could not run')) if st[k])
+            survived += st['survivors']
+        md.append('| **%s**: %s | %s | %s | %s |' % (o['slug'], _cell(o.get('outcome') or ''), _cell(o.get('proof') or '', True),
+                                                    red, score))
+    if survived:
+        md += ['', 'Survived (each a changed line the proof does not depend on):'] + ['- ' + _cell(w, True, False) for w in survived]
+    if f.get('exemptions'):
+        md += ['', '**Exemptions** (passed without verification):'] + ['- ' + _cell(e, table=False) for e in f['exemptions']]
+    if f.get('control'):
+        md += ['', '**Control files changed** (a person must review): ' + ', '.join(_cell(c, True, False) for c in f['control'])]
+    if f.get('problems'):
+        md += ['', '**Why it did not pass:**', '', '~~~text'] + [p.replace('~~~', '~ ~ ~') for p in f['problems']] + ['~~~']
+    return '\n'.join(md) + '\n'
 
 
 def cmd_park(a, root):
@@ -1261,6 +1335,8 @@ def main(argv=None):
     s = sub.add_parser('gate')
     s.add_argument('--base')
     s.add_argument('--recompute', action='store_true')
+    s.add_argument('--summary', metavar='FILE', help='also write the result as Markdown, for a pull request')
+    s.add_argument('--json', metavar='FILE', help='also write the result as JSON')
     s = sub.add_parser('park')
     s.add_argument('slug')
     s.add_argument('reason')

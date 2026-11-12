@@ -161,6 +161,13 @@ On GitHub Actions, one step at the end of your test job, made a required check:
 ```
 Other CI systems use the two lines `odd init` prints.
 
+**What does the reviewer see?**
+One pull-request comment, updated on every run: the verdict, then per outcome its sentence, its proof, what the proof
+said with the change taken out and how many small breaks it caught, then what passed without verification. It needs
+`permissions: pull-requests: write` on the job; without that the step summary still has it and the check is
+unaffected. We do not yet know how many review minutes it saves; [docs/review-time.md](docs/review-time.md) is how we
+intend to find out.
+
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).
 2. This week: `odd init` on one repository and use it on your next agent task.
