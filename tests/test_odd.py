@@ -2372,14 +2372,8 @@ class Cascade(Agents):
         self.assertIn('--race', self.no('cascade', 'add', '--agents', 'true', '--race', '0', code=2))
 
 
-class Spec(Agents):
-    """odd spec --proof-by: a separate (in practice stronger) agent writes only the proof, in its own worktree; odd
-    brings the test files back and seals them red before any code. Fake agents only."""
-    PASSING = 'import unittest\n\n\nclass T(unittest.TestCase):\n    def test_nothing(self):\n        pass\n'
-
-    def setUp(self):
-        Agents.setUp(self)
-        os.remove(self.path('tests/test_calc.py'))
+class ProofAuthors(object):
+    """Helpers for tests whose fake agents write proofs (odd spec --proof-by); mixed into Agents test classes."""
 
     def author(self, name, *tries):
         """A fake proof author: on its n-th run it writes tries[n-1] (the last one repeats) as tests/test_calc.py,
@@ -2397,6 +2391,16 @@ class Spec(Agents):
     def prompt(self, name, n):
         with open(os.path.join(self.bin, '%s.prompt.%d' % (name, n))) as f:
             return f.read()
+
+
+class Spec(ProofAuthors, Agents):
+    """odd spec --proof-by: a separate (in practice stronger) agent writes only the proof, in its own worktree; odd
+    brings the test files back and seals them red before any code. Fake agents only."""
+    PASSING = 'import unittest\n\n\nclass T(unittest.TestCase):\n    def test_nothing(self):\n        pass\n'
+
+    def setUp(self):
+        Agents.setUp(self)
+        os.remove(self.path('tests/test_calc.py'))
 
     def test_the_proof_is_written_in_a_worktree_brought_back_and_sealed_red(self):
         cmd = 'TOKEN=s3cret ' + self.author('strong', TEST) + ' --api-key s3cret2'
@@ -4195,6 +4199,65 @@ class Successive(Agents):
 
     def subjects(self):
         return self.git('log', '--format=%s').splitlines()
+
+
+WRONG_TEST = TEST.replace('add(2, 3), 5', 'add(2, 3), 6')  # a sealed proof that contradicts the outcome sentence
+DISPUTE = 'echo "odd-dispute: tests/test_calc.py asserts add(2, 3) == 6, but the outcome says it receives 5"'
+
+
+class Disputes(ProofAuthors, Agents):
+    """Backlog item 23: when no attempt is verified and an attempt says the sealed proof itself is wrong, the outcome
+    waits for an answer (asked:) with the disputes instead of being parked; odd spec rewrites the proof with them."""
+
+    def setUp(self):
+        Agents.setUp(self)
+        self.write('tests/test_calc.py', WRONG_TEST)
+        self.ok('seal', 'add')
+        self.commit('a wrong proof, sealed')
+
+    def mark(self, name):
+        return 'touch %s/%s.ran' % (self.bin, name)
+
+    def ran(self, name):
+        return os.path.exists(os.path.join(self.bin, name + '.ran'))
+
+    def test_a_disputed_race_asks_instead_of_failing_blind_and_is_not_parked(self):
+        self.config([self.agent('honest', DISPUTE)])
+        out = self.no('race', 'add', '--n', '2')
+        self.assertIn('the proof is disputed', out)
+        md = self.read('.odd/outcomes/add.md')
+        self.assertRegex(md, r'(?m)^asked: Is the proof right\? 2 of 2 attempt\(s\) dispute it: tests/test_calc\.py asserts')
+        self.assertNotIn('parked:', md)
+        self.assertIn('(1 waiting for an answer: add)', self.ok('gate'))  # waiting, not failed: no product code moved
+        self.config([self.agent('again', self.mark('again'))])
+        self.assertIn('waiting for an answer', self.no('race', 'add', code=2))
+        self.assertFalse(self.ran('again'), 'no attempt is spent on an outcome waiting for an answer')
+
+    def test_a_failed_race_without_a_dispute_is_unchanged(self):
+        self.config([self.agent('quiet', self.writes(BROKEN.replace('0', 'a - b')))])
+        self.no('race', 'add', '--n', '1')
+        self.assertNotIn('asked:', self.read('.odd/outcomes/add.md'))
+
+    def test_a_disputed_cascade_level_stops_the_escalation_and_does_not_park(self):
+        self.no('cascade', 'add', '--agents', '%s,%s' % (self.agent('cheap', DISPUTE), self.agent('dear', self.mark('dear'))))
+        self.assertFalse(self.ran('dear'), 'no dearer level is paid for while the proof is disputed')
+        md = self.read('.odd/outcomes/add.md')
+        self.assertIn('asked: Is the proof right? 1 of 1 attempt(s) dispute it', md)
+        self.assertNotIn('parked:', md)
+
+    def test_spec_rewrites_a_disputed_proof_with_the_disputes_and_answers_the_question(self):
+        self.config([self.agent('honest', DISPUTE)])
+        self.no('race', 'add', '--n', '1')
+        self.commit('the dispute')
+        out = self.ok('spec', 'add', '--proof-by', self.author('strong', TEST))
+        self.assertIn('asserts add(2, 3) == 6, but the outcome says it receives 5', self.prompt('strong', 1))
+        self.assertEqual(self.read('tests/test_calc.py'), TEST, out)
+        md = self.read('.odd/outcomes/add.md')
+        self.assertNotIn('asked:', md)
+        self.assertRegex(md, r'(?m)^sealed: ')
+        self.config([self.agent('fixer', self.writes(FIXED))])
+        self.ok('race', 'add', '--n', '1')
+        self.assertEqual(self.read('calc.py'), FIXED)
 
 
 if __name__ == '__main__':

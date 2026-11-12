@@ -2389,7 +2389,9 @@ Leave alone: %(fixed)s. An attempt that edits them is discarded.
 %(read)s
 When you have finished, exit. odd then checks this copy as `odd done %(slug)s` would: the proof passes, fails with the
 change taken out and passes again, and small breaks in the changed lines make it fail. Do not commit, push or run
-`odd park` here; if the outcome cannot honestly be reached, say why in your output and exit.
+`odd park` here; if the outcome cannot honestly be reached, say why in your output and exit. If the proof itself is
+wrong (an assertion contradicts the outcome, the request or the proof's own data), do not change it or work around
+it: print one line `odd-dispute: <the assertion, and why it is wrong>` and exit.
 
 """
 
@@ -2569,6 +2571,10 @@ def _race_start(root, cfg, slug, base_arg):
     except Fail as e:
         raise CouldNotRun(str(e))
     refuse_budget_park(o)
+    if o.asked:
+        raise CouldNotRun('%s is waiting for an answer: %s\nanswer it (for a disputed proof: %s spec %s --proof-by '
+                          '<cmd>, or correct the proof and reseal it), then delete the "asked:" line of %s'
+                          % (o.slug, o.asked, ODD, o.slug, o.rel))
     if cfg['race_seal'] and not o.get('sealed'):
         raise CouldNotRun('"race_seal" is on and %s is not sealed: run %s seal %s first, so the proof is shown to fail '
                           'before any attempt and no attempt can change it unseen' % (o.rel, ODD, o.slug))
@@ -2686,6 +2692,7 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names, judge=No
             at['why'] = (judge or _judge)(root, cfg, o, base, at, fixed)
             at['verify_s'] = round(time.time() - v0, 1)
             at['cost'] = _cost(at)
+            at['dispute'] = _said(at, DISPUTED) if at['why'] else None
             # backlog item 16: every attempt's spend, for `odd stats`; a refused one is counted for the attempt budget
             # as a failed done is
             record(root, o.slug, attempt=at['name'], cost=at['cost'], seconds=round(at['agent_s'] + at['verify_s'], 1),
@@ -2765,6 +2772,25 @@ def _none_verified(msg, attempts, a):
     return Fail('%s\n%s' % (msg, next_block(items, _rerun(a))), items)
 
 
+def disputed(root, o, attempts, a):
+    """Backlog item 23: when no attempt was verified and at least one said the proof itself is wrong, the outcome
+    waits for an answer (its "asked:" line) with the disputes, instead of being parked or attempted again; returns
+    the Fail to raise, or None when nobody disputed. A dispute loosens nothing: the proof stands until its author
+    rewrites it, and a rewritten proof is sealed red again before any code."""
+    said = [at for at in attempts if at.get('dispute')]
+    if not said:
+        return None
+    o = Outcome.load(root, o.slug)
+    o.f['asked'] = ' '.join(('%s%d of %d attempt(s) dispute it: %s' % (DISPUTE_ASK, len(said), len(attempts), ' | '.join(
+        dict.fromkeys(at['dispute'][:400] for at in said)))).split())
+    o.save()
+    return _none_verified('the proof is disputed: no attempt was verified and %d of %d said the sealed proof itself is '
+                          'wrong (%s). Nothing was applied or parked; the outcome waits for an answer in %s. A person, or '
+                          'the proof\'s author through `%s spec %s --proof-by <cmd>` (which is given the disputes), '
+                          'decides: correct the proof and reseal it, or keep it; then delete the "asked:" line.'
+                          % (len(said), len(attempts), said[0]['dispute'][:200], o.rel, ODD, o.slug), attempts, a)
+
+
 def _race_n(agents, n, flag):
     """How many attempts: `n` as given, else one per configured agent, or 3 for one agent."""
     n = n if n is not None else (len(agents) if len(agents) > 1 else 3)
@@ -2795,8 +2821,8 @@ def cmd_race(a, root):
     o, head, attempts, ranked, patch, keep = _race_run(root, cfg, a.slug, a.base, agents, _race_n(agents, a.n, '--n'))
     if not ranked:
         over = budget(root, cfg, o)
-        raise _none_verified('no attempt was verified; each one\'s reason is in the table above' + ('\n' + over if over else ''),
-                             attempts, a)
+        raise (None if over else disputed(root, o, attempts, a)) or _none_verified(
+            'no attempt was verified; each one\'s reason is in the table above' + ('\n' + over if over else ''), attempts, a)
     print('winner: attempt %s, %s' % (ranked[0]['name'], _why_won(ranked)))
     _apply(root, o, head, ranked[0], patch, keep)
 
@@ -2816,6 +2842,8 @@ When you have finished, print exactly one line:
 odd-wrong: <the input or case your version gets wrong, and what it does instead of what the outcome says>
 If you find no such version, print "odd-wrong: none". Then exit. Do not commit or push. Your version is never kept.
 """
+DISPUTED = re.compile(r'(?m)^odd-dispute:[ \t]*(\S.*?)[ \t]*$')
+DISPUTE_ASK = 'Is the proof right? '
 WRONG = re.compile(r'(?m)^odd-wrong:[ \t]*(\S.*?)[ \t]*$')
 
 
@@ -2917,6 +2945,9 @@ def _cascade_run(root, cfg, slug, base_arg, levels, n):
         history += attempts
         if ranked:
             break
+        if any(at.get('dispute') for at in attempts):
+            print('the proof is disputed at level %d: no further level runs' % lv)
+            break
         if lv < len(levels) and over_budget(root, cfg, o.slug):
             print('attempt budget reached: no further level runs')
             break
@@ -2949,6 +2980,9 @@ def cmd_cascade(a, root):
         raise _none_verified('no attempt was verified; each one\'s reason is in the table above and in %s. Nothing was '
                              'applied.\n%s' % (record_path, over), history, a)
     if not ranked:
+        why = disputed(root, o, history, a)
+        if why:
+            raise why
         o.f['parked'] = ' '.join(('odd cascade: no level verified (%s): %s' % (now()[:10], '; '.join(
             'level %s (%s): %s' % (at['name'], _short(at['cmd']), at['why']) for at in history))).split())
         o.save()
@@ -3101,6 +3135,11 @@ or a missing import of the test framework). Test what the outcome sentence says 
 building it. odd runs the proof command here when you exit: if it passes, or does not run, your proof is refused.
 Do not commit, push or run odd here.
 """
+SPEC_DISPUTED = """
+The current proof was disputed by the agents that tried to write the code. Read it, check each dispute against the
+outcome and the request, and correct the proof where a dispute is right (keep what is right). The disputes:
+%s
+"""
 SPEC_BEFORE = """
 Earlier proofs for this outcome were refused. Do not repeat this:
 %s
@@ -3164,7 +3203,8 @@ def cmd_spec(a, root):
         o = Outcome.load(root, a.slug)
     except Fail as e:
         raise CouldNotRun(str(e))
-    if o.get('sealed'):
+    dispute = o.asked[len(DISPUTE_ASK):] if o.asked.startswith(DISPUTE_ASK) else ''
+    if o.get('sealed') and not dispute:
         raise CouldNotRun('%s is sealed already; to have the proof written again, delete its "sealed:" line and its '
                           'test files first' % o.rel)
     head = rev(root, 'HEAD')
@@ -3174,7 +3214,7 @@ def cmd_spec(a, root):
     keep = _keep(root, 'spec', o.slug)
     who = _who(a.proof_by)
     text = SPEC_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), slug=o.slug,
-                              tests=', '.join(cfg['test_globs']))
+                              tests=', '.join(cfg['test_globs'])) + (SPEC_DISPUTED % dispute if dispute else '')
     print('%s spec %s: %s writes the proof in its own worktree (at most %d tries); it must fail before the code'
           % (ODD, o.slug, who, tries))
     run, reasons, patch, done, p = _run_dir(root), [], '', queue.Queue(), None
@@ -3218,6 +3258,8 @@ def cmd_spec(a, root):
         raise
     o = Outcome.load(root, o.slug)
     o.f['proof-by'] = who
+    if dispute and o.asked.startswith(DISPUTE_ASK):  # the rewritten proof, sealed red again, answers the dispute
+        del o.f['asked']
     o.save()
     record(root, o.slug, proof_by=who, tries=len(reasons) + 1)
     print('proof-by: %s (recorded in %s). Next: %s race %s or %s cascade %s; an attempt that edits the sealed proof is '
