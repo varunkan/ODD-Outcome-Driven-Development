@@ -479,7 +479,7 @@ class ProofStrength(Repo):
         self.write('calc.py', FIXED)
         p = subprocess.Popen([sys.executable, ODD, 'done', 'add'], cwd=self.dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         deadline = time.time() + 15
-        while time.time() < deadline and 'a - b' not in self.read('calc.py'):
+        while time.time() < deadline and 'a - b' not in (self.peek('calc.py') or ''):
             time.sleep(0.05)
         self.assertIn('a - b', self.read('calc.py'), 'the mutant is made in place')
         p.send_signal(signal.SIGKILL)
