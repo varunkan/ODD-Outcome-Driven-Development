@@ -4036,5 +4036,53 @@ class SameBehaviour(Repo):
         self.assertRegex(self.no('gate'), r'run: .* done tidy')
 
 
+class InertFiles(Repo):
+    """R7: with "inert" on, each changed file is taken out on its own; one whose removal leaves the proof green is named."""
+
+    def setUp(self):
+        super().setUp()
+        self.outcome(in_='calc.py, util.py')
+        self.write('tests/test_calc.py', TEST)
+
+    def setting(self, value):
+        self.write('.odd/config.json', json.dumps({'inert': value}))
+
+    def test_report_names_a_file_the_proof_does_not_need(self):
+        self.setting('report')
+        self.write('calc.py', FIXED)
+        self.write('util.py', 'def unused():\n    return 1\n')
+        out = self.ok('done', 'add')
+        self.assertIn('inert: util.py (the proof passes with it taken out on its own)', out)
+        self.assertIn('per-file: 1 of 2 changed file(s) needed by the proof', out)
+        self.assertEqual(self.read('util.py'), 'def unused():\n    return 1\n', 'the file was put back')
+
+    def test_enforce_fails_and_the_next_block_names_the_file(self):
+        self.setting('enforce')
+        self.write('calc.py', FIXED)
+        self.write('util.py', 'def unused():\n    return 1\n')
+        out = self.no('done', 'add')
+        self.assertIn('the proof passes with util.py taken out on its own ("inert": "enforce")', out)
+        self.assertRegex(out, r'(?m)^  inert: util\.py$')
+
+    def test_files_that_are_all_needed_pass_under_enforce(self):
+        self.setting('enforce')
+        self.write('util.py', 'def plus(a, b):\n    return a + b\n')
+        self.write('calc.py', 'from util import plus\n\n\ndef add(a, b):\n    return plus(a, b)\n')
+        self.assertIn('per-file: 2 of 2 changed file(s) needed by the proof', self.ok('done', 'add'))
+
+    def test_off_by_default_and_a_single_file_needs_no_extra_run(self):
+        self.write('calc.py', FIXED)
+        self.write('util.py', 'def unused():\n    return 1\n')
+        self.assertNotIn('per-file', self.ok('done', 'add'))
+        self.write('util.py', '')
+        os.remove(self.path('util.py'))
+        self.setting('enforce')
+        self.assertNotIn('per-file', self.ok('done', 'add'))
+
+    def test_a_wrong_value_stops(self):
+        self.setting('yes')
+        self.assertIn('"inert" has the wrong kind of value', self.no('done', 'add', code=2))
+
+
 if __name__ == '__main__':
     unittest.main()

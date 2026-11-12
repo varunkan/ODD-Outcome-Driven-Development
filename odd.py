@@ -69,6 +69,7 @@ DEFAULTS = {
     'auto_max_lines': 120,     # the auto lane: most changed product lines
     'cache_file': None,    # backlog item 12: the verification cache file (default: under the git directory); a CI cache step saves it
     'max_attempts': 0,     # backlog item 15: park an outcome after this many failed attempts (done, race, cascade, chain); 0 is off
+    'inert': 'off',        # R7: each changed file taken out on its own; off, report, or enforce (a file the proof does not need fails)
     'held_out': [],        # R8: proofs the agent never sees, [{"name", "proof", "in"}], run only by gate --recompute
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
@@ -88,7 +89,7 @@ BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
-RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same')  # what --json says of a verified outcome
+RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -219,6 +220,7 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'auto_max_lines': lambda v: type(v) is int and v >= 0,
             'cache_file': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
             'max_attempts': lambda v: type(v) is int and v >= 0,
+            'inert': lambda v: v in ('off', 'report', 'enforce'),
             'held_out': _held_out}
 
 
@@ -1552,7 +1554,19 @@ def _same(path, data):
 def weak(cfg, o, res):
     """Under "strength": "enforce" a surviving mutant, or a changed line the proof never ran (ran), is a Fail, also
     for a verification recorded earlier."""
-    if cfg['strength'] != 'enforce' or res.get('skip'):
+    if res.get('skip'):
+        return
+    if cfg['inert'] == 'enforce' and res.get('files', 0) > 1:
+        if res.get('inert') is None:
+            raise Fail('verified before each changed file was taken out on its own; run: %s done %s' % (ODD, o.slug))
+        if res['inert']['files']:
+            raise Fail('the proof passes with %s taken out on its own ("inert": "enforce"): the proof does not need %s.'
+                       '\n  take %s out of the change, or make the proof check what %s.' % (
+                           ', '.join(res['inert']['files']), 'it' if len(res['inert']['files']) == 1 else 'them',
+                           'it' if len(res['inert']['files']) == 1 else 'them',
+                           'it does' if len(res['inert']['files']) == 1 else 'they do'),
+                       [('inert', p) for p in res['inert']['files']])
+    if cfg['strength'] != 'enforce':
         return
     st = res.get('strength')
     if st is None:
@@ -1650,10 +1664,25 @@ def _verify(root, cfg, o, base, changed, say):
     res.update(seconds=[s1, s2, s3], red_says=says(ctail))
     if o.bug:
         res['reproduced'] = last_line(ctail)
+    if cfg['inert'] != 'off' and len(targets) > 1:
+        res['inert'] = inert(root, cfg, o, base, targets, say)
     if cfg['strength'] != 'off':
         res['strength'] = strength(root, cfg, o, base, targets, say, [s1, s2, s3])
         weak(cfg, o, res)
     return res
+
+
+def inert(root, cfg, o, base, targets, say):
+    """R7: each changed product file taken out on its own, the others kept, with the same journalled take-out. A file
+    whose removal leaves the proof passing is one the proof does not need ("inert"); a run that cannot complete shows
+    nothing either way. One proof run per file; only when more than one file changed (with one, the take-out check
+    already took it out on its own)."""
+    say('  "inert": taking out each of %d changed file(s) on its own' % len(targets))
+    t0, found, unrun = time.time(), [], []
+    for p in targets:
+        rc = without_change(root, cfg, o, base, [p])[0]
+        (unrun if unrunnable(rc) else found if rc == 0 else []).append(p)
+    return {'files': found, 'unrun': unrun, 'checked': len(targets), 'seconds': round(time.time() - t0, 1)}
 
 
 def same_behaviour(root, cfg, o, base, targets, say):
@@ -1746,6 +1775,12 @@ def _describe(o, res):
         text += '\n          reproduced: ' + res['reproduced']
     if res.get('same'):
         text += '\n          ' + res['same']
+    ine = res.get('inert')
+    if ine:
+        text += '\n          per-file: %d of %d changed file(s) needed by the proof (each taken out on its own)%s; %s s' % (
+            ine['checked'] - len(ine['files']) - len(ine['unrun']), ine['checked'],
+            '; %d could not run' % len(ine['unrun']) if ine['unrun'] else '', ine['seconds'])
+        text += ''.join('\n          inert: %s (the proof passes with it taken out on its own)' % p for p in ine['files'])
     st = res.get('strength')
     if st:
         text += '\n          proof strength %d of %d (small breaks in the changed lines the proof caught)%s%s; %s s' % (
@@ -3106,6 +3141,8 @@ def markdown(f):
             red = '**%s**: %s' % ({'fail': 'not shown', 'asked': 'waiting for an answer'}.get(o['state'], 'parked'),
                                   _cell(o.get('why', '').split('\n')[0][:200]))
         red += '; **kind changed from bug**' if o.get('kind_was') else ''
+        red += '; inert (the proof does not need): %s' % ', '.join(_cell(p, True) for p in o['inert']['files']) if (
+            o.get('inert') or {}).get('files') else ''
         score = '-'
         if st:
             score = '%d of %d' % (st['killed'], st['killed'] + len(st['survivors']))

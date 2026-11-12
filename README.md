@@ -225,6 +225,11 @@ them, with the list read from the target branch, and their output is never shown
 proof (a lookup table for the cases it checks) fails there without learning why. Why: visible-only checks scored 97%
 against 0% held out on such a solution (arXiv 2605.21384). Details: [DESIGN.md](DESIGN.md) section 5e.
 
+**Files the proof does not need.** `"inert": "report"` or `"enforce"` (default off; a tool newer than 0.4.0) takes
+each changed file out on its own after the main check; a file whose removal leaves the proof passing is named, or
+fails the check under `"enforce"`. Smaller changes, nothing riding along unproven. Details: [DESIGN.md](DESIGN.md)
+section 4f.
+
 **Refactors checked by comparison, not skipped.** `same: <command>` in an outcome (a tool newer than 0.4.0) runs the
 command with the change and with it taken out; its exit code and whole output must be identical, or `done` names the
 first differing line. Details: [DESIGN.md](DESIGN.md) section 4e.

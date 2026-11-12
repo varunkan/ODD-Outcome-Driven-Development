@@ -865,6 +865,25 @@ recorded results. Limits: output that varies from run to run (times, temporary p
 fails the comparison; print what is stable. It compares one command's output, not all behaviour; a command that
 prints little shows little.
 
+### 4f. Per-file inertness: `"inert"`
+
+Needs a tool newer than 0.4.0 (R7). The take-out check removes the whole change at once, so a file the proof does not
+need passes along with the files it does (an unused helper, a stray edit, special-casing kept "just in case"). With
+`"inert": "report"` or `"enforce"` (default `"off"`), after green-red-green `done` and `gate --recompute` take each
+changed product file inside the boundary out on its own, the others kept, with the same journalled take-out
+(`without_change()` on one target), and run the proof. A file whose removal leaves the proof passing is named:
+`inert: <file> (the proof passes with it taken out on its own)`, under the line `per-file: k of n changed file(s)
+needed by the proof`. A run that cannot complete (timeout, 126, 127, 129-192) counts as neither and is reported as
+could not run. Under `"enforce"` an inert file fails `done` and the gate, with `inert: <file>` in the `next:` block
+(section 4d); a result recorded before the setting was turned on fails with "run: odd done <slug>". It runs only when
+more than one file changed (with one, the take-out check already took it out on its own) and is skipped for
+`counterfactual: skip`. Cost: one proof run per changed file. `--json` adds `inert: {files, unrun, checked,
+seconds}`; the PR comment names inert files beside what the proof said without the change. Limits: two files that
+each make the proof pass without the other (a fallback and its duplicate) are both named; a file needed only
+together with another is not. Inert is relative to this proof: a file the proof does not need may be needed by
+something else, which the boundary and review still decide. How often agents' changes carry inert files is not
+measured (the research found one task, arXiv 2606.28430).
+
 ### 4d. Failure feedback: the `next:` block
 
 Needs a tool newer than 0.4.0. When `odd done` fails (exit 1), and when `odd race` or `odd cascade` ends with no
@@ -1063,6 +1082,8 @@ line still loads, and is now counted as one escape against the outcome that carr
   environment variable, a plugin installed outside the repository, a `load_tests` in a test module, or test
   selection written in a product file are not detected. The ids collected at the base and at the head are not
   compared.
+- `"inert"` takes files out one at a time, so a file needed only together with another is not flagged, and two
+  interchangeable files are both flagged (section 4f).
 - `same:` compares one command's output; output that varies between runs fails it. Held-out proofs are only as
   hidden as the CI step that provides them, and are not take-out checked (sections 4e, 5e). Neither is measured on
   the comparison harness.

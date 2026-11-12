@@ -101,6 +101,10 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
 ### R7. Per-file inertness (opt-in)
 - **Outcome:** each changed file is taken out on its own, and a file whose removal leaves the proof green is flagged.
 - **Evidence:** arXiv 2606.28430, one task only; prevalence unknown.
+- **Done** in the commit "R7: per-file inertness" (`git log --grep '^R7:'`), a tool newer than 0.4.0: setting
+  `"inert"` (off, report, enforce; default off), one proof run per changed file, only when more than one changed
+  ([DESIGN 4f](DESIGN.md)). Tests: `InertFiles`. Measure: how many verified outcomes on the harness carry an inert
+  file, under `"report"`; not yet run.
 
 ### R8. A proof the agent never sees
 - **Outcome:** an optional held-out proof run only by `gate --recompute`, plus a base-against-head behaviour diff for
