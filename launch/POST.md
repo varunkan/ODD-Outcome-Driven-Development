@@ -37,7 +37,7 @@ skills): in each of them, "done" is the model's claim or a ticked checklist. ODD
 ## What I am not claiming
 
 Not that it makes agents faster or cheaper; not that it beats anything. The evidence is one project, measured by
-itself. A same-task comparison (ten tasks with hidden tests, five ways of working, several runs each) is in the repo
+itself. A same-task comparison (16 tasks with hidden tests, five ways of working, three runs each on two models) is in the repo
 and its numbers will be published with their spread, whatever they show.
 
 It also has limits I would rather you hear from me: it checks that the proof depends on the change, not that the proof

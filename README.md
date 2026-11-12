@@ -3,12 +3,39 @@
 **Work is done when a proof says so, not when the agent says so.**
 
 `odd` is one small command-line tool and a half-page method for building software with a coding agent. It works with
-Claude Code, Cursor, Copilot, or anything else that can run a shell command, because it needs only a shell and git.
+Claude Code, Cursor, Copilot, Codex or anything else that can run a shell command, because it needs only a shell and
+git.
 
-> **Status: early (0.3.0).** The tool passes its own tests, including the ways an agent could fake "done", and a red team of 0.2.0 (48 confirmed defects, each now a test), and
-> has been through one design review (23 changes, all applied). A same-task comparison against plain Claude Code,
-> Spec Kit, BMAD and Superpowers is being built. No claim about speed, cost or quality is made here until those
-> numbers exist.
+## The problem
+
+Coding agents report "done" for work that is not done. The tests pass, but they test nothing the change does; the bug
+is still there; the summary says fixed. Writing more rules for the agent does not fix this, because a rule is
+something the model may or may not follow. In the project this method came from, 1,856 instructions were given to
+agents over three months, and the two most expensive mistakes were the process's own rules.
+
+ODD keeps the one part that does not depend on the model agreeing: "done" is decided by a command, on the code.
+
+## Who it is for
+
+| you are | the problem it solves | how you use it |
+|---|---|---|
+| a developer working with an AI agent | the agent says done; the tests pass but test nothing | `odd init` once; the agent follows `AGENTS.md` and runs `odd done` before it reports done |
+| a team letting agents open pull requests | reviewers cannot tell whether an agent's PR really works | one CI step, made a required check: a PR whose changed files are not covered by a proof that fails without them cannot merge |
+| anyone running agents unattended | nobody is watching the "done" claims | the gate is the referee, and `odd park` gives the agent an honest "blocked" instead of a fake done |
+| a user of Spec Kit, BMAD or Superpowers | specs and plans, but nothing proves the code meets them | ODD sits underneath as the last check; it replaces none of them |
+
+It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
+the model.
+
+> **Status: early (0.3.0).** The tool passes its own tests (82), including the ways an agent could fake "done". It
+> has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
+>
+> **Does it work better? Not claimed yet.** A same-task comparison is running: 16 tasks with hidden acceptance tests,
+> each done by plain Claude Code, ODD, Spec Kit, BMAD and Superpowers, three times each, on Sonnet and on Haiku. It
+> measures whether the work is really right, whether the agent claims "done" falsely, and the cost and time. The
+> results will be published here with their spread, whatever they show. Early signs from the
+> [pilot](docs/evidence/12-pilot.md), too small to be results: on Sonnet, plain Claude Code got the work right on
+> every task tried, so correctness may not separate the five; on an impossible task, one framework claimed "done".
 
 ## The idea
 

@@ -152,10 +152,13 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
 
 <h2>Does it work better?</h2>
 <div class="pending">
-  <p style="margin-top:0"><b>Not claimed yet.</b> A same-task comparison is being run: ten tasks with hidden acceptance
-    tests (bug fixes, features, traps, a vague request, an impossible one), each done by plain Claude Code, ODD, Spec
-    Kit, BMAD and Superpowers, several times each. It measures how often the work really passes, how often each one
-    says "done" when it is not, and the cost in tokens, money and time.</p>
+  <p style="margin-top:0"><b>Not claimed yet.</b> A same-task comparison is running: 16 tasks with hidden acceptance
+    tests (bug fixes, features, traps, vague requests, impossible ones), each done by plain Claude Code, ODD, Spec Kit,
+    BMAD and Superpowers, three times each, on Sonnet and on Haiku. It measures how often the work really passes, how
+    often each one says "done" when it is not, and the cost in tokens, money and time.</p>
+  <p>Early signs from the <a href="https://github.com/varunkan/ODD-Outcome-Driven-Development/blob/main/docs/evidence/12-pilot.md">pilot</a>,
+    too small to be results: on Sonnet, plain Claude Code got the work right on every task tried, so correctness may
+    not separate the five; on an impossible task, one framework claimed "done".</p>
   <p style="margin-bottom:0">The results will be published here with their spread, whatever they show. The harness is
     open: <a href="https://github.com/varunkan/ODD-Outcome-Driven-Development/tree/main/bench">bench/</a>.</p>
 </div>
