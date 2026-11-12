@@ -225,6 +225,16 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **How:** a method rule plus `odd new` refusing an outcome sentence with no observable; an "ask" result distinct from
   park.
 - **Measure:** rework and wrong-problem rate on the vague tasks.
+- **Done** in the commit "B6: ambiguity stop ..." (`git log --grep '^B6:'`): `odd new` refuses a sentence with
+  neither a verb of observation nor a measurable term (two English word lists, `OBSERVE` and `MEASURE` in odd.py;
+  setting `"ambiguity_stop"`, default `true`); `odd ask <slug> "<question>"` and the MCP `ask` tool write the new
+  field `asked:`; the gate reports such an outcome as `asked` / "waiting for an answer", covering no files, and `done`
+  refuses it; the method says to ask one precise question. DESIGN.md section 4b. Measured with `tests/test_odd.py`
+  class `AmbiguityStop` (7 tests; 6 seen RED on the missing check, command, method text and MCP tool; the
+  conservative-refusal test passed before the code, as a control) and 20 hand-made mutants of the new code in odd.py
+  and odd_mcp.py, each turning an `AmbiguityStop` test red (one survived at first, dropping the measurable-term list;
+  a sentence relying only on it was added and it then turned red). Not measured: rework and wrong-problem rate on
+  vague tasks; the word list lets through vague sentences containing a listed word and likely refuses other languages.
 
 ### 7. Outcome templates by kind of change
 - **Outcome:** a bug, a feature and a refactor each start from the right proof shape: reproduce-then-fix; new

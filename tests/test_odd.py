@@ -1778,7 +1778,7 @@ class Adoption(Repo):
                      tool='.odd/odd_mcp.py')
         self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
         self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
-        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['cascade', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec'])
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec'])
         self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
         done = r[4]['result']
         self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)
@@ -2523,6 +2523,85 @@ class ReproduceFirst(Repo):
         self.assertIn('--kind', argv)
         self.ok(*argv)
         self.assertIn('kind: bug', self.read('.odd/outcomes/add.md'))
+
+
+class AmbiguityStop(Repo):
+    """Backlog item 6: odd new refuses a sentence with no observable; odd ask records an open question and the gate
+    reports the outcome as waiting for an answer, not as failed and not as parked."""
+    VAGUE = ('Refactor the billing module.', 'Improve the login flow for users.', 'Clean up the code in utils.',
+             'Make search better and faster.')
+
+    def test_a_sentence_with_no_observable_is_refused_with_the_form_to_use(self):
+        for i, sentence in enumerate(self.VAGUE):
+            out = self.no('new', 'v%d' % i, sentence, '--proof', PROOF, '--in', 'calc.py')
+            self.assertIn('no checkable observable', out, sentence)
+            self.assertIn('"<who> <observes> <what>, measurably"', out)
+            self.assertFalse(os.path.exists(self.path('.odd/outcomes/v%d.md' % i)))
+
+    def test_the_refusal_is_conservative(self):
+        readme = open(os.path.join(os.path.dirname(HERE), 'README.md'), encoding='utf-8').read()
+        demo = open(os.path.join(os.path.dirname(HERE), 'launch', 'demo.sh'), encoding='utf-8').read()
+        found = re.findall(r'new [\w-]+ \\?\s*"([^"<]+)"', readme + demo)
+        self.assertGreaterEqual(len(found), 2, 'the README and demo examples were found')
+        for i, sentence in enumerate(found + [SENTENCE, 'Someone later sees something.', 'The page loads in under 2 s.',
+                                              'Checkout takes under 2 seconds for 99% of carts.',
+                                              'Every invoice total equals the sum of its lines.',
+                                              'A user who mistypes the password is refused.']):
+            self.ok('new', 'c%d' % i, sentence, '--proof', PROOF, '--in', 'calc.py')
+
+    def test_the_stop_can_be_turned_off(self):
+        self.write('.odd/config.json', json.dumps({'ambiguity_stop': False}))
+        self.ok('new', 'v', self.VAGUE[0], '--proof', PROOF, '--in', 'calc.py')
+        self.write('.odd/config.json', json.dumps({'ambiguity_stop': 'no'}))
+        self.no('new', 'w', SENTENCE, '--proof', PROOF, '--in', 'calc.py', code=2)
+
+    def test_ask_is_recorded_and_the_gate_waits_instead_of_failing(self):
+        self.outcome()
+        self.no('ask', 'add', 'which?')
+        out = self.ok('ask', 'add', 'Should add() round half up or half to even for money?')
+        self.assertIn('waiting for an answer', out)
+        self.assertRegex(self.read('.odd/outcomes/add.md'),
+                         r'(?m)^asked: Should add\(\) round half up or half to even for money\?$')
+        out = self.ok('gate')
+        self.assertIn('asked   add: Should add() round half up', out)
+        self.assertIn('waiting for an answer', out)
+        self.assertNotIn('parked', out)
+        self.assertIn('PASS (1 waiting for an answer: add)', out)
+        self.solve()
+        self.write('calc.py', FIXED + '# pad\n' * 30)
+        out = self.no('done', 'add')
+        self.assertIn('waiting for an answer', out)
+        self.assertNotIn('verified', out)
+        out = self.no('gate')  # an asked outcome covers no files, as a parked one: code written before the answer fails
+        self.assertIn('are outside every outcome', out)
+        facts = self.path('.git/facts.json')
+        self.no('gate', '--json', facts, '--summary', facts + '.md')
+        self.assertEqual([o['state'] for o in json.load(open(facts))['outcomes']], ['asked'])
+        self.assertIn('**waiting for an answer**', open(facts + '.md').read())
+
+    def test_answering_is_deleting_the_asked_line(self):
+        self.outcome()
+        self.ok('ask', 'add', 'Should add() round half up or half to even for money?')
+        self.write('.odd/outcomes/add.md', re.sub(r'(?m)^asked:.*\n', '', self.read('.odd/outcomes/add.md')))
+        self.solve()
+        self.assertIn('verified', self.ok('done', 'add'))
+        out = self.ok('gate')
+        self.assertNotIn('waiting', out)
+
+    def test_the_method_says_to_ask_one_precise_question(self):
+        self.assertIn('ask one precise question', ' '.join(oddmod.METHOD.split()))
+        self.assertIn('odd ask <slug>', oddmod.METHOD)
+
+    def test_the_mcp_ask_tool(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('odd_mcp_for_ask', MCP)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.outcome()
+        argv = mod.argv_for('ask', {'slug': 'add', 'question': '-Is rounding half up, for money?'})
+        self.assertEqual(argv, ['ask', '--', 'add', '-Is rounding half up, for money?'])
+        self.ok(*argv)
+        self.assertIn('asked: -Is rounding half up', self.read('.odd/outcomes/add.md'))
 
 
 if __name__ == '__main__':

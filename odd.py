@@ -61,9 +61,10 @@ DEFAULTS = {
     'race_seal': False,    # odd race: refuse an outcome that is not sealed
     'proof_tries': 3,      # odd spec: tries for the proof author to write a proof that fails before the code
     'coverage': 'report',  # requirements no outcome in the change covers: off, report, or enforce (an uncovered one fails)
+    'ambiguity_stop': True,  # odd new refuses an outcome sentence with no observable (an English word list)
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked')
 KINDS = ('bug',)  # kind: bug, the proof must fail at the base revision (reproduce first)
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
@@ -180,7 +181,8 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'race_timeout': lambda v: type(v) in (int, float) and 0 < v < float('inf'),
             'race_seal': lambda v: type(v) is bool,
             'proof_tries': lambda v: type(v) is int and 1 <= v <= 32,
-            'coverage': lambda v: v in ('off', 'report', 'enforce')}
+            'coverage': lambda v: v in ('off', 'report', 'enforce'),
+            'ambiguity_stop': lambda v: type(v) is bool}
 
 
 def load_config(root, at=None):
@@ -376,6 +378,10 @@ class Outcome:
     @property
     def parked(self):
         return self.get('parked')
+
+    @property
+    def asked(self):
+        return self.get('asked')
 
     @property
     def bug(self):
@@ -1494,7 +1500,7 @@ def survey(root, base_arg=None, recompute=False):
     changed = changed_files(root, base)
     control, exempt, tests, product = classify(changed, cfg)
     inplay = [o for o in all_outcomes(root) if o.rel in changed and not escape_only(root, base, o)]
-    active = [o for o in inplay if not o.parked]
+    active = [o for o in inplay if not o.parked and not o.asked]
     stray = [p for p in product if not any(o.covers(p) for o in active)]
     return dict(cfg=cfg, base=base, changed=changed, control=control, exempt=exempt, tests=tests, product=product,
                 inplay=inplay, active=active, stray=stray,
@@ -1539,6 +1545,10 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
         if o.parked:
             lines.append('  parked  %s: %s (a parked outcome covers no files)' % (o.slug, o.parked))
             fact(o, 'parked', why=o.parked)
+        elif o.asked:
+            lines.append('  asked   %s: %s (waiting for an answer; covers no files until the "asked:" line is deleted)'
+                         % (o.slug, o.asked))
+            fact(o, 'asked', why=o.asked)
     n = s['stray_lines']
     if stray and n > cfg['trivial_lines']:
         un = set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z'))
@@ -1579,6 +1589,8 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     head = '%s gate%s: base %s, %d file(s) changed, %d outcome(s) in this change' % (
         ODD, ' --recompute' if recompute else '', (base or 'none')[:10], len(changed), len(s['inplay']))
     tail = ' (%d skipped the take-out check: %s)' % (len(skips), '; '.join(skips)) if skips else ''
+    waiting = [o.slug for o in s['inplay'] if o.asked and not o.parked]
+    tail += ' (%d waiting for an answer: %s)' % (len(waiting), ', '.join(waiting)) if waiting else ''
     if problems:
         return 1, [head] + lines + ['FAIL' + tail] + ['  ' + p for p in problems]
     return 0, [head] + lines + ['PASS' + tail]
@@ -1640,6 +1652,24 @@ def suggest_proof(root, slug, test=None):
         '  (the test goes in %s)' % path))
 
 
+# backlog item 6: a sentence names something checkable when it has a verb of observation or a measurable term. The
+# lists are deliberately wide (English only): the stop refuses only a sentence with neither, such as "Refactor X."
+OBSERVE = re.compile(r'\b(?:(?:see|get|receive|observe|read|find|show|display|print|return|report|list|log|exit|fail|'
+                     r'pass|reject|refuse|accept|raise|throw|respond|answer|reply|load|contain|hear|notice|measure|'
+                     r'match|appear|produce|output|emit|render|download|send|warn|alert|block|stay|remain|succeed|'
+                     r'complete|finish|reach|hold|include|exclude|equal|count|total|sum|lose|crash|hang|redirect|'
+                     r'record|allow|deny|restore|recover|survive|detect|notify)(?:s|es|ed|d|n|ing)?|'
+                     r'saw|seen|got|gotten|found|shown|heard|ran|held|sent|lost|told|gives|gave|given)\b', re.I)
+MEASURE = re.compile(r'\d|%|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|every|each|'
+                     r'none|never|always|only|exactly|within|under|at (?:least|most)|(?:fewer|less|more) than|same|'
+                     r'percent|ms|seconds?|minutes?|hours?|bytes?|errors?|status|empty)\b', re.I)
+
+
+def observable(sentence):
+    """True unless the sentence has neither a verb of observation nor a measurable term (conservative)."""
+    return bool(OBSERVE.search(sentence) or MEASURE.search(sentence))
+
+
 def cmd_new(a, root):
     if not SLUG.match(a.slug):
         raise Fail('slug: lowercase letters, digits, dot, dash, underscore')
@@ -1649,6 +1679,12 @@ def cmd_new(a, root):
     sentence = ' '.join(a.outcome.split())
     if len(sentence.split()) < 4 or re.search(r'<[^>]+>', sentence):
         raise Fail('the outcome is one full sentence: who observes what result')
+    if load_config(root)['ambiguity_stop'] and not observable(sentence):
+        raise Fail('the outcome has no checkable observable (nothing anyone would see, get or measure): %r.\n'
+                   'state it in the form "<who> <observes> <what>, measurably", e.g. "A cashier who splits a bill three '
+                   'ways sees three totals that add up to the bill."\nIf the ticket does not say what should be '
+                   'observable, ask one precise question instead of guessing: %s ask <slug> "<question>" (on an '
+                   'outcome file) or ask the person who wrote the ticket.' % (sentence, ODD))
     globs = split_globs(','.join(a.in_))
     if not a.proof.strip() or not globs:
         raise Fail('--proof and --in must not be empty')
@@ -1674,6 +1710,8 @@ def prove(root, o, s, say=lambda s: None):
     """The checks of `odd done`: no unexplained edit of an existing test (R2), then verify. `s` is survey(root).
     Shared by done and race, which runs it inside each attempt's worktree."""
     cfg, base = s['cfg'], s['base']
+    if o.asked:
+        raise Fail('%s is waiting for an answer: %s\nanswer it, then delete the "asked:" line of %s' % (o.slug, o.asked, o.rel))
     _, bad, _ = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug], s['product'],
                             cfg['test_globs'])
     if bad:
@@ -2358,7 +2396,7 @@ def markdown(f):
             red = 'the proof failed: %s (%s file(s), %s line(s))' % (_cell(o.get('red_says') or '(no output)', True),
                                                                   o.get('files'), o.get('lines'))
         else:
-            red = '**%s**: %s' % ('not shown' if o['state'] == 'fail' else 'parked',
+            red = '**%s**: %s' % ({'fail': 'not shown', 'asked': 'waiting for an answer'}.get(o['state'], 'parked'),
                                   _cell(o.get('why', '').split('\n')[0][:200]))
         score = '-'
         if st:
@@ -2396,6 +2434,18 @@ def cmd_park(a, root):
           'this file as the record; to resume, delete its "parked:" line.' % (a.slug, PARK_WHEN, load_config(root)['trivial_lines']))
 
 
+def cmd_ask(a, root):
+    q = ' '.join(a.question.split())
+    if len(q) < 15 or not q.endswith('?'):
+        raise Fail('ask one precise question, ending in "?", that someone can answer without asking you back')
+    o = Outcome.load(root, a.slug)
+    o.f['asked'] = q
+    o.save()
+    print('%s: asked, waiting for an answer. Put the question in your report and stop work on this outcome: the gate '
+          'reports it as waiting, not failed, and it covers no files until answered. To answer: write the answer into '
+          'the outcome (its sentence, proof or notes), then delete the "asked:" line of %s.' % (a.slug, o.rel))
+
+
 def cmd_escaped(a, root):
     what = ' '.join(a.what.split())
     if len(what) < 10:
@@ -2424,7 +2474,7 @@ def cmd_stats(a, root):
         st = ([e['strength'] for e in ev if e.get('ok') and e.get('strength')] or [None])[-1]
         n = st and st['killed'] + len(st['survivors'])
         kind[o.slug] = 'survived' if n and st['survivors'] else ('caught' if n else '')
-        state = 'parked' if o.parked else ('skip' if o.skip else '')
+        state = 'parked' if o.parked else ('asked' if o.asked else ('skip' if o.skip else ''))
         print('%-28s %-8s %9d %8d %8d %-7s %s' % (o.slug, state, len(ev), sum(1 for e in ev if e.get('ok')), escapes(o),
                                                o.sealed_here, '%d of %d' % (st['killed'], n) if n else '-'))
     print('%d outcome(s): %d parked, %d skip the take-out check, %d record an escaped defect' % (
@@ -2452,8 +2502,8 @@ Work here is done when a proof says so, not when it looks finished. `odd` below 
 For any change of more than a few lines, on a branch of its own:
 
 1. State the outcome before writing code: one sentence saying who observes what, a command that exits 0 only when
-   that is true, and the files the change may touch. If the request is unclear, ask (at most five questions)
-   instead of guessing. List the ticket's requirements first, one per line, in `.odd/requirements/<ticket>.md`
+   that is true, and the files the change may touch. If the outcome cannot be made checkable from the ticket, ask
+   one precise question instead of guessing (`odd ask <slug> "<question>"` records it), and stop there. List the ticket's requirements first, one per line, in `.odd/requirements/<ticket>.md`
    (`R1: ...`), and cover each with an outcome (`--covers R1,R2`).
    `odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated, relative to the repository root>"`
 2. Write the proof as a test in a file of its own under a test path (`tests/`, `test_*.py`, `*_test.*`, `*.test.*`,
@@ -2634,7 +2684,7 @@ def cmd_hook(a, root):
     if a.event == 'session-start':
         if msg or (s and s['inplay']):
             print('odd: ' + (msg + '. ' if msg else '') + '; '.join(
-                '%s %s' % (o.slug, 'parked' if o.parked else 'in this change') for o in (s['inplay'] if s else [])))
+                '%s %s' % (o.slug, 'parked' if o.parked else ('waiting for an answer' if o.asked else 'in this change')) for o in (s['inplay'] if s else [])))
         return
     if ev.get('stop_hook_active') or (ev.get('loop_count') or 0) >= 1:  # never blocks twice in a row
         if msg:
@@ -2716,6 +2766,9 @@ def main(argv=None):
     s = sub.add_parser('park')
     s.add_argument('slug')
     s.add_argument('reason')
+    s = sub.add_parser('ask')
+    s.add_argument('slug')
+    s.add_argument('question', help='one precise question; delete the "asked:" line once it is answered')
     s = sub.add_parser('escaped')
     s.add_argument('slug')
     s.add_argument('what', help='what went wrong, and where it was found')

@@ -39,7 +39,8 @@ Free notes: questions asked and answered, decisions and why.
   a pinned Action at 0.4.0 or older refuses the unknown field), `proof-by: <name>` (written by `odd spec`: which
   agent command wrote the sealed proof, section 3d; the same tool version, and the same refusal by an older one:
   delete the line for an older tool), `covers: R1, R3` (the ticket requirements this outcome covers, section 5a;
-  the same tool version and the same refusal by an older one).
+  the same tool version and the same refusal by an older one), `kind: bug` (section 4a), `asked: <question>`
+  (written by `odd ask`: an open question, section 4b; the same tool version and the same refusal by an older one).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -49,7 +50,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | command | what it does | exit |
 |---|---|---|
 | `odd init [--claude-hooks] [--mcp]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step, the conditions under which CI is the authority, and a proof suggestion (section 3a); `--mcp` also installs the MCP server (section 7) | 0 |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0); `--kind bug` writes `kind: bug` (section 4a; needs a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0); `--kind bug` writes `kind: bug` (section 4a; needs a tool newer than 0.4.0); refuses a sentence with no observable (section 4b; a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
@@ -57,6 +58,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd spec <slug> --proof-by CMD [--tries N] [--base REF]` | another agent command (in practice a stronger model) writes only the proof in its own worktree; the test files come back and are sealed red (section 3d); retried, then parked; needs a tool newer than 0.4.0 | 0 proof brought back and sealed, 1 parked or refused (the proof passes in your tree, or did not apply), 2 could not run |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
+| `odd ask <slug> "<question>"` | records one open question as `asked:`; the gate reports the outcome as waiting for an answer (section 4b); needs a tool newer than 0.4.0 | 0, 1 not a question or no such outcome |
 | `odd escaped <slug> "<what, where found>"` | records a defect that got past this outcome (section 9) | 0, 1 vague report or no such outcome |
 | `odd stats` | counts, labelled self-reported, with escaped defects split by kind of proof | 0 |
 
@@ -473,6 +475,28 @@ though it is not the reported symptom: the `reproduced:` line shows it, and a re
 itself is the tree's version, since a test written for the bug did not exist at the base. odd cannot tell whether the
 failure is the reported behaviour; it shows the line. Measured: `tests/test_odd.py` class `ReproduceFirst`. Not
 measured: false "done" on bug tasks with and without it (BACKLOG item 5).
+
+### 4b. Ambiguity stop: no observable, ask instead
+
+`odd new` refuses an outcome sentence that has neither a verb of observation (sees, gets, receives, returns, shows,
+prints, is refused, ...) nor a measurable term (a digit, `%`, a number word, every, each, only, exactly, within,
+under, at most, seconds, errors, ...), exit 1, and suggests the form "<who> <observes> <what>, measurably". The test
+is two English word lists in `odd.py` (`OBSERVE`, `MEASURE`), never a model, and is deliberately wide: it refuses
+"Refactor the billing module." and "Make search better and faster.", and passes every example in the README, the demo
+and the tests. It cannot tell a checkable sentence from one that only contains a listed word ("Users see a nicer
+page." passes), and a sentence in another language is likely refused: set `"ambiguity_stop": false` in
+`.odd/config.json` to turn the check off (default `true`; the setting needs a tool newer than 0.4.0, and an older tool
+refuses the unknown setting).
+
+When the outcome cannot be made checkable from the ticket, the method tells the agent to ask one precise question
+and stop. `odd ask <slug> "<question>"` writes it as `asked: <question>` (one line, ending in `?`, at least 15
+characters). Such an outcome is not a fail and not parked: the gate prints `asked   <slug>: <question> (waiting for an
+answer; ...)`, adds `(N waiting for an answer: <slugs>)` to the verdict line, and reports state `asked` in `--json`
+and "waiting for an answer" in `--summary`. Like a parked outcome it covers no files, so code written before the
+answer is outside every outcome and fails the gate as usual (the exit codes keep their meaning: only the outcome file
+changed means PASS). `odd done` (and so `race` and `cascade`) refuses an asked outcome, exit 1. Answering is deleting
+the `asked:` line, with the answer written into the sentence, proof or notes. Measured: `tests/test_odd.py` class
+`AmbiguityStop`. Not measured: rework and wrong-problem rate on vague tasks with and without it (BACKLOG item 6).
 
 ## 6. Exemptions
 

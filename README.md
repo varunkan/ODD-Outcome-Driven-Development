@@ -93,6 +93,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | `odd spec <slug> --proof-by CMD [--tries N]` | another agent (in practice a stronger model) writes only the proof in its own worktree; it is brought back and sealed red before any code, retried up to 3 times, then parked (a tool newer than 0.4.0) |
 | `odd gate [--recompute]` | is every changed file inside a verified outcome? (`--recompute` for CI) |
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
+| `odd ask <slug> "<question>"` | the outcome cannot be made checkable from the ticket: record one precise question; the gate says "waiting for an answer" until the `asked:` line is deleted (a tool newer than 0.4.0) |
 | `odd escaped <slug> "<what, where found>"` | a defect got past a verified outcome: record it on that outcome |
 | `odd stats` | counts, self-reported, including escaped defects by kind of proof |
 
@@ -132,6 +133,13 @@ the proof to fail on the unfixed code (the outcome's changed files put back to t
 `reproduced: <last line of the failure>`; a proof that passes there is refused ("the proof does not reproduce the
 bug"). A tool newer than 0.4.0. odd shows the failure line; whether it is the reported symptom is for the reviewer
 (a missing new file also fails). Details: [DESIGN.md](DESIGN.md) section 4a.
+
+**A vague outcome is stopped, and a question is a valid answer.** `odd new` refuses a sentence with nothing anyone
+would see, get or measure ("Refactor the billing module.") and suggests "<who> <observes> <what>, measurably". It is a
+small English word list, not a model: wide on purpose, so it misses vague sentences that contain a listed word, and
+`"ambiguity_stop": false` turns it off. When the ticket does not say what should be observable, `odd ask <slug>
+"<question>"` records the question; the gate reports that outcome as waiting for an answer, not failed, until the
+`asked:` line is deleted. A tool newer than 0.4.0. Details: [DESIGN.md](DESIGN.md) section 4b.
 
 **A stronger model writes the proof, a cheaper one the code.** `odd spec <slug> --proof-by "<command>"` gives the
 outcome to one agent command to write only the proof, in its own worktree. odd accepts it only if it changes test

@@ -241,6 +241,15 @@ proof on the unfixed code, the outcome's changed files put back to the base, req
 `reproduced: <last line>`; a proof that passes on the unfixed code is refused. The line shows how it failed; odd
 cannot tell whether that is the reported symptom (an import of a file the fix added also fails), so read it.
 
+**What if the ticket is too vague to state a checkable outcome?**
+`odd new` refuses a sentence with no observable (no verb such as sees, gets, returns, is refused, and no measurable
+term such as a number, every, within, seconds) and suggests "<who> <observes> <what>, measurably". The agent is told
+to ask one precise question instead of guessing: `odd ask <slug> "<question>"` writes it into the outcome file, and
+the gate shows "waiting for an answer" for that outcome rather than a fail. Delete the `asked:` line once it is
+answered. The check is a word list, not a model: it stops "Refactor the billing module." and lets through vague
+sentences that contain a listed word; set `"ambiguity_stop": false` if it gets in your way (for example, outcomes
+written in another language). A tool newer than 0.4.0. Whether it lowers rework is not measured.
+
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).
 2. This week: `odd init` on one repository and use it on your next agent task.

@@ -22,7 +22,7 @@ MEANING = {0: 'pass', 1: 'fail / not shown', 2: 'could not run'}
 S, B = {'type': 'string'}, {'type': 'boolean'}
 SLUG = ('slug', S, 'the outcome, as named in .odd/outcomes/<slug>.md')
 BASE = ('base', S, 'measure from this revision instead of the target branch')
-POSITIONAL = ('slug', 'outcome', 'reason', 'what')
+POSITIONAL = ('slug', 'outcome', 'reason', 'what', 'question')
 TOOLS = (  # name, description, arguments (name, schema, description), the required ones
     ('new', 'State an outcome before the code: writes .odd/outcomes/<slug>.md. proof "auto" picks a narrow command '
             'from the test runner the repository uses and says what it detected.',
@@ -55,6 +55,9 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
       ('tries', S, 'tries for a proof that fails before the code, as a number (default 3)'), BASE], ('slug', 'proof-by')),
     ('park', 'The honest exit: the outcome is blocked or cannot be done as specified.',
      [SLUG, ('reason', S, 'why')], ('slug', 'reason')),
+    ('ask', 'The outcome cannot be made checkable from the ticket: record one precise question; the gate reports the '
+            'outcome as waiting for an answer until its "asked:" line is deleted.',
+     [SLUG, ('question', S, 'one precise question, ending in "?"')], ('slug', 'question')),
     ('escaped', 'Record a defect that got past a merged outcome.',
      [SLUG, ('what', S, 'what went wrong, and where it was found')], ('slug', 'what')),
 )
