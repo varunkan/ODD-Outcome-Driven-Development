@@ -253,6 +253,15 @@ published result, not one we have reproduced; the comparison to run is the same 
 against a strong-written sealed proof. odd cannot tell whether the proof tests the right thing, only that it is red
 first and stays unchanged; read it.
 
+**Can odd stop an agent that keeps failing at one outcome?**
+Yes, with `"max_attempts": N` in `.odd/config.json` (default 0, off; a tool newer than 0.4.0). odd counts failed
+`odd done` runs and refused race, cascade and chain attempts from its local evidence since the outcome was last
+verified; at N it parks the outcome with the reasons, exits 1, and a cascade stops escalating. Delete the `parked:`
+line to reset. odd does not tell the agent the number in advance (the pilot, docs/evidence/12-pilot.md, saw a visible
+dollar budget make an agent skip review steps). Limits: the count is per machine and per worktree, so another clone
+or CI starts at zero; it does not stop an agent between attempts, only at the next odd command; how much it saves is
+not measured.
+
 **How do I make sure every requirement of the ticket was done, not just the ones the agent liked?**
 List them once in `.odd/requirements/<ticket>.md`, one per line (`R1: ...`, `R2: ...`), and give each outcome a
 `covers: R1, R3` line (`odd new ... --covers R1,R3`; a tool newer than 0.4.0). `odd gate`, local and `--recompute`,

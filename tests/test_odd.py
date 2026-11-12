@@ -3181,6 +3181,16 @@ class Chain(Agents):
         self.assertEqual(self.git('status', '--porcelain'), '', 'everything the chain proved is committed')
         self.no_worktrees_left()
 
+    def test_chain_attempts_count_for_the_attempt_budget(self):
+        """Backlog item 15: a chain's failed attempts count, and the outcome is parked with the budget's reasons."""
+        self.use([self.solver('bad', wrong=('one',))])
+        self.write('.odd/config.json', json.dumps(dict(json.loads(self.read('.odd/config.json')), max_attempts=2)))
+        self.commit('budget')
+        out = self.no('chain', 'T-1', '--race', '2')
+        self.assertRegex(self.read('.odd/outcomes/one.md'),
+                         r'(?m)^parked: odd chain T-1 .*attempt budget reached \(2 failed attempts.*attempt 1: .*attempt 2: ', out)
+        self.no_worktrees_left()
+
     def test_a_failing_middle_outcome_stops_parks_and_a_rerun_resumes(self):
         self.use([self.solver('bad', wrong=('two',))])
         out = self.no('chain', 'T-1', '--race', '1')
@@ -3603,6 +3613,81 @@ class StopWhenProven(Repo):
         fail = tail.index('FAIL')
         self.assertIn('outside every outcome', '\n'.join(tail[fail:]))
         self.assertTrue(all(l.startswith('  ') for l in tail[fail + 1:]), 'nothing follows the problems')
+
+
+class AttemptBudget(Agents):
+    """Backlog item 15: "max_attempts" (0, off, by default) parks an outcome when its failed attempts reach the limit,
+    counted from local evidence: failed done runs and failed race, cascade or chain attempts. Never shown in advance."""
+
+    def budget(self, n, agents=()):
+        self.config(list(agents) or [self.agent('idle', 'true')], max_attempts=n)
+
+    def parked(self):
+        m = re.search(r'(?m)^parked: (.*)$', self.read('.odd/outcomes/add.md'))
+        return m and m.group(1)
+
+    def test_done_parks_on_the_nth_failure_with_the_reasons(self):
+        self.budget(3)
+        for _ in range(2):
+            self.assertNotIn('budget', self.no('done', 'add'))
+            self.assertIsNone(self.parked())
+        out = self.no('done', 'add')
+        self.assertIn('attempt budget reached: 3 failed attempt(s) at add; parked', out)
+        self.assertIn('attempt budget reached (3 failed attempts', self.parked())
+        self.assertIn('the proof fails', self.parked(), 'the collected reasons are in the parked line')
+
+    def test_deleting_the_parked_line_resets_and_a_verified_done_resets(self):
+        self.budget(2)
+        self.no('done', 'add')
+        self.no('done', 'add')
+        self.assertTrue(self.parked())
+        self.write('.odd/outcomes/add.md', re.sub(r'(?m)^parked: .*\n', '', self.read('.odd/outcomes/add.md')))
+        self.assertNotIn('budget', self.no('done', 'add'), 'the count starts again after a budget park')
+        self.assertIsNone(self.parked())
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+        self.write('calc.py', BROKEN)
+        self.assertNotIn('budget', self.no('done', 'add'), 'a verified done starts the count again')
+        self.assertIsNone(self.parked())
+        self.assertIn('budget', self.no('done', 'add'))
+
+    def test_off_by_default_and_never_shown_to_the_agent(self):
+        self.assertEqual(oddmod.DEFAULTS['max_attempts'], 0)
+        for _ in range(4):
+            self.assertNotIn('budget', self.no('done', 'add'))
+        self.assertIsNone(self.parked())
+        self.budget(5, [self.agent('show', 'cp "$1" %s' % os.path.join(self.bin, 'prompt.txt'))])
+        self.no('race', 'add', '--n', '1')
+        self.ok('init')
+        with open(os.path.join(self.bin, 'prompt.txt')) as f:
+            prompt = f.read()
+        for text in (self.read('AGENTS.md'), prompt):
+            self.assertNotRegex(text, r'(?i)budget|max_attempts|attempts left')
+
+    def test_race_attempts_count(self):
+        self.budget(4, [self.agent('broken', self.writes(BROKEN.replace('0', 'a - b')))])
+        self.assertNotIn('budget', self.no('race', 'add', '--n', '3'))
+        self.assertIsNone(self.parked())
+        out = self.no('done', 'add')
+        self.assertIn('attempt budget reached: 4 failed attempt(s) at add; parked', out)
+        self.assertIn('attempt 1: the proof fails', self.parked())
+        self.no_worktrees_left()
+
+    def test_a_race_that_reaches_it_parks(self):
+        self.budget(2, [self.agent('broken', self.writes(BROKEN.replace('0', 'a - b')))])
+        out = self.no('race', 'add', '--n', '2')
+        self.assertIn('attempt budget reached: 2 failed attempt(s) at add; parked', out)
+        self.assertTrue(self.parked())
+        self.assertEqual(self.read('calc.py'), BROKEN)
+
+    def test_cascade_stops_escalating_at_the_budget(self):
+        mark = os.path.join(self.bin, 'dear.ran')
+        self.budget(2, [self.agent('a', self.writes(BROKEN.replace('0', 'a - b'))), self.agent('b', 'true'),
+                        self.agent('dear', 'touch %s\n' % mark + self.writes(FIXED))])
+        out = self.no('cascade', 'add')
+        self.assertFalse(os.path.exists(mark), 'no level runs after the budget is reached: ' + out)
+        self.assertIn('attempt budget reached: 2 failed attempt(s) at add; parked', out)
+        self.assertIn('attempt budget reached', self.parked())
 
 
 if __name__ == '__main__':

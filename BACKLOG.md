@@ -425,6 +425,20 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **How:** counted by ODD from local evidence, never shown to the agent as a budget (the pilot showed a visible budget
   makes agents skip work, [12](docs/evidence/12-pilot.md)).
 - **Measure:** spend on tasks that end unsolved.
+- **Done** in the commit "B15: attempt budget per outcome" (`git log --grep '^B15:'`), a tool newer than 0.4.0, setting
+  `"max_attempts"` (default 0, off; the v0.4.0 Action refuses it as unknown): `failures()` counts, from local evidence,
+  failed `odd done` runs and every attempt `_judge()` refused in `_attempts()` (so race, cascade and chain alike),
+  since the latest verified `done` or budget park; `budget()` parks with the first line of each reason and exit 1 when
+  the count reaches the limit; a cascade runs no further level once reached. Nothing in `AGENTS.md` or a prompt names
+  it (asserted). DESIGN.md section 3g. Measured with `tests/test_odd.py` class `AttemptBudget` (6 tests) and
+  `Chain.test_chain_attempts_count_for_the_attempt_budget`; the 6 `AttemptBudget` tests seen RED before the code (the
+  unknown setting, exit 2); the chain test was added after the code, and the mutant dropping the chain reason turns it
+  red: 12 hand-made mutants
+  (no reset on a verified done, no reset on a budget park, race attempts not counted, `>=` to `>`, default 1, no
+  attempt record, no cascade stop, chain reason dropped, no budget in done, in race, in cascade, no park record) each
+  turned a new test red. In the cascade test with `"max_attempts": 2` and three levels, the third agent did not run.
+  Suites: 271 and 89 tests OK. Not done: spend on tasks that end unsolved (the item's measure) is not measured on real
+  agents; the count is per machine and worktree; `odd stats` does not show refused race attempts.
 
 ### 16. Cost per proven outcome
 - **Outcome:** ODD reports dollars, seconds and turns per proven outcome, the figure the race and the cascade optimise.

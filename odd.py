@@ -68,6 +68,7 @@ DEFAULTS = {
     'auto_min_strength': 1.0,  # the auto lane: least share k/n of small breaks each outcome's proof must catch
     'auto_max_lines': 120,     # the auto lane: most changed product lines
     'cache_file': None,    # backlog item 12: the verification cache file (default: under the git directory); a CI cache step saves it
+    'max_attempts': 0,     # backlog item 15: park an outcome after this many failed attempts (done, race, cascade, chain); 0 is off
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
 FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked')
@@ -208,7 +209,8 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'auto_lane': lambda v: type(v) is bool,
             'auto_min_strength': lambda v: type(v) in (int, float) and 0 <= v <= 1,
             'auto_max_lines': lambda v: type(v) is int and v >= 0,
-            'cache_file': lambda v: v is None or (isinstance(v, str) and bool(v.strip()))}
+            'cache_file': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
+            'max_attempts': lambda v: type(v) is int and v >= 0}
 
 
 def load_config(root, at=None):
@@ -609,6 +611,38 @@ def evidence(root, slug):
                 except ValueError:
                     pass
     return out
+
+
+def failures(root, slug):
+    """The failed attempts at an outcome since it was last verified or last parked for its attempt budget (local
+    evidence): failed `odd done` runs and failed race, cascade or chain attempts."""
+    out = []
+    for e in evidence(root, slug):
+        if e.get('ok') or 'budget' in e:
+            out = []
+        elif e.get('ok') is False or e.get('failed'):
+            out.append(e)
+    return out
+
+
+def over_budget(root, cfg, slug):
+    return bool(cfg['max_attempts']) and len(failures(root, slug)) >= cfg['max_attempts']
+
+
+def budget(root, cfg, o):
+    """Backlog item 15: when the failed attempts reach "max_attempts" (0: off), park the outcome with their reasons
+    and return the line to add to the failure; else ''. The number is never shown to an agent in advance (a visible
+    budget made agents skip work, docs/evidence/12-pilot.md). Deleting the "parked:" line starts the count again."""
+    if not over_budget(root, cfg, o.slug):
+        return ''
+    fails = failures(root, o.slug)
+    why = '; '.join(('%s: ' % e['failed'] if e.get('failed') else '') + (e.get('why') or '').strip().split('\n')[0][:160]
+                    for e in fails)
+    o.f['parked'] = ' '.join(('odd: attempt budget reached (%d failed attempts, %s): %s' % (len(fails), now()[:10], why)).split())
+    o.save()
+    record(root, o.slug, budget=cfg['max_attempts'], failures=len(fails))
+    return ('attempt budget reached: %d failed attempt(s) at %s; parked with their reasons in the "parked:" line of %s. '
+            'Stop and report it; to try again, delete that line.' % (len(fails), o.slug, o.rel))
 
 
 def _state(path):
@@ -2102,6 +2136,9 @@ def cmd_done(a, root):
         res = prove(root, o, s, print)
     except Fail as e:
         record(root, a.slug, ok=False, why=str(e)[:300], **_kind(o))
+        over = budget(root, cfg, o)
+        if over:
+            raise Fail('%s\n%s' % (e, over), e.items)
         raise Fail('%s\n%s' % (e, next_block(e.items, _rerun(a))) if e.items else e, e.items)  # no item: rerunning fails alike
     _verified(root, o, s, res)
     print('%s: verified. %s' % (a.slug, _describe(o, res)))
@@ -2425,6 +2462,8 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
             v0 = time.time()
             at['why'] = _judge(root, cfg, o, base, at, fixed)
             at['verify_s'] = round(time.time() - v0, 1)
+            if at['why']:  # counted for the attempt budget as a failed done is
+                record(root, o.slug, failed='attempt %s' % at['name'], why=(at.get('detail') or at['why'])[:300], **_kind(o))
         ranked = sorted([x for x in attempts if not x['why']], key=_rank)
         patch = ''
         if ranked:
@@ -2528,7 +2567,9 @@ def cmd_race(a, root):
     agents = _agents(cfg, [a.agent] if a.agent else cfg['agents'], 'race')
     o, head, attempts, ranked, patch, keep = _race_run(root, cfg, a.slug, a.base, agents, _race_n(agents, a.n, '--n'))
     if not ranked:
-        raise _none_verified('no attempt was verified; each one\'s reason is in the table above', attempts, a)
+        over = budget(root, cfg, o)
+        raise _none_verified('no attempt was verified; each one\'s reason is in the table above' + ('\n' + over if over else ''),
+                             attempts, a)
     print('winner: attempt %s, %s' % (ranked[0]['name'], _why_won(ranked)))
     _apply(root, o, head, ranked[0], patch, keep)
 
@@ -2581,6 +2622,9 @@ def _cascade_run(root, cfg, slug, base_arg, levels, n):
         history += attempts
         if ranked:
             break
+        if lv < len(levels) and over_budget(root, cfg, o.slug):
+            print('attempt budget reached: no further level runs')
+            break
         for at in attempts:
             before.append('- level %d (agent `%s`), attempt %s: %s\n%s' % (lv, cmd, at['name'], (at.get('detail') or at['why'])[:1500],
                                                                        next_block(at.get('items', []), '%s done %s' % (ODD, o.slug))))
@@ -2605,6 +2649,10 @@ def cmd_cascade(a, root):
     if not 1 <= n <= 32:
         raise CouldNotRun('--race must be between 1 and 32')
     o, head, history, ranked, patch, keep, record_path = _cascade_run(root, cfg, a.slug, a.base, levels, n)
+    over = '' if ranked else budget(root, cfg, o)
+    if over:
+        raise _none_verified('no attempt was verified; each one\'s reason is in the table above and in %s. Nothing was '
+                             'applied.\n%s' % (record_path, over), history, a)
     if not ranked:
         o.f['parked'] = ' '.join(('odd cascade: no level verified (%s): %s' % (now()[:10], '; '.join(
             'level %s (%s): %s' % (at['name'], _short(at['cmd']), at['why']) for at in history))).split())
@@ -2668,7 +2716,7 @@ def _chain_step(root, cfg, a, slug, agents, n, rel):
         o, head, attempts, ranked, patch, keep = _race_run(root, cfg, slug, a.base, agents, n)
     if not ranked:
         e = _none_verified('no attempt at %s was verified' % slug, attempts, a)
-        e.why = '; '.join('attempt %s: %s' % (at['name'], at['why']) for at in attempts)
+        e.why = o.parked if budget(root, cfg, o) else '; '.join('attempt %s: %s' % (at['name'], at['why']) for at in attempts)
         raise e
     path, paths = _apply(root, o, head, ranked[0], patch, keep, hint=False), []
     try:

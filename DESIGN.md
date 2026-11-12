@@ -286,6 +286,31 @@ listed file and callers outside the boundary are not listed); a proof that reach
 script is read as text, as in the take-out check; whether the list cuts an agent's turns and tokens (the item's
 measure) is not measured.
 
+### 3g. Attempt budget per outcome: `"max_attempts"`
+
+A tool newer than 0.4.0 (backlog item 15; the Action at v0.4.0 refuses `"max_attempts"` as an unknown setting, so
+set it only once the tool in use is newer). `"max_attempts"` (an integer, default 0 = off) parks an outcome once its
+failed attempts reach the number. The count comes from local evidence under the git directory (`failures()` reads the
+log `record()` writes): every failed `odd done` (the `ok: false` line it already wrote; a run that could not run,
+exit 2, is not an attempt) and every attempt of `race`, `cascade` or `chain` that `_judge()` refused (one
+`failed: "attempt <name>"` line each, written by `_attempts()`, the machinery all three share). It counts from the
+latest verified `done` or the latest budget park, whichever is newer. When the count reaches the limit,
+`budget()` writes `parked: odd: attempt budget reached (N failed attempts, <date>): <the first line of each
+reason>`, records the park as the new starting point, and the command exits 1 with `attempt budget reached: N failed
+attempt(s) at <slug>; parked ...`; `done` prints that line in place of its `next:` block. A race or chain checks the
+count after its attempts; a cascade also checks it between levels and runs no further level once it is reached (the
+spend the item is about); a chain parks the outcome with the budget's line after `odd chain <ticket>`. A race whose
+winner is verified is not parked, although its refused attempts are counted until the next verified `done`. Resetting
+is deleting the `parked:` line, as for any park. The number is never shown to an agent in advance: neither the
+`AGENTS.md` block nor a race, cascade or chain prompt mentions it, because a budget the agent could see made agents
+skip review and spec steps in the pilot ([12](docs/evidence/12-pilot.md)); the agent sees it only once reached.
+
+Limits: the evidence is per machine and per worktree (`state_dir()`), so attempts on another machine, in CI or in a
+fresh clone are not counted, and deleting `.git/odd/evidence/` resets every count; an agent that runs `odd done` in
+a loop still uses the full budget; `odd stats` counts done runs only, not refused race attempts; the parked line is
+the reason list cut to the first line of each reason (up to 160 characters), the full findings stay in the race and
+cascade logs. The spend saved on tasks that end unsolved (the item's measure) is not measured on real agents.
+
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
 **The base** is one revision for everything: where this branch left the target branch (the merge-base of HEAD and

@@ -210,6 +210,13 @@ while tests from the weak model itself lowered it to 57.3% (arXiv 2609.09133, se
 [docs/evidence/14-research.md](docs/evidence/14-research.md)). Whether that holds on odd's harness is not measured yet
 (BACKLOG item 3). Details: [DESIGN.md](DESIGN.md) section 3d.
 
+**An attempt budget per outcome.** `"max_attempts": N` (default 0, off; a tool newer than 0.4.0) parks an outcome
+after N failed attempts at it, counted on this machine from odd's local evidence: failed `odd done` runs and refused
+`race`, `cascade` or `chain` attempts, since the outcome was last verified. The `parked:` line lists each reason; a
+cascade runs no further level once the budget is reached; delete the `parked:` line to try again. The number is
+never written into `AGENTS.md` or an agent's prompt: in our pilot a visible budget made an agent skip work. Whether it
+saves money on tasks that end unsolved is not measured. Details: [DESIGN.md](DESIGN.md) section 3g.
+
 ## What it checks, and what it does not
 
 It checks that the proof **depends on the change**: with the change removed, the proof fails. It checks that nothing
