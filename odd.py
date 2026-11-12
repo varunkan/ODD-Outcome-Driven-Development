@@ -65,7 +65,16 @@ DEFAULTS = {
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
 FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked')
-KINDS = ('bug',)  # kind: bug, the proof must fail at the base revision (reproduce first)
+KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
+REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
+HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
+    'bug': 'reproduce first: write the proof so it fails on the current code the way the ticket describes; seal and '
+           'done require it to fail at the base revision and refuse "counterfactual: skip". Then fix.',
+    'feature': 'the proof covers the new behaviour: a test that fails without the change and passes with it; keep the '
+               'existing suite green as well (run it before done; the proof alone does not).',
+    'refactor': 'the existing suite is the proof: behaviour must not change, so the take-out check is skipped '
+                '(counterfactual: %s) and done passes when the suite passes; an edit of an existing test is refused '
+                'unless explained, so do not change the tests to fit.' % REFACTOR_SKIP}
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
@@ -1608,6 +1617,10 @@ PROOFS = (('pytest', 'python3 -m pytest -q {test}', 'tests/test_{name}.py'),
           ('cargo', 'cargo test --test {stem}', 'tests/{name}.rs'),
           ('unittest', 'python3 -m unittest -q {test}', 'tests/test_{name}.py'),
           ('make', 'make test', ''))
+# backlog item 7: the whole suite of each runner, the proof `new --kind refactor` defaults to ({dir}: the test folder)
+SUITES = {'pytest': 'python3 -m pytest -q', 'jest': 'npx jest', 'vitest': 'npx vitest run', 'node': 'node --test',
+          'mocha': 'npx mocha', 'go': 'go test ./...', 'cargo': 'cargo test',
+          'unittest': 'python3 -m unittest discover -q{dir}', 'make': 'make test'}
 NO_RUNNER = ('no test runner detected (looked for pytest settings, a conftest.py, pytest in requirements*.txt, *.py '
              'files, a package.json test script running jest, vitest, mocha or node --test, go.mod, Cargo.toml, a '
              'Makefile test target)')
@@ -1637,12 +1650,17 @@ def runners(root):
     return [(name, seen[name][0]) for name, _, _ in PROOFS if seen[name]]
 
 
-def suggest_proof(root, slug, test=None):
-    """(the proof command, what was detected and chosen), or (None, why not): never a silent guess."""
+def suggest_proof(root, slug, test=None, suite=False):
+    """(the proof command, what was detected and chosen), or (None, why not): never a silent guess. suite: the
+    runner's whole suite instead of one test file (unless a test path is given)."""
     found = runners(root)
     if not found:
         return None, NO_RUNNER
     name, cmd, default = [p for p in PROOFS if p[0] == found[0][0]][0]
+    if suite and not test:
+        folder = [d for d in ('tests', 'test') if os.path.isdir(os.path.join(root, d))][:1]
+        proof = SUITES[name].format(dir=''.join(' -s ' + d for d in folder))
+        return proof, 'detected: %s\nproof: %s  (the whole test suite)' % (', '.join('%s (%s)' % f for f in found), proof)
     path = test or default.format(slug=slug, name=re.sub(r'[.-]', '_', slug))
     q = shlex.quote if test else (lambda x: x)  # a path from the slug needs no quoting; the init placeholder must stay readable
     proof = cmd.format(test=q(path), dir=q('./' + os.path.dirname(path) if os.path.dirname(path) else '.'),
@@ -1686,24 +1704,31 @@ def cmd_new(a, root):
                    'observable, ask one precise question instead of guessing: %s ask <slug> "<question>" (on an '
                    'outcome file) or ask the person who wrote the ticket.' % (sentence, ODD))
     globs = split_globs(','.join(a.in_))
+    if a.proof is None:
+        if a.kind != 'refactor':
+            raise CouldNotRun('odd new: --proof is required (only --kind refactor defaults it, to the whole test suite)')
+        a.proof = 'auto'
     if not a.proof.strip() or not globs:
         raise Fail('--proof and --in must not be empty')
     if a.test and a.proof.strip() != 'auto':
         raise Fail('--test goes with --proof auto only; the test path is already in your proof command')
     if a.proof.strip() == 'auto':
-        a.proof, said = suggest_proof(root, a.slug, a.test)
+        a.proof, said = suggest_proof(root, a.slug, a.test, suite=a.kind == 'refactor')
         if a.proof is None:
             raise Fail('%s.\ngive the command yourself: %s new %s "<outcome>" --proof "<command>" --in "<globs>"' % (said, ODD, a.slug))
         print(said)
     covers = ', '.join('%s:%s' % (k, r) if k else r for k, r in cover_ids(a.covers or ''))
     o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(globs))] +
-               ([('covers', covers)] if covers else []) + ([('kind', a.kind)] if a.kind else []))
+               ([('covers', covers)] if covers else []) + ([('kind', a.kind)] if a.kind else []) +
+               ([('counterfactual', REFACTOR_SKIP)] if a.kind == 'refactor' else []))
     o.save()
     odd_looking = [g for g in globs if re.search(r'[\s{}]', g)]
     print('%s created (paths and the proof are relative to the repository root).%s\n'
           'next: write the proof under a test path, make the change inside "%s", then: %s done %s'
           % (o.rel, ('\nnote: globs are separated by commas and braces are not expanded; "%s" is read as one path.'
                      % odd_looking[0]) if odd_looking else '', o.get('in'), ODD, a.slug))
+    if a.kind:
+        print('hint (%s): %s' % (a.kind, HINTS[a.kind]))
 
 
 def prove(root, o, s, say=lambda s: None):
@@ -2728,14 +2753,15 @@ def main(argv=None):
     s = sub.add_parser('new')
     s.add_argument('slug')
     s.add_argument('outcome')
-    s.add_argument('--proof', required=True, help='a command that exits 0 only when the outcome holds, or "auto": '
-                   'one picked from the test runner the repository uses')
+    s.add_argument('--proof', help='a command that exits 0 only when the outcome holds, or "auto": one picked from the '
+                   'test runner the repository uses (required, except with --kind refactor: the whole suite)')
     s.add_argument('--test', metavar='PATH', help='with --proof auto: the test file the proof runs')
     s.add_argument('--in', dest='in_', required=True, action='append', help='globs, comma-separated (may be repeated)')
     s.add_argument('--covers', metavar='IDS', help='the requirements this outcome covers, comma-separated: R1, R3 (from '
                    '.odd/requirements/<ticket>.md), or <ticket>:R1')
     s.add_argument('--kind', choices=KINDS, help='bug: seal and done require the proof to fail at the base revision '
-                   '(reproduce first)')
+                   '(reproduce first); feature: the proof covers the new behaviour; refactor: the proof defaults to '
+                   'the whole suite and the take-out check is skipped. Prints a hint after creation')
     s = sub.add_parser('seal')
     s.add_argument('slug')
     s.add_argument('--base', help='measure from this revision instead of the target branch')

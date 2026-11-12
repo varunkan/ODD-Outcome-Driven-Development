@@ -50,7 +50,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | command | what it does | exit |
 |---|---|---|
 | `odd init [--claude-hooks] [--mcp]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step, the conditions under which CI is the authority, and a proof suggestion (section 3a); `--mcp` also installs the MCP server (section 7) | 0 |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0); `--kind bug` writes `kind: bug` (section 4a; needs a tool newer than 0.4.0); refuses a sentence with no observable (section 4b; a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0); `--kind bug|feature|refactor` writes `kind:` and prints a hint (sections 4a, 4c; needs a tool newer than 0.4.0); `--proof` may be left out only with `--kind refactor` (exit 2 otherwise, as before); refuses a sentence with no observable (section 4b; a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
@@ -459,8 +459,8 @@ missed per task with and without the check (BACKLOG item 4).
 
 ### 4a. Reproduce first: `kind: bug`
 
-An outcome may carry `kind: bug` (`odd new ... --kind bug`; needs a tool newer than 0.4.0; the only kind so far, any
-other value is refused). For a bug outcome `odd seal` and `odd done` (and so `odd gate --recompute`) require the proof
+An outcome may carry `kind: bug` (`odd new ... --kind bug`; needs a tool newer than 0.4.0; the kinds are `bug`,
+`feature` and `refactor` (section 4c), any other value is refused). For a bug outcome `odd seal` and `odd done` (and so `odd gate --recompute`) require the proof
 to fail at the base revision, and print how it failed as `reproduced: <last line of its output>`. The base run is the
 take-out of section 4, unchanged: taking out every changed product file inside the outcome's `in:` puts back exactly
 the base version of those files (a file the change added is removed). `odd seal` on a bug outcome takes the fix out
@@ -497,6 +497,30 @@ answer is outside every outcome and fails the gate as usual (the exit codes keep
 changed means PASS). `odd done` (and so `race` and `cascade`) refuses an asked outcome, exit 1. Answering is deleting
 the `asked:` line, with the answer written into the sentence, proof or notes. Measured: `tests/test_odd.py` class
 `AmbiguityStop`. Not measured: rework and wrong-problem rate on vague tasks with and without it (BACKLOG item 6).
+
+
+### 4c. Templates by kind of change: `odd new --kind bug|feature|refactor`
+
+Needs a tool newer than 0.4.0. `--kind` writes `kind: <kind>`, fills the kind's defaults, and prints one line
+`hint (<kind>): ...` after the file is written (`HINTS` in odd.py); without `--kind` nothing changes and no hint is
+printed.
+
+| kind | defaults written | what `seal`/`done` then do | hint |
+|---|---|---|---|
+| `bug` | `kind: bug` | require the proof to fail at the base revision (section 4a) | reproduce first, then fix |
+| `feature` | `kind: feature`; the proof as given | as for an outcome without a kind | the proof covers the new behaviour; keep the existing suite green (the proof alone does not run it) |
+| `refactor` | `kind: refactor`; `counterfactual: skip - behaviour-preserving refactor`; `--proof` optional, defaulting to `auto` with the runner's whole suite | `done` passes when the proof passes and no existing test changed unexplained (section 4's take-out and the strength check are skipped, as for any `counterfactual: skip`) | the existing suite is the proof; do not change the tests to fit |
+
+The whole-suite command per runner is `SUITES` in odd.py, picked by the same detection as `--proof auto` (section
+3a): `python3 -m pytest -q`, `npx jest`, `npx vitest run`, `node --test`, `npx mocha`, `go test ./...`, `cargo test`,
+`python3 -m unittest discover -q -s tests` (or `-s test`, or no `-s` when neither folder exists), `make test`.
+`--proof auto --test PATH` with `--kind refactor` keeps the one test file; an explicit `--proof` is kept as given.
+No runner detected: refused, exit 1, as for `--proof auto`. Limits: `feature` adds only the field and the hint; odd
+does not run the existing suite for it. A refactor's take-out is skipped, so odd does not show that the suite
+exercises the changed code. The refactor sentence still meets the ambiguity stop (section 4b): "Refactor X." is
+refused, "Every existing test of X still passes after the split." is not. Only the unittest suite command is
+exercised by the tests; the others are not run. Whether the templates lower turns or failed `done` attempts is not
+measured.
 
 ## 6. Exemptions
 

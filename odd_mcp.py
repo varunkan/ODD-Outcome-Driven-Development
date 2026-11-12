@@ -27,12 +27,15 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
     ('new', 'State an outcome before the code: writes .odd/outcomes/<slug>.md. proof "auto" picks a narrow command '
             'from the test runner the repository uses and says what it detected.',
      [SLUG, ('outcome', S, 'one sentence: who observes what result'),
-      ('proof', S, 'a command that exits 0 only when the outcome holds, or "auto"'),
+      ('proof', S, 'a command that exits 0 only when the outcome holds, or "auto" (optional with kind "refactor": '
+                   'the whole suite)'),
       ('in', S, 'globs of the product files the change may touch, comma-separated'),
       ('test', S, 'with proof "auto": the test file the proof runs'),
       ('covers', S, 'the requirements this outcome covers, comma-separated: R1, R3 (.odd/requirements/<ticket>.md)'),
-      ('kind', S, '"bug": seal and done require the proof to fail at the base revision (reproduce first)')],
-     ('slug', 'outcome', 'proof', 'in')),
+      ('kind', S, '"bug": seal and done require the proof to fail at the base revision (reproduce first); "feature": '
+                  'the proof covers the new behaviour; "refactor": the proof defaults to the whole suite and the '
+                  'take-out check is skipped')],
+     ('slug', 'outcome', 'in')),
     ('seal', 'Optional, before the code: the proof must fail now; fingerprints the test files so a later edit shows.',
      [SLUG, BASE], ('slug',)),
     ('done', 'Verify an outcome: the proof passes, fails with the change taken out, and passes again.',

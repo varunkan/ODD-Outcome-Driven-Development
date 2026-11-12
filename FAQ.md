@@ -241,6 +241,15 @@ proof on the unfixed code, the outcome's changed files put back to the base, req
 `reproduced: <last line>`; a proof that passes on the unfixed code is refused. The line shows how it failed; odd
 cannot tell whether that is the reported symptom (an import of a file the fix added also fails), so read it.
 
+**How do I state a refactor, where nothing new should be observable?**
+`odd new <slug> "<sentence>" --in "<globs>" --kind refactor` (a tool newer than 0.4.0): the proof defaults to the
+whole suite of the runner odd detects (for example `python3 -m unittest discover -q -s tests`), and the outcome
+records `counterfactual: skip - behaviour-preserving refactor`, since taking a refactor out should change nothing.
+`done` then passes when the suite passes and no existing test was edited unexplained; the take-out and strength
+checks are skipped, so odd does not show the suite runs the changed lines. The sentence still needs an observable:
+"Every existing test of billing still passes after the split." `--kind feature` and `--kind bug` print their own
+hints (the proof covers the new behaviour and the suite stays green; reproduce first).
+
 **What if the ticket is too vague to state a checkable outcome?**
 `odd new` refuses a sentence with no observable (no verb such as sees, gets, returns, is refused, and no measurable
 term such as a number, every, within, seconds) and suggests "<who> <observes> <what>, measurably". The agent is told

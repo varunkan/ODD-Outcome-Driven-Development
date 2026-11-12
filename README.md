@@ -86,7 +86,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | command | what it does |
 |---|---|
 | `odd init [--claude-hooks] [--mcp]` | set up or repair a project; prints the step to add to CI and a proof suggestion |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected; `--covers R1,R3` names the ticket requirements it covers; `--kind bug` requires the proof to fail on the unfixed code (both a tool newer than 0.4.0) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` | state an outcome (a three-line file in `.odd/outcomes/`); `--proof auto` picks a narrow command from your test runner and prints what it detected; `--covers R1,R3` names the ticket requirements it covers; `--kind bug` requires the proof to fail on the unfixed code; `--kind feature` and `--kind refactor` fill their defaults and hints (all a tool newer than 0.4.0) |
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd race <slug> [--n N] [--agent CMD]` | run N agent attempts in parallel, each in its own git worktree; the verified one with the strongest proof and fewest changed lines is applied to your tree (a tool newer than 0.4.0) |
 | `odd cascade <slug> [--agents C1,C2] [--race N]` | try the agents in order, cheapest first, each attempt in its own worktree; stop at the first verified one and apply it, else escalate with the failure in the next prompt, and park after the last (a tool newer than 0.4.0) |
@@ -133,6 +133,13 @@ the proof to fail on the unfixed code (the outcome's changed files put back to t
 `reproduced: <last line of the failure>`; a proof that passes there is refused ("the proof does not reproduce the
 bug"). A tool newer than 0.4.0. odd shows the failure line; whether it is the reported symptom is for the reviewer
 (a missing new file also fails). Details: [DESIGN.md](DESIGN.md) section 4a.
+
+**Each kind of change starts from its proof shape.** `odd new ... --kind bug|feature|refactor` (a tool newer than
+0.4.0) writes `kind:` and prints a one-line hint: bug, reproduce first; feature, the proof covers the new behaviour
+and the existing suite stays green; refactor, the existing suite is the proof. `--kind refactor` may leave out
+`--proof` (it becomes the detected runner's whole suite) and writes `counterfactual: skip - behaviour-preserving
+refactor`, so `done` checks only that the suite passes and no test changed unexplained. odd does not run the suite for
+a feature, and does not show that the suite exercises a refactored line. Details: [DESIGN.md](DESIGN.md) section 4c.
 
 **A vague outcome is stopped, and a question is a valid answer.** `odd new` refuses a sentence with nothing anyone
 would see, get or measure ("Refactor the billing module.") and suggests "<who> <observes> <what>, measurably". It is a

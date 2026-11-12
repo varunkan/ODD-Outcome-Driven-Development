@@ -2604,5 +2604,71 @@ class AmbiguityStop(Repo):
         self.assertIn('asked: -Is rounding half up', self.read('.odd/outcomes/add.md'))
 
 
+class KindTemplates(Repo):
+    """Backlog item 7: odd new --kind bug|feature|refactor fills the right defaults and prints the matching hint."""
+    SUITE = 'python3 -m unittest discover -q -s tests'
+
+    def green_suite(self):
+        self.write('calc.py', FIXED)
+        self.write('tests/test_calc.py', TEST)
+        self.commit('a green suite')
+
+    def test_bug_records_the_kind_and_hints_reproduce_first(self):
+        out = self.ok('new', 'add', SENTENCE, '--proof', PROOF, '--in', 'calc.py', '--kind', 'bug')
+        self.assertIn('hint (bug): reproduce first', out)
+        md = self.read('.odd/outcomes/add.md')
+        self.assertRegex(md, r'(?m)^kind: bug$')
+        self.assertNotIn('counterfactual:', md)
+
+    def test_feature_keeps_the_proof_and_hints_to_keep_the_suite_green(self):
+        out = self.ok('new', 'add', SENTENCE, '--proof', PROOF, '--in', 'calc.py', '--kind', 'feature')
+        self.assertIn('hint (feature): the proof covers the new behaviour', out)
+        self.assertIn('keep the existing suite green', out)
+        md = self.read('.odd/outcomes/add.md')
+        self.assertRegex(md, r'(?m)^kind: feature$')
+        self.assertIn('proof: ' + PROOF, md)
+        self.assertNotIn('counterfactual:', md)
+        self.solve()
+        self.assertIn('verified', self.ok('done', 'add'))
+
+    def test_refactor_defaults_to_the_whole_suite_and_skips_the_take_out_check(self):
+        self.green_suite()
+        out = self.ok('new', 'tidy', 'Every existing test of add still passes after the tidy.', '--in', 'calc.py',
+                      '--kind', 'refactor')
+        self.assertIn('hint (refactor): the existing suite is the proof', out)
+        md = self.read('.odd/outcomes/tidy.md')
+        self.assertRegex(md, r'(?m)^proof: %s$' % re.escape(self.SUITE))
+        self.assertRegex(md, r'(?m)^counterfactual: skip - behaviour-preserving refactor$')
+        self.assertRegex(md, r'(?m)^kind: refactor$')
+        self.write('calc.py', 'def add(a, b):\n    total = a + b\n    return total\n')
+        self.assertIn('verified', self.ok('done', 'tidy'))
+
+    def test_refactor_with_a_given_proof_keeps_it(self):
+        self.green_suite()
+        self.ok('new', 'tidy', SENTENCE, '--proof', PROOF, '--in', 'calc.py', '--kind', 'refactor')
+        md = self.read('.odd/outcomes/tidy.md')
+        self.assertIn('proof: ' + PROOF, md)
+        self.assertIn('counterfactual: skip - behaviour-preserving refactor', md)
+
+    def test_a_missing_proof_is_still_refused_without_refactor(self):
+        out = self.no('new', 'add', SENTENCE, '--in', 'calc.py', code=2)
+        self.assertIn('--proof', out)
+        self.assertFalse(os.path.exists(self.path('.odd/outcomes/add.md')))
+        self.no('new', 'add', SENTENCE, '--in', 'calc.py', '--kind', 'feature', code=2)
+
+    def test_no_kind_prints_no_hint(self):
+        self.assertNotIn('hint (', self.ok('new', 'add', SENTENCE, '--proof', PROOF, '--in', 'calc.py'))
+
+    def test_the_mcp_new_tool_accepts_a_refactor_without_a_proof(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('odd_mcp_for_kinds', MCP)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.green_suite()
+        argv = mod.argv_for('new', {'slug': 'tidy', 'outcome': SENTENCE, 'in': 'calc.py', 'kind': 'refactor'})
+        self.assertIn('hint (refactor)', self.ok(*argv))
+        self.assertIn('proof: ' + self.SUITE, self.read('.odd/outcomes/tidy.md'))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -242,6 +242,15 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   recorded.
 - **How:** `odd new --kind bug|feature|refactor` filling the matching fields and hints.
 - **Measure:** turns and failed `done` attempts per outcome.
+- **Done** in the commit "B7: outcome templates by kind of change ..." (`git log --grep '^B7:'`): `KINDS` gains
+  `feature` and `refactor`; `odd new --kind` prints `hint (<kind>): ...` after creation (`HINTS`); `--kind refactor`
+  writes `counterfactual: skip - behaviour-preserving refactor` and makes `--proof` optional, defaulting to the
+  detected runner's whole suite (`SUITES`, through `suggest_proof(..., suite=True)`); the MCP `new` tool no longer
+  requires `proof`. DESIGN.md section 4c. Measured with `tests/test_odd.py` class `KindTemplates` (7 tests; 5 seen
+  RED on the unknown kinds and missing hints; the missing-proof refusal and the no-kind-no-hint control passed before
+  the code, as controls) and 14 hand-made mutants of the new code in odd.py and odd_mcp.py, each turning a
+  `KindTemplates` test red. Not measured: turns and failed `done` attempts per outcome with and without templates;
+  `feature` adds only a field and a hint; only the unittest whole-suite command is exercised.
 
 ### 8. Precise failure feedback
 - **Outcome:** when `odd done` fails, the agent is told exactly what is unproven (the line, the surviving break, the
