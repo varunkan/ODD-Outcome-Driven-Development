@@ -332,6 +332,22 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **How:** a gate result flag and an action output the repository's merge rules can use; off by default.
 - **Measure:** human review minutes per merged change ([docs/review-time.md](docs/review-time.md) protocol), and
   escaped defects through the lane.
+- **Done** in the commit "B11: auto-merge lane ..." (`git log --grep '^B11:'`): settings `"auto_lane"` (default
+  `false`), `"auto_min_strength"` (default `1.0`, k of n with k = n) and `"auto_max_lines"` (default 120), a tool
+  newer than 0.4.0. `lane()` and `_strong()` read what the gate already computed (the recorded strength results, the
+  `test_change()` reason, `survey()`'s control, stray and product lists, the guard results, the problems); no new
+  check runs, and the only extra work is one `sizes()` over the product files. `--json` `lane` and `lane_reasons`,
+  the printed `lane` line, the summary line `Auto-merge lane: yes` / `no, because ...`, and the Action output
+  `odd_lane` (`auto`, `review`, `off`; the gate step now also writes `--json`). odd never merges. DESIGN.md section
+  5c (with a wiring sketch and the risk). Measured with `tests/test_odd.py` class `AutoLane` (16 tests): 13 seen RED
+  before the code (the settings did not exist, no `odd_lane` output); the default-off and wrong-value tests passed
+  vacuously before it and are pinned by mutants; the 120-line default test was added after a mutant of the default
+  survived. Mutants: 29 hand-made of the new code and the Action (each disqualifier dropped, the threshold
+  loosened, the defaults and validators changed, the flag forced to auto, the text, summary and output lines
+  broken), each turned an `AutoLane` test red. Suites: 237 tests and 89 bench tests green. Not measured or not
+  tested: review minutes per merged change and escaped defects (no repository uses the lane); the wiring sketch in
+  DESIGN.md 5c (no GitHub run); the lines-run condition outside Python (not measured there, so the lane relies on
+  k of n alone); the `value:` line of the Action output (only the output's declaration is asserted).
 
 ## Speed and cost
 

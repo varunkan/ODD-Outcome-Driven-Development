@@ -28,10 +28,18 @@ inputs:
       marker is updated; any other is left alone. Set it when `token` is a personal access token.
     required: false
     default: github-actions[bot]
+outputs:
+  odd_lane:
+    description: >-
+      "auto" when the target's .odd/config.json sets "auto_lane": true and every condition of the auto-merge lane
+      holds, "review" when it is on and one does not (or the gate stopped), "off" when the setting is off. odd itself
+      never merges: a repository's own merge rules may key on this output (a tool newer than 0.4.0).
+    value: ${{ steps.gate.outputs.odd_lane }}
 runs:
   using: composite
   steps:
     - name: odd gate --recompute
+      id: gate
       shell: bash
       env:
         TARGET: ${{ inputs.target || github.base_ref || github.event.repository.default_branch }}
@@ -42,11 +50,19 @@ runs:
       run: |
         set -euo pipefail
         summary="${RUNNER_TEMP:-/tmp}/odd-gate-summary.md"
-        rm -f "$summary"
+        facts="${RUNNER_TEMP:-/tmp}/odd-gate.json"
+        rm -f "$summary" "$facts"
         if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --quiet --unshallow --no-tags origin; fi
         git fetch --quiet --no-tags origin "+refs/heads/$TARGET:refs/remotes/origin/$TARGET"
         rc=0
-        python3 "$GITHUB_ACTION_PATH/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET" --summary "$summary" || rc=$?
+        python3 "$GITHUB_ACTION_PATH/odd.py" gate --recompute --base "refs/remotes/origin/$TARGET" --summary "$summary" --json "$facts" || rc=$?
+        lane="$(python3 -c 'import json,sys
+        try:
+            print(json.load(open(sys.argv[1])).get("lane") or "off")
+        except Exception:
+            print("review")' "$facts")"
+        echo "odd: auto-merge lane: $lane"
+        if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "odd_lane=$lane" >> "$GITHUB_OUTPUT"; fi
         if [ ! -s "$summary" ]; then
           printf '<!-- odd-gate -->\n### odd gate: COULD NOT RUN\nThe tool stopped (exit %s) before it wrote a result; see the log.\n' "$rc" > "$summary"
         fi

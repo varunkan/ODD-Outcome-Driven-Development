@@ -2898,6 +2898,204 @@ class RegressionGuard(Repo):
         self.assertNotIn('guard', out)
 
 
+class AutoLane(Repo):
+    """Backlog item 11: under "auto_lane": true the gate says "lane": "auto" for a verified, strong, small change
+    inside its outcomes, else "lane": "review" with each reason. odd never merges; it is off by default."""
+    REPO, STEP_INPUTS = Distribution.REPO, Distribution.STEP_INPUTS
+    action_steps, ci = Distribution.action_steps, Distribution.ci
+
+    def on(self, **cfg):
+        """Settings committed on main before the feature branch, so they are not part of the change."""
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/config.json', json.dumps(dict({'auto_lane': True}, **cfg)))
+        self.commit('settings')
+        self.git('checkout', '-q', '-B', 'feat')
+
+    def lane(self, *more, code=0):
+        js, md = self.path('.git/lane.json'), self.path('.git/lane.md')
+        rc, out = self.odd('gate', '--json', js, '--summary', md, *more)
+        self.assertEqual(rc, code, out)
+        f = json.loads(self.read('.git/lane.json'))
+        return f.get('lane'), f.get('lane_reasons'), self.read('.git/lane.md'), out
+
+    def proven(self, **cfg):
+        self.on(**cfg)
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add')
+
+    def assertReview(self, reasons, text):
+        self.assertTrue(any(text in r for r in reasons or []), '%r not in %r' % (text, reasons))
+
+    def test_the_default_is_off(self):
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add')
+        lane, why, md, out = self.lane()
+        self.assertIsNone(lane)
+        self.assertIsNone(why)
+        self.assertNotIn('Auto-merge lane', md)
+        self.assertNotIn('lane    ', out)
+
+    def test_a_proven_strong_small_change_takes_the_auto_lane(self):
+        self.proven()
+        lane, why, md, out = self.lane()
+        self.assertEqual((lane, why), ('auto', []))
+        self.assertIn('Auto-merge lane: yes', md)
+        self.assertIn('lane    auto', out)
+        self.commit('proven')
+        self.assertEqual(self.lane('--recompute')[:2], ('auto', []))
+
+    def test_a_surviving_mutant_goes_to_review(self):
+        self.on()
+        self.outcome()
+        self.solve()
+        self.write('calc.py', ProofStrength.TWO)
+        self.ok('done', 'add')
+        lane, why, md, out = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'add: proof strength 1 of 2')
+        self.assertIn('Auto-merge lane: no, because add: proof strength 1 of 2', md)
+        self.assertIn('lane    review: add: proof strength 1 of 2', out)
+
+    def test_a_lower_minimum_strength_admits_k_of_n(self):
+        self.on(auto_min_strength=0.25)
+        self.outcome()
+        self.solve()
+        self.write('calc.py', FIXED + '\n\nZ = 2 + 1\n')  # runs on import, asserted by nothing: 3 of 4 breaks survive
+        self.assertIn('proof strength 1 of 4', self.ok('done', 'add'))
+        self.assertEqual(self.lane()[:2], ('auto', []))
+
+    def test_unmeasured_strength_goes_to_review(self):
+        self.proven(strength='off')
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'add: proof strength was not measured')
+
+    def test_a_changed_line_the_proof_never_runs_goes_to_review(self):
+        self.on(auto_min_strength=0)
+        self.write('tests/check.py', 'import sys\nsys.path.insert(0, ".")\nimport calc\n'
+                                     'sys.exit(0 if calc.add(2, 3) == 5 else 1)\n')
+        self.outcome('add', '%s tests/check.py' % sys.executable)
+        self.write('calc.py', ProofStrength.TWO)
+        self.ok('done', 'add')
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'add: not run by the proof: calc.py:6')
+
+    def test_more_lines_than_the_budget_go_to_review(self):
+        self.proven(auto_max_lines=1)
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, '2 changed product line(s), more than "auto_max_lines" 1')
+
+    def test_the_default_budget_is_120_lines(self):
+        self.proven()
+        self.write('calc.py', FIXED + '# note\n' * 119)  # 2 + 119: a comment holds no small break
+        self.ok('done', 'add')
+        lane, why, _, _ = self.lane()
+        self.assertReview(why, '121 changed product line(s), more than "auto_max_lines" 120')
+        self.write('calc.py', FIXED + '# note\n' * 118)
+        self.ok('done', 'add')
+        self.assertEqual(self.lane()[:2], ('auto', []))
+
+    def test_a_changed_control_file_goes_to_review(self):
+        self.proven()
+        self.write('.odd/config.json', json.dumps({'auto_lane': True, 'mutants': 9}))
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'control file(s) changed: .odd/config.json')
+
+    def test_a_test_change_reason_goes_to_review(self):
+        self.on()
+        self.git('checkout', '-q', 'main')
+        self.write('tests/test_keep.py', KEEP)
+        self.commit('an existing test')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.outcome()
+        self.solve()
+        self.write('tests/test_keep.py', KEEP.replace('assertTrue(True)', 'assertTrue(1)'))
+        self.add_line('add', 'test-change: the old test pinned the bug')
+        self.ok('done', 'add')
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'an existing test changed: test-change (add)')
+
+    def test_a_skipped_take_out_check_goes_to_review(self):
+        self.on()
+        self.outcome('tidy', 'true', 'calc.py', 'A reader of calc.py finds clearer argument names and the same behaviour.')
+        self.add_line('tidy', 'counterfactual: skip - pure rename, nothing can fail first')
+        self.write('calc.py', BROKEN.replace('a, b', 'x, y'))
+        self.ok('done', 'tidy')
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'tidy skipped the take-out check')
+
+    def test_an_asked_or_parked_outcome_goes_to_review(self):
+        self.proven()
+        for slug, extra in (('p1', 'parked: blocked on a decision'), ('a1', 'asked: which rounding?')):
+            self.write('.odd/outcomes/%s.md' % slug, '---\noutcome: %s holds.\nproof: exit 1\nin: other.py\n%s\n---\n'
+                       % (slug, extra))
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'p1 is parked')
+        self.assertReview(why, 'a1 is waiting for an answer')
+
+    def test_a_failing_guard_or_no_guard_goes_to_review(self):
+        self.on(guard='report')
+        RegressionGuard.merged(self)
+        self.write('calc.py', 'def add(a, b):\n    return a - b\n')
+        self.outcome('sub', 'true', 'other.py', 'A caller of other.X receives 1.')
+        self.add_line('sub', 'counterfactual: skip - a constant')
+        self.write('other.py', 'X = 1\n')
+        self.ok('done', 'sub')
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertRegex(' '.join(why), r'the regression guard failed: add \(proven in \w+\)')
+        self.write('.odd/config.json', json.dumps({'auto_lane': True, 'guard': 'off'}))
+        self.commit('guard off')
+        lane, why, _, _ = self.lane()
+        self.assertReview(why, 'the regression guard is off')
+
+    def test_a_failing_gate_lines_outside_outcomes_or_no_outcome_go_to_review(self):
+        self.on()
+        self.write('calc.py', FIXED)
+        lane, why, _, _ = self.lane()
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'no verified outcome in this change')
+        self.assertReview(why, 'line(s) outside every outcome: calc.py')
+        self.outcome()
+        self.solve()
+        lane, why, _, _ = self.lane(code=1)
+        self.assertEqual(lane, 'review')
+        self.assertReview(why, 'the gate did not pass')
+
+    def test_wrong_values_stop(self):
+        for bad in ({'auto_lane': 'yes'}, {'auto_min_strength': 2}, {'auto_max_lines': -1}):
+            self.write('.odd/config.json', json.dumps(bad))
+            self.no('gate', code=2)
+
+    def test_the_action_sets_odd_lane(self):
+        out_file = self.path('.git/gh-output')
+        self.outcome()
+        self.solve()
+        self.commit('proven')
+        rc, out = self.ci(GITHUB_OUTPUT=out_file)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('odd_lane=off\n', self.read('.git/gh-output'))
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/config.json', json.dumps({'auto_lane': True}))
+        self.commit('settings')
+        self.git('checkout', '-q', 'feat')
+        self.git('merge', '-q', 'main')
+        os.remove(out_file)
+        rc, out = self.ci(GITHUB_OUTPUT=out_file)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('odd_lane=auto\n', self.read('.git/gh-output'))
+        with open(os.path.join(Distribution.REPO, 'action.yml')) as f:
+            self.assertIn('odd_lane:', f.read().split('runs:')[0])
+
+
 class Chain(Agents):
     """odd chain <ticket>: the outcomes of .odd/chains/<ticket>.md one at a time, each attempted by race or cascade,
     verified and committed as a checkpoint; an unproven one parks and stops the chain; a rerun resumes. Fake agents."""

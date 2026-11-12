@@ -148,6 +148,17 @@ run per guard. `"guard": "report"` only prints, `"off"` turns it off (the defaul
 0.4.0). Overlap is by path: a break through a file outside the earlier `in:` is not seen. Not measured: earlier
 outcomes broken with and without it (BACKLOG item 9). Details: [DESIGN.md](DESIGN.md) section 5b.
 
+**An auto-merge lane, off by default.** With `"auto_lane": true` (a tool newer than 0.4.0) the gate also says
+`"lane": "auto"` or `"lane": "review"` with its reasons: auto only when the gate passed, every outcome in the change
+is verified with every small break caught (`"auto_min_strength"`, default 1.0) and no changed line its proof never
+runs, the change is at most `"auto_max_lines"` product lines (default 120) all inside outcomes, and there is no
+control file, no `test-change:`, no skipped take-out check, no parked or asked outcome, and every regression guard
+passed. It shows in `--json`, in the pull-request summary (`Auto-merge lane: yes` or `no, because ...`) and as the
+Action output `odd_lane`. odd never merges: a repository wires its own auto-merge job on `odd_lane == 'auto'`, and a
+change that takes it merges with nobody reading its code, so the outcome sentence and the proof are all that is
+checked. Not measured: review minutes saved or defects escaping through it (BACKLOG item 11). Details:
+[DESIGN.md](DESIGN.md) section 5c.
+
 **Bugs are reproduced first.** `odd new <slug> ... --kind bug` marks a bug fix. Then `odd seal` and `odd done` require
 the proof to fail on the unfixed code (the outcome's changed files put back to the base) and print
 `reproduced: <last line of the failure>`; a proof that passes there is refused ("the proof does not reproduce the

@@ -256,6 +256,18 @@ prints instead of failing and `"off"` turns it off. Parked, asked and skipped ou
 only through files inside the earlier `in:`, and deleting an earlier outcome file removes its guard (the deletion is
 in the diff). Whether it lowers regressions is not measured yet.
 
+**Can a proven change merge without a human review?**
+odd can say it qualifies; it never merges. With `"auto_lane": true` in `.odd/config.json` (a tool newer than 0.4.0)
+the gate reports `"lane": "auto"` only when the gate passed, every outcome is verified, each proof caught every small
+break (`"auto_min_strength"`, default 1.0) and ran every changed line (Python only; elsewhere not measured), the
+change is at most `"auto_max_lines"` product lines (default 120) inside its outcomes, and nothing else needs a
+person: no control file, no `test-change:`, no skipped take-out check, no parked or asked outcome, no failing or
+disabled regression guard. Otherwise `"review"` with each reason. The Action sets the output `odd_lane`; a workflow
+can enable GitHub's auto-merge when it is `auto` while branch protection keeps the odd check required. The risk is
+real: nobody reads that code, and a strong proof of a wrong outcome sentence merges. Use the Action's `--recompute`
+result, never a local gate, and start with a small `"auto_max_lines"`. Whether it saves review time without
+letting defects through is not measured yet.
+
 **For a bug fix, how do I know the test reproduces the bug and does not just pass?**
 Create the outcome with `odd new ... --kind bug` (a tool newer than 0.4.0). `odd seal` and `odd done` then run the
 proof on the unfixed code, the outcome's changed files put back to the base, require it to fail there, and print

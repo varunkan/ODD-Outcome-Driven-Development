@@ -64,6 +64,9 @@ DEFAULTS = {
     'coverage': 'report',  # requirements no outcome in the change covers: off, report, or enforce (an uncovered one fails)
     'ambiguity_stop': True,  # odd new refuses an outcome sentence with no observable (an English word list)
     'guard': 'enforce',    # earlier merged outcomes whose in: holds a touched file: proofs run again (off, report, enforce)
+    'auto_lane': False,    # odd gate says "lane": "auto" or "review" (backlog item 11); odd itself never merges
+    'auto_min_strength': 1.0,  # the auto lane: least share k/n of small breaks each outcome's proof must catch
+    'auto_max_lines': 120,     # the auto lane: most changed product lines
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
 FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked')
@@ -198,7 +201,10 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'proof_tries': lambda v: type(v) is int and 1 <= v <= 32,
             'coverage': lambda v: v in ('off', 'report', 'enforce'),
             'ambiguity_stop': lambda v: type(v) is bool,
-            'guard': lambda v: v in ('off', 'report', 'enforce')}
+            'guard': lambda v: v in ('off', 'report', 'enforce'),
+            'auto_lane': lambda v: type(v) is bool,
+            'auto_min_strength': lambda v: type(v) in (int, float) and 0 <= v <= 1,
+            'auto_max_lines': lambda v: type(v) is int and v >= 0}
 
 
 def load_config(root, at=None):
@@ -1548,6 +1554,56 @@ def guards(root, s, say=lambda s: None):
 
 
 
+def _strong(cfg, o):
+    """Why one verified outcome's recorded proof strength (strength, weak) is short of the auto lane, or []."""
+    st, need, slug = o.get('strength'), cfg['auto_min_strength'], o['slug']
+    if o.get('skip'):
+        return []  # named as a skipped take-out check
+    if not st:
+        return ['%s: proof strength was not measured' % slug]
+    n, why = st['killed'] + len(st['survivors']), []
+    if not n:
+        why.append('%s: no small break could be made in its changed lines, so its proof strength is unknown' % slug)
+    elif st['killed'] < need * n - 1e-9:
+        why.append('%s: proof strength %d of %d, below "auto_min_strength" %s' % (slug, st['killed'], n, need))
+    if st['unrun']:
+        why.append('%s: %d small break(s) did not run to completion' % (slug, len(st['unrun'])))
+    if st.get('not_run'):
+        why.append('%s: %s' % (slug, lines_run(st)))
+    return why
+
+
+def lane(root, s, facts, skips, allowed):
+    """Backlog item 11, the auto-merge lane: [] when the change may merge with its outcomes and proofs read, else
+    each reason it goes to review. A disqualifier is never weighed against the rest. odd only says; it never merges."""
+    cfg, outs, why = s['cfg'], facts['outcomes'], []
+    if facts['problems']:
+        why.append('the gate did not pass')
+    if not any(o['state'] == 'ok' for o in outs):
+        why.append('no verified outcome in this change')
+    for o in outs:
+        if o['state'] == 'ok':
+            why += _strong(cfg, o)
+        elif o['state'] in ('parked', 'asked'):
+            why.append('%s is %s' % (o['slug'], 'parked' if o['state'] == 'parked' else 'waiting for an answer'))
+    why += ['%s skipped the take-out check' % k.split(' - ', 1)[0] for k in skips]
+    n = sum(min(v, BIG) for v in sizes(root, s['base'], s['product']).values())
+    if n > cfg['auto_max_lines']:
+        why.append('%s changed product line(s), more than "auto_max_lines" %d'
+                   % ('a binary file or other' if n >= BIG else n, cfg['auto_max_lines']))
+    if s['stray']:
+        why.append('%d line(s) outside every outcome: %s' % (s['stray_lines'], ', '.join(s['stray'][:5])))
+    if s['control']:
+        why.append('control file(s) changed: ' + ', '.join(s['control']))
+    if allowed:
+        why.append('an existing test changed: ' + allowed)
+    if cfg['guard'] == 'off':
+        why.append('the regression guard is off')
+    why += ['the regression guard failed: %s (proven in %s)' % (g['slug'], g['commit'])
+            for g in facts.get('guards', []) if g['state'] != 'ok']
+    return why
+
+
 def survey(root, base_arg=None, recompute=False):
     """Everything the gate and the hooks need to know about the change, computed once."""
     cfg = load_config(root)
@@ -1592,6 +1648,8 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
         if len(owners) > 1:
             problems.append('%s is inside the boundary of %s: within one change a file belongs to one outcome. Make '
                             'them one outcome, or ship them as successive changes.' % (p, ' and '.join(owners)))
+    if cfg['auto_lane']:  # until the end is reached: a gate that stops is never the auto lane
+        facts.update(lane='review', lane_reasons=['the gate stopped before it finished'])
     for o in active:
         try:
             if recompute:
@@ -1654,6 +1712,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     if s['exempt']:
         exempted.append('exempt paths: %d file(s), %s line(s)' % (
             len(s['exempt']), sum(min(v, 10 ** 5) for v in sizes(root, base, s['exempt']).values())))
+    allowed = ''
     if s['tests'] or s['product']:
         touched, bad, why, _ = test_change(root, base, s['tests'], active, s['product'], cfg['test_globs'])
         picks = [p for p in touched if COLLECT.search(p) or collects(root, base, p)]
@@ -1662,6 +1721,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
             len(s['tests']), '; existed before and were modified or deleted: ' + ', '.join(old[:8]) if old else '',
             '; decide which tests run: ' + ', '.join(picks[:8]) if picks else '', '; allowed by ' + why if why else '')]
         problems += [bad] if bad else []
+        allowed = why
     lines += ['  ' + e for e in exempted]
     exempted += ['skip: ' + k for k in skips]
     cov_lines, cov_problems, cov_facts = coverage(root, s)
@@ -1678,6 +1738,11 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     tail += ' (%d changed kind from bug: %s)' % (len(changed_kind), ', '.join(changed_kind)) if changed_kind else ''
     waiting = [o.slug for o in s['inplay'] if o.asked and not o.parked]
     tail += ' (%d waiting for an answer: %s)' % (len(waiting), ', '.join(waiting)) if waiting else ''
+    if cfg['auto_lane']:
+        reasons = lane(root, s, facts, skips, allowed)
+        facts.update(lane='review' if reasons else 'auto', lane_reasons=reasons)
+        lines.append('  lane    ' + ('review: ' + '; '.join(reasons) if reasons else
+                                     'auto (every condition of the auto-merge lane holds; odd itself never merges)'))
     if problems:
         return 1, [head] + lines + ['FAIL' + tail] + ['  ' + p for p in problems]
     return 0, [head] + lines + ['PASS' + tail]
@@ -2691,6 +2756,9 @@ def markdown(f):
         md += ['', '**Guards** (earlier outcomes whose files this change touches; each proof ran again):']
         md += ['- **%s** (proven in %s): %s' % (g['slug'], _cell(g['commit'], True, False), 'passes' if g['state'] == 'ok'
                else '**now fails**: ' + _cell(g.get('why', ''), True, False)) for g in f['guards']]
+    if f.get('lane'):
+        md += ['', 'Auto-merge lane: ' + ('yes' if f['lane'] == 'auto' else 'no, because ' + '; '.join(
+            _cell(r, table=False) for r in f.get('lane_reasons') or ['(no reason recorded)']))]
     if f.get('exemptions'):
         md += ['', '**Exemptions** (passed without verification):'] + ['- ' + _cell(e, table=False) for e in f['exemptions']]
     if f.get('control'):

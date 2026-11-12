@@ -529,6 +529,66 @@ change edits is in play and must pass `done` again; one whose file this change d
 shows only in the diff. A flaky earlier proof fails the gate. Not measured: earlier outcomes broken by later changes
 on a multi-step task sequence, with and without the guard (BACKLOG item 9).
 
+### 5c. Auto-merge lane: a flag the repository's merge rules may use
+
+Off unless `.odd/config.json` sets `"auto_lane": true` (a tool newer than 0.4.0; in CI read from the target branch,
+like every setting). Then `odd gate` (local and `--recompute`) adds a result: `"lane": "auto"` when every condition
+below holds, else `"lane": "review"` with every reason that failed (none is weighed against the others). It appears
+as `lane` and `lane_reasons` in `--json`, as the line `lane    auto ...` or `lane    review: <reasons>` in the
+printed result, as `Auto-merge lane: yes` or `Auto-merge lane: no, because <reasons>` in the `--summary` (the
+pull-request comment), and as the Action output `odd_lane` (`auto`, `review`, or `off` when the setting is off;
+`review` when the Action could not read the result). **odd never merges**; the flag only says the change qualifies.
+The exit code is the gate's, unchanged.
+
+The conditions (each one failing is a reason, in the words shown):
+
+- the gate passed (`the gate did not pass`), and at least one outcome in the change is verified (`no verified outcome
+  in this change`);
+- each verified outcome's recorded proof strength (the small breaks of section 4, measured by `done` or `--recompute`):
+  measured (`proof strength was not measured`, e.g. under `"strength": "off"`), at least one break made (`no small
+  break could be made`), at least the share `"auto_min_strength"` caught (default `1.0`: k of n with k = n; `proof
+  strength k of n, below ...`), no break that did not run to completion, and no changed line the proof never runs
+  (`not run by the proof: ...`);
+- no skipped take-out check (`counterfactual: skip`), no parked or asked outcome in the change;
+- at most `"auto_max_lines"` changed product lines (default 120; test files, exempt paths and outcome files do not
+  count), and no line outside every outcome (the small-change lane is unverified, so it disqualifies);
+- no control file changed, no existing test changed under a `test-change:` reason;
+- the regression guard (5b) is on and every guard passed (a guard failing under `"report"` disqualifies;
+  `"guard": "off"` disqualifies).
+
+Wiring it (a sketch; not run by any test here, and `uses:` must pin the odd version you vendor): a branch-protection
+rule (or ruleset) on the target requires the `odd` check, and the repository allows auto-merge. Then:
+
+```yaml
+on: pull_request
+permissions: {contents: write, pull-requests: write}
+jobs:
+  odd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - id: odd
+        uses: varunkan/ODD-Outcome-Driven-Development@<a tag newer than v0.4.0>
+      - if: steps.odd.outputs.odd_lane == 'auto'
+        run: gh pr merge --auto --squash "${{ github.event.pull_request.number }}"
+        env: {GH_TOKEN: "${{ github.token }}"}
+```
+
+GitHub's auto-merge still waits for every required check. A repository whose branch protection requires a human
+approval gets no auto-merge from this; it must lift that requirement for the lane, which is the risk below. Key only
+on `== 'auto'`: `review` and `off` both mean a person reviews.
+
+Risk, stated plainly: a change in the auto lane merges with nobody reading its code. What stands between it and
+`main` is the outcome sentence, the proof and the checks above. A proof that is strong against odd's small breaks can
+still miss behaviour outside the changed lines, test the wrong thing, or encode a wrong requirement; an outcome
+sentence can be wrong. The lines-run check exists for Python only: for other languages "no changed line the proof
+never runs" is not measured and the lane relies on k of n alone. Requirement coverage (5a) is not a condition.
+Mutants are capped by `"mutants"` (8 by default) and sampled, so k = n is of the breaks made, not of every possible
+fault. A local `odd gate` reads recorded results, which can be forged; only the Action's `--recompute` decides
+anything a merge rule should trust. Not measured: review minutes per merged change or defects escaping through the
+lane (BACKLOG item 11).
+
 ### 4a. Reproduce first: `kind: bug`
 
 An outcome may carry `kind: bug` (`odd new ... --kind bug`; needs a tool newer than 0.4.0; the kinds are `bug`,
