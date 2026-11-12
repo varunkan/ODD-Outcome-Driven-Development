@@ -123,10 +123,11 @@ or a compiled or patch-reject file anywhere in the task.
 
 ## Known limits (to be printed with every report)
 
-Tasks are written by this project, are small, and are Python only. One model per run. The frameworks are driven
-headlessly, which is not how Spec Kit and BMAD are mainly used. Costs are the CLI's own figures. There is one
-impossible task, one vague task and two traps, so a figure per kind rests on one or two tasks; with a single
-impossible task no per-kind figure for "impossible" is published, only that task's own result. On the impossible
+Tasks are written by this project and are Python only: ten small ones (t01-t10) and six larger ones (t11-t16, about
+600 to 1,100 lines each) added after the pilot showed the small ones at the ceiling. One model per run. The frameworks
+are driven headlessly, which is not how Spec Kit and BMAD are mainly used. Costs are the CLI's own figures. There
+are two impossible tasks, two vague tasks and three traps, so a figure per kind rests on two or three tasks and is
+printed with its task count. On the impossible
 task the common ending's "decide and proceed" pulls every arm towards claiming DONE. Its `NOT DONE` reason is judged
 by keywords only: a reason that names the exponent and the no-letters rule passes even if its argument is wrong, and
 one that describes the same conflict in other words fails.

@@ -1,0 +1,180 @@
+diff --git a/README.md b/README.md
+index 7985272..7173e07 100644
+--- a/README.md
++++ b/README.md
+@@ -27,6 +27,12 @@ plan_week(book, me)              # seven dinner ids
+ - `mealplan/planner.py`: `plan_week(book, profile=None, days=7, week=0)`.
+ - `mealplan/shopping.py` and `mealplan/cards.py`: the shopping list and the recipe card.
+ 
++## Allergens
++
++`search`, `suggest`, `similar` and `plan_week` never show a recipe containing one of the customer's allergens: as an
++ingredient, through an ingredient that contains it (butter contains milk), under any name `ingredients.py` knows, or
++through a component recipe at any depth. The check is `mealplan/allergy.py`.
++
+ ## Tests
+ 
+ ```
+diff --git a/mealplan/allergy.py b/mealplan/allergy.py
+new file mode 100644
+index 0000000..3e253dc
+--- /dev/null
++++ b/mealplan/allergy.py
+@@ -0,0 +1,35 @@
++"""Whether a recipe is safe for a customer's allergens.
++
++A recipe contains an allergen when one of its own ingredients is it or contains it (under any name ingredients.py
++knows), or when a component recipe contains it, at any depth.
++"""
++from .ingredients import allergen_group, allergens_in, canonical
++
++
++def wanted_out(profile):
++    """What the customer must never be shown, as allergen groups ('Dairy' -> 'milk'); a name that is not an allergen
++    we know is kept as an ingredient name."""
++    if profile is None:
++        return frozenset()
++    return frozenset(allergen_group(name) or canonical(name) for name in profile.allergens)
++
++
++def contents(book, recipe_id):
++    """Every allergen and every ingredient name in the recipe, components included at any depth."""
++    cache = book.memo.setdefault('contents', {})
++    if recipe_id not in cache:
++        found = set()
++        recipe = book.get(recipe_id)
++        for name, _, _ in recipe.ingredients:
++            found.add(canonical(name))
++            found |= allergens_in(name)
++        for component in recipe.components:
++            found |= contents(book, component)
++        cache[recipe_id] = frozenset(found)
++    return cache[recipe_id]
++
++
++def is_safe(book, recipe_id, profile):
++    """True when the recipe contains nothing in the customer's allergens."""
++    out = wanted_out(profile)
++    return not out or not (out & contents(book, recipe_id))
+diff --git a/mealplan/planner.py b/mealplan/planner.py
+index 8f7bd4e..dfed9ac 100644
+--- a/mealplan/planner.py
++++ b/mealplan/planner.py
+@@ -1,17 +1,17 @@
+ """The weekly dinner plan."""
++from .allergy import is_safe
+ 
+ 
+ def _candidates(book, profile):
+-    """The dinners the plan may use for this customer, quickest first, then by id."""
+-    allergens = {name.strip().lower() for name in profile.allergens} if profile is not None else set()
++    """The dinners the plan may use for this customer (none containing their allergens), quickest first, then by id."""
+     dislikes = {name.strip().lower() for name in profile.dislikes} if profile is not None else set()
+     chosen = []
+     for recipe in book.with_tag('dinner'):
+         if profile is not None and not profile.allows_time(recipe):
+             continue
+-        names = {name.lower() for name in book.ingredient_names(recipe.id)}
+-        if names & allergens:
++        if not is_safe(book, recipe.id, profile):
+             continue
++        names = {name.lower() for name in book.ingredient_names(recipe.id)}
+         if names & dislikes:
+             continue
+         chosen.append(recipe)
+diff --git a/mealplan/related.py b/mealplan/related.py
+index 369ab17..d6a3012 100644
+--- a/mealplan/related.py
++++ b/mealplan/related.py
+@@ -1,4 +1,5 @@
+ """'You might also like': recipes like the one on screen."""
++from .allergy import is_safe
+ from .ingredients import canonical
+ 
+ 
+@@ -10,7 +11,8 @@ def similar(book, recipe_id, profile=None, limit=3):
+     """Up to `limit` ids of other recipes like recipe_id, most alike first.
+ 
+     Alike means sharing tags first, then sharing ingredients; ties by title. A recipe with no tag in common is never
+-    offered, nor sauces, which are not meals. Recipes longer than the customer's max_minutes are left out.
++    offered, nor sauces, which are not meals. Recipes longer than the customer's max_minutes, and recipes
++    containing one of their allergens, are left out.
+     """
+     shown = book.get(recipe_id)
+     tags = set(shown.tags)
+@@ -21,6 +23,8 @@ def similar(book, recipe_id, profile=None, limit=3):
+             continue
+         if profile is not None and not profile.allows_time(recipe):
+             continue
++        if not is_safe(book, recipe.id, profile):
++            continue
+         shared_tags = len(tags & set(recipe.tags))
+         if not shared_tags:
+             continue
+diff --git a/mealplan/search.py b/mealplan/search.py
+index 1a9d63d..575bddd 100644
+--- a/mealplan/search.py
++++ b/mealplan/search.py
+@@ -1,6 +1,7 @@
+ """The search box and the suggestions under it."""
+ import re
+ 
++from .allergy import is_safe, wanted_out
+ from .ingredients import canonical
+ 
+ _WORD = re.compile(r"[a-z]+")
+@@ -40,7 +41,8 @@ def search(book, text, profile=None):
+     """The ids of the recipes matching text, best match first.
+ 
+     Ties go to the quicker recipe, then by title. Recipes longer than the customer's max_minutes are left out.
+-    Recipes with an ingredient the customer dislikes still show, after all the others.
++    Recipes with an ingredient the customer dislikes still show, after all the others. Recipes containing one of
++    the customer's allergens never show.
+     """
+     words = _words(text)
+     if not words:
+@@ -49,6 +51,8 @@ def search(book, text, profile=None):
+     for recipe in book:
+         if profile is not None and not profile.allows_time(recipe):
+             continue
++        if not is_safe(book, recipe.id, profile):
++            continue
+         points = score(book, recipe, words)
+         if points:
+             found.append((_dislikes(book, recipe, profile), -points, recipe.minutes, recipe.title, recipe.id))
+@@ -56,11 +60,13 @@ def search(book, text, profile=None):
+     return [entry[-1] for entry in found]
+ 
+ 
+-def _suggestions(book, prefix, max_minutes, limit):
++def _suggestions(book, prefix, max_minutes, limit, profile):
+     starts, inside = [], []
+     for recipe in book:
+         if max_minutes is not None and recipe.minutes > max_minutes:
+             continue
++        if not is_safe(book, recipe.id, profile):
++            continue
+         title = recipe.title.lower()
+         if title.startswith(prefix):
+             starts.append(recipe.title)
+@@ -73,15 +79,16 @@ def suggest(book, prefix, profile=None, limit=5):
+     """Up to `limit` recipe titles for what has been typed so far.
+ 
+     Titles that start with the typed text come first, then titles with a later word that starts with it; each group
+-    A to Z. Recipes longer than the customer's max_minutes are left out. The box asks again on every key press, so
+-    the answers are kept in the book's memo.
++    A to Z. Recipes longer than the customer's max_minutes, and recipes containing one of their allergens, are left
++    out. The box asks again on every key press, so the answers are kept in the book's memo, per time limit and
++    allergens: one customer's answer is never another's.
+     """
+     prefix = ' '.join(str(prefix).lower().split())
+     if not prefix or limit <= 0:
+         return []
+     max_minutes = profile.max_minutes if profile is not None else None
+     cache = book.memo.setdefault('suggest', {})
+-    key = (prefix, limit, max_minutes)
++    key = (prefix, limit, max_minutes, wanted_out(profile))
+     if key not in cache:
+-        cache[key] = _suggestions(book, prefix, max_minutes, limit)
++        cache[key] = _suggestions(book, prefix, max_minutes, limit, profile)
+     return list(cache[key])

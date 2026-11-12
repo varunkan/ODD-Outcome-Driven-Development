@@ -1,0 +1,115 @@
+diff --git a/README.md b/README.md
+index 0273283..05964c1 100644
+--- a/README.md
++++ b/README.md
+@@ -30,8 +30,10 @@ print(to_csv(book.documents()))
+   note's invoice), `net`, `tax`, `total`, `tax_by_rate()` and `render()`. On a credit note quantities, net and tax
+   are negative.
+ 
+-The tax of a document is the sum of the tax of its lines. Once issued, a document's figures are stored and never
+-change.
++Tax is worked out per line: net x rate, rounded to the nearest cent, exactly half a cent away from zero (6.5 cents
++is 7, -6.5 cents is -7). The tax of a document is the sum of the tax of its lines. Once issued, a document's figures
++are stored and never change. The credit note that refunds the last units of an invoice line gives back exactly what
++is left of that line's tax, so a fully refunded invoice comes to zero.
+ 
+ ## The book file
+ 
+@@ -51,7 +53,7 @@ change.
+ 
+ `invoicing.export.to_csv(documents)` writes the file the accountant imports: columns
+ `number,kind,date,customer,rate,net,tax,gross`, one row per document and tax rate (highest rate first), amounts
+-with two decimals, and a last `TOTAL` row. `invoicing.export.rows(documents)` gives the same rows as dictionaries
++with two decimals, and a last `TOTAL` row. Every figure is the document's own, never recomputed. `invoicing.export.rows(documents)` gives the same rows as dictionaries
+ in cents. From the shell: `python3 -m invoicing export book.json --from 2024-04-01 --to 2024-06-30`.
+ 
+ ## Tests
+diff --git a/invoicing/book.py b/invoicing/book.py
+index ab464ca..435db66 100644
+--- a/invoicing/book.py
++++ b/invoicing/book.py
+@@ -51,6 +51,15 @@ class Book:
+                     units -= line.quantity
+         return units
+ 
++    def refunded_tax(self, number, index):
++        """How much of the tax of line `index` of invoice `number` has been given back so far, in cents."""
++        tax = 0
++        for note in self.credit_notes_for(number):
++            for line, origin in zip(note.lines, note.origins):
++                if origin == index:
++                    tax -= line.tax
++        return tax
++
+     # issuing
+ 
+     def issue_invoice(self, customer, date, lines):
+@@ -94,7 +103,13 @@ class Book:
+             if units > left:
+                 raise RefundError('line %d of %s has %d units left to refund, not %d' % (index, number, left, units))
+             net = -units * line.unit_price
+-            credit_lines.append(Line(line.description, -units, line.unit_price, line.rate, line_tax(net, line.rate)))
++            if units == left:
++                # The last units of the line: give back exactly what is left of the tax it was charged, so that the
++                # invoice line and its credit-note lines add up to zero whatever rounding the invoice was issued with.
++                tax = -(line.tax - self.refunded_tax(number, index))
++            else:
++                tax = line_tax(net, line.rate)
++            credit_lines.append(Line(line.description, -units, line.unit_price, line.rate, tax))
+             origins.append(index)
+         note = Document(self._next_number('CRN'), 'credit', invoice.customer, date, credit_lines, refers_to=number,
+                         origins=origins)
+diff --git a/invoicing/export.py b/invoicing/export.py
+index 909028f..d561275 100644
+--- a/invoicing/export.py
++++ b/invoicing/export.py
+@@ -14,8 +14,6 @@ import csv
+ import io
+ 
+ from .money import format_cents
+-from .rates import rate_order
+-from .tax import line_tax
+ 
+ COLUMNS = ('number', 'kind', 'date', 'customer', 'rate', 'net', 'tax', 'gross')
+ 
+@@ -24,14 +22,11 @@ def rows(documents):
+     """The export as a list of dictionaries with int cents, without the TOTAL row."""
+     out = []
+     for document in documents:
+-        nets = {}
+-        for line in document.lines:
+-            nets[line.rate] = nets.get(line.rate, 0) + line.net
+-        for rate in sorted(nets, key=rate_order):
+-            net = nets[rate]
+-            tax = line_tax(net, rate)
++        # The figures the document itself carries, never recomputed: the export must match it to the cent.
++        for rate, figures in document.tax_by_rate().items():
+             out.append({'number': document.number, 'kind': document.kind, 'date': document.date,
+-                        'customer': document.customer, 'rate': rate, 'net': net, 'tax': tax, 'gross': net + tax})
++                        'customer': document.customer, 'rate': rate, 'net': figures['net'], 'tax': figures['tax'],
++                        'gross': figures['gross']})
+     return out
+ 
+ 
+diff --git a/invoicing/tax.py b/invoicing/tax.py
+index 2b955fa..a16c200 100644
+--- a/invoicing/tax.py
++++ b/invoicing/tax.py
+@@ -1,8 +1,15 @@
+ """How much tax a line carries."""
++from decimal import ROUND_HALF_UP, Decimal
++
+ from .rates import check_rate
+ 
+ 
+ def line_tax(net, rate):
+-    """The tax in cents on a net amount in cents at `rate` percent (a string such as '20' or '7.5')."""
++    """The tax in cents on a net amount in cents at `rate` percent (a string such as '20' or '7.5').
++
++    Rounded to the nearest cent, exactly half a cent away from zero (6.5 -> 7, -6.5 -> -7), in exact decimal
++    arithmetic.
++    """
+     check_rate(rate)
+-    return round(net * float(rate) / 100)
++    exact = Decimal(net) * Decimal(rate) / 100
++    return int(exact.quantize(Decimal(1), rounding=ROUND_HALF_UP))

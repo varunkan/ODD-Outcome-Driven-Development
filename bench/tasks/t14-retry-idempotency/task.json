@@ -1,0 +1,8 @@
+{
+  "id": "t14-retry-idempotency",
+  "size": "medium",
+  "kind": "feature",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done",
+  "note": "Retries alone pass the visible tests. A pass needs an idempotency key per job id and per side effect that is the same on every attempt and after a restart, attempts rebuilt from the journal (old journals included), and failures injected before, inside and after provider calls."
+}

@@ -1,0 +1,307 @@
+diff --git a/README.md b/README.md
+index 7f9a728..0652ddc 100644
+--- a/README.md
++++ b/README.md
+@@ -24,18 +24,25 @@ Budget({'groceries': 30000}).spent(ledger, 'groceries', 2024, 3)     # 4599
+ 
+ An entry has an `id` (given by the ledger, from 1, never reused), a `date` (`YYYY-MM-DD`), an `account` (the bank
+ account the money moved in), a `category`, an `amount` in whole cents (positive: money in; negative: money out;
+-never zero) and a `memo` (free text on one line). Account and category names cannot contain a semicolon.
++never zero), a `memo` (free text on one line) and a `status`: `'cleared'` (the default), `'pending'` (booked, not yet
++cleared by the bank) or `'void'` (cancelled, kept on record). Account and category names cannot contain a semicolon.
++
++A void entry counts for nothing: not in any balance, report figure or budget. A pending entry counts like a cleared
++one everywhere, except in `Ledger.cleared_balance`.
+ 
+ - `Ledger.add(date, account, category, amount, memo='')` returns the new id.
++- `Ledger.set_status(entry_id, status)`.
+ - `Ledger.get(entry_id)`, `Ledger.edit(entry_id, **fields)`, `Ledger.remove(entry_id)`.
+ - `Ledger.entries(account=None, category=None)`: copies, ordered by date then id.
+ - `Ledger.balance(account, until=None)`, `Ledger.balances(until=None)`: in cents, `until` a date, inclusive.
++- `Ledger.cleared_balance(account, until=None)`: the balance counting only cleared entries.
+ 
+ ## Totals
+ 
+ - `ledgerbook.balances`: `balance(entries, account, until=None)`, `balances(entries, until=None)`, `net_worth`.
+ - `ledgerbook.report.monthly(ledger, year, month)`: a dictionary with `month`, `income`, `spending` (positive),
+-  `net`, `by_category`, `entries` (the count) and `closing` (every account's balance at the end of the month).
++  `net`, `by_category`, `entries` (the count), `pending`
++  (the signed sum of the month's pending entries) and `closing` (every account's balance at the end of the month).
+   `report.render(r)` turns it into the text we e-mail to the accountant; `report.yearly(ledger, year)`.
+ - `ledgerbook.budget.Budget(limits)`: `spent(ledger, category, year, month)`, `remaining(...)`,
+   `over(ledger, year, month)`.
+@@ -45,14 +52,15 @@ The closing balances of a month's report are always the same numbers as `Ledger.
+ ## The file
+ 
+ ```
+-ledgerbook 1
+-1;2024-03-01;checking;salary;250000;March pay
+-2;2024-03-02;checking;groceries;-4599;market; bread and cheese
++ledgerbook 2
++1;2024-03-01;checking;salary;250000;cleared;March pay
++2;2024-03-02;checking;groceries;-4599;pending;market; bread and cheese
+ ```
+ 
+ UTF-8. The first line names the format. Every other line is one entry: id, date, account, category, amount in
+-cents, memo. The memo is last and may contain semicolons, so a line is split at its first five semicolons. Blank
+-lines are ignored. `save` replaces the file only once the new one is fully written. `load` raises
++cents, status, memo. The memo is last and may contain semicolons, so a line is split at its first six semicolons.
++Blank lines are ignored. Files in format 1 (first line `ledgerbook 1`, no status field, a line split at its first
++five semicolons) are still read, every entry cleared; `save` writes format 2. `save` replaces the file only once the new one is fully written. `load` raises
+ `LedgerFormatError` for text it cannot read.
+ 
+ ## Command line
+diff --git a/ledgerbook/balances.py b/ledgerbook/balances.py
+index 1f30cca..2488a54 100644
+--- a/ledgerbook/balances.py
++++ b/ledgerbook/balances.py
+@@ -1,8 +1,10 @@
+-"""Account balances: the sum of the amounts booked to an account, optionally up to and including a date."""
++"""Account balances: the sum of the amounts booked to an account, optionally up to and including a date.
++
++Void entries count for nothing; pending ones count like cleared ones."""
+ 
+ 
+ def _counts(entry, until):
+-    return until is None or entry.date <= until
++    return entry.counts and (until is None or entry.date <= until)
+ 
+ 
+ def balance(entries, account, until=None):
+diff --git a/ledgerbook/budget.py b/ledgerbook/budget.py
+index c4584bd..80982f9 100644
+--- a/ledgerbook/budget.py
++++ b/ledgerbook/budget.py
+@@ -16,7 +16,7 @@ class Budget:
+         key = '%04d-%02d' % (year, month)
+         total = 0
+         for entry in ledger.entries(category=category):
+-            if entry.date.startswith(key):
++            if entry.counts and entry.date.startswith(key):
+                 total -= entry.amount
+         return total
+ 
+diff --git a/ledgerbook/entry.py b/ledgerbook/entry.py
+index 54b7118..c0caad8 100644
+--- a/ledgerbook/entry.py
++++ b/ledgerbook/entry.py
+@@ -1,7 +1,8 @@
+ """One entry of the ledger: money into (positive) or out of (negative) one account, filed under one category."""
+ import datetime
+ 
+-FIELDS = ('id', 'date', 'account', 'category', 'amount', 'memo')
++FIELDS = ('id', 'date', 'account', 'category', 'amount', 'memo', 'status')
++STATUSES = ('cleared', 'pending', 'void')
+ EDITABLE = ('date', 'account', 'category', 'amount', 'memo')
+ 
+ 
+@@ -10,13 +11,19 @@ class Entry:
+ 
+     __slots__ = FIELDS
+ 
+-    def __init__(self, id, date, account, category, amount, memo=''):
++    def __init__(self, id, date, account, category, amount, memo='', status='cleared'):
+         self.id = id
+         self.date = date
+         self.account = account
+         self.category = category
+         self.amount = amount
+         self.memo = memo
++        self.status = status
++
++    @property
++    def counts(self):
++        """False for a void entry: it stays on record and counts in no balance, report or budget."""
++        return self.status != 'void'
+ 
+     @property
+     def month(self):
+@@ -47,6 +54,12 @@ def _check_name(field, value):
+         raise ValueError('%s must not contain a semicolon or a line break: %r' % (field, value))
+ 
+ 
++def check_status(status):
++    if status not in STATUSES:
++        raise ValueError('status must be one of %s, got %r' % (', '.join(STATUSES), status))
++    return status
++
++
+ def check_entry(entry):
+     """Raise ValueError unless every field of the entry is well formed. Returns the entry."""
+     if isinstance(entry.id, bool) or not isinstance(entry.id, int) or entry.id < 1:
+@@ -67,4 +80,5 @@ def check_entry(entry):
+         raise ValueError('an entry of zero moves no money')
+     if not isinstance(entry.memo, str) or '\n' in entry.memo or '\r' in entry.memo:
+         raise ValueError('memo must be text on one line, got %r' % (entry.memo,))
++    check_status(entry.status)
+     return entry
+diff --git a/ledgerbook/ledger.py b/ledgerbook/ledger.py
+index 6c65af4..a0559ef 100644
+--- a/ledgerbook/ledger.py
++++ b/ledgerbook/ledger.py
+@@ -1,6 +1,6 @@
+ """The ledger: entries in memory, numbered from 1. Reading and writing files is store.py's job."""
+ from . import balances as _balances
+-from .entry import EDITABLE, Entry, check_entry
++from .entry import EDITABLE, Entry, check_entry, check_status
+ 
+ 
+ class Ledger:
+@@ -10,9 +10,9 @@ class Ledger:
+ 
+     # writing
+ 
+-    def add(self, date, account, category, amount, memo=''):
++    def add(self, date, account, category, amount, memo='', status='cleared'):
+         """Book an entry and return its id. Raises ValueError when a field is malformed."""
+-        entry = check_entry(Entry(self._next_id, date, account, category, amount, memo))
++        entry = check_entry(Entry(self._next_id, date, account, category, amount, memo, status))
+         self._entries[entry.id] = entry
+         self._next_id += 1
+         return entry.id
+@@ -37,6 +37,12 @@ class Ledger:
+         self._entries[entry_id] = changed
+         return changed.copy()
+ 
++    def set_status(self, entry_id, status):
++        """Mark an entry cleared, pending or void. Returns the entry as it now is."""
++        entry = self._find(entry_id)
++        entry.status = check_status(status)
++        return entry.copy()
++
+     def remove(self, entry_id):
+         """Delete an entry. Its id is never given out again."""
+         self._find(entry_id)
+@@ -65,6 +71,11 @@ class Ledger:
+         """The balance of one account in cents, optionally up to and including the date `until`."""
+         return _balances.balance(self.entries(account=account), account, until)
+ 
++    def cleared_balance(self, account, until=None):
++        """The balance of one account counting only cleared entries: what the bank statement should show."""
++        cleared = [entry for entry in self.entries(account=account) if entry.status == 'cleared']
++        return _balances.balance(cleared, account, until)
++
+     def balances(self, until=None):
+         """{account: balance in cents} for every account."""
+         return _balances.balances(self.entries(), until)
+diff --git a/ledgerbook/report.py b/ledgerbook/report.py
+index 4f0ca2a..59b06a5 100644
+--- a/ledgerbook/report.py
++++ b/ledgerbook/report.py
+@@ -18,19 +18,24 @@ def monthly(ledger, year, month):
+     net         income - spending
+     by_category {category: signed sum of the month's amounts}, in category order
+     entries     how many entries are dated in the month
++    pending     the signed sum of the amounts of the month's pending entries
+     closing     {account: balance at the end of the month's last day}, for every account with an entry by then
+     """
+     key = _month_key(year, month)
+     last_day = '%s-%02d' % (key, calendar.monthrange(year, month)[1])
+-    income = spending = count = 0
++    income = spending = count = pending = 0
+     by_category = {}
+     closing = {}
+     for entry in ledger.entries():
++        if not entry.counts:
++            continue
+         if entry.date <= last_day:
+             closing[entry.account] = closing.get(entry.account, 0) + entry.amount
+         if entry.month != key:
+             continue
+         count += 1
++        if entry.status == 'pending':
++            pending += entry.amount
+         if entry.amount > 0:
+             income += entry.amount
+         else:
+@@ -43,6 +48,7 @@ def monthly(ledger, year, month):
+         'net': income - spending,
+         'by_category': dict(sorted(by_category.items())),
+         'entries': count,
++        'pending': pending,
+         'closing': dict(sorted(closing.items())),
+     }
+ 
+diff --git a/ledgerbook/store.py b/ledgerbook/store.py
+index 6966b33..67d1645 100644
+--- a/ledgerbook/store.py
++++ b/ledgerbook/store.py
+@@ -7,6 +7,15 @@
+ The first line names the format. Every other line is one entry: id, date, account, category, amount in cents and
+ memo, separated by semicolons. The memo is last and is free text: it may contain semicolons, so a line is split at
+ its first five semicolons only. Blank lines are ignored.
++
++That was format 1. Format 2 adds the status (cleared, pending or void) between the amount and the memo, so its
++lines are split at their first six semicolons:
++
++    ledgerbook 2
++    1;2024-03-01;checking;salary;250000;cleared;March pay
++    2;2024-03-02;checking;groceries;-4599;pending;market; bread and cheese
++
++Both are read; every entry of a format 1 file is cleared. `save` always writes format 2.
+ """
+ import os
+ import tempfile
+@@ -14,7 +23,8 @@ import tempfile
+ from .entry import Entry
+ from .ledger import Ledger
+ 
+-HEADER = 'ledgerbook 1'
++HEADER = 'ledgerbook 2'
++READABLE = {'ledgerbook 1': 1, 'ledgerbook 2': 2}
+ SEPARATOR = ';'
+ 
+ 
+@@ -27,7 +37,8 @@ class LedgerFormatError(ValueError):
+ 
+ 
+ def _entry_line(entry):
+-    return SEPARATOR.join((str(entry.id), entry.date, entry.account, entry.category, str(entry.amount), entry.memo))
++    return SEPARATOR.join((str(entry.id), entry.date, entry.account, entry.category, str(entry.amount), entry.status,
++                           entry.memo))
+ 
+ 
+ def dumps(ledger):
+@@ -46,26 +57,34 @@ def _parse_int(text, what, number):
+         raise LedgerFormatError('%s is not a whole number: %r' % (what, text), number) from None
+ 
+ 
+-def _parse_line(line, number):
+-    parts = line.split(SEPARATOR, 5)
+-    if len(parts) != 6:
+-        raise LedgerFormatError('expected id;date;account;category;amount;memo, got %r' % line, number)
+-    entry_id, date, account, category, amount, memo = parts
++def _parse_line(line, number, version):
++    if version == 1:
++        parts = line.split(SEPARATOR, 5)
++        if len(parts) != 6:
++            raise LedgerFormatError('expected id;date;account;category;amount;memo, got %r' % line, number)
++        entry_id, date, account, category, amount, memo = parts
++        status = 'cleared'
++    else:
++        parts = line.split(SEPARATOR, 6)
++        if len(parts) != 7:
++            raise LedgerFormatError('expected id;date;account;category;amount;status;memo, got %r' % line, number)
++        entry_id, date, account, category, amount, status, memo = parts
+     return Entry(_parse_int(entry_id, 'id', number), date, account, category, _parse_int(amount, 'amount', number),
+-                 memo)
++                 memo, status)
+ 
+ 
+ def loads(text):
+     """A Ledger from the text of a ledger file. Raises LedgerFormatError when the text is not one."""
+     lines = text.split('\n')
+-    if lines[0].lstrip('\ufeff').rstrip('\r') != HEADER:
++    version = READABLE.get(lines[0].lstrip('\ufeff').rstrip('\r'))
++    if version is None:
+         raise LedgerFormatError('not a ledgerbook file, or a format this version cannot read: %r' % lines[0][:40], 1)
+     ledger = Ledger()
+     for number, line in enumerate(lines[1:], start=2):
+         line = line.rstrip('\r')
+         if not line.strip():
+             continue
+-        entry = _parse_line(line, number)
++        entry = _parse_line(line, number, version)
+         try:
+             ledger.insert(entry)
+         except ValueError as problem:
