@@ -72,6 +72,7 @@ DRY_AGENT = '%s -c %s' % (shlex.quote(sys.executable), shlex.quote(
 
 LIVE = set()  # process groups now running, so an interrupt can stop every session
 LIVE_LOCK = threading.Lock()
+TOPS = set()  # the top directory of every session now running: its processes are never another session's leftovers
 STOPPING = threading.Event()  # set on an interrupt: a session ending now was stopped, so it gets no manifest
 
 
@@ -107,12 +108,18 @@ def kill_group(pid):
         pass
 
 
-def kill_under(top):
+def kill_under(top, spare=()):
     """Kill every process whose cwd, executable or an open file is under top: the CLI may detach a shell into a group
-    of its own. Returns how many were killed, or None where /proc is not available (not Linux)."""
+    of its own. A process whose cwd is under a spare top (another session still running) is never killed: an agent
+    that looks around ../../.. may hold this session's directories open for a moment. Returns how many were killed,
+    or None where /proc is not available (not Linux)."""
     if not os.path.isdir('/proc/self/fd'):
         return None
     real, killed = os.path.realpath(top), 0
+    others = [os.path.realpath(t) for t in spare if os.path.realpath(t) != real]
+
+    def under(path, root):
+        return path == root or path.startswith(root + os.sep)
     for _ in range(3):  # a process may fork while the scan runs
         found = 0
         for pid in (n for n in os.listdir('/proc') if n.isdigit() and int(n) != os.getpid()):
@@ -127,7 +134,13 @@ def kill_under(top):
                     links.append(os.readlink(os.path.join(base, name)))
                 except OSError:
                     pass
-            if any(x == real or x.startswith(real + os.sep) for x in links):
+            try:
+                cwd = os.readlink(os.path.join(base, 'cwd'))
+            except OSError:
+                cwd = ''
+            if cwd and any(under(cwd, o) for o in others) and not under(cwd, real):
+                continue  # another live session's process
+            if any(under(x, real) for x in links):
                 try:
                     os.kill(int(pid), signal.SIGKILL)
                     found += 1
@@ -568,6 +581,8 @@ def one_run(cfg, task, arm, repeat):
     # A top-level directory per session (mkdtemp: mode 700) whose name says nothing about the task or the arm. The
     # session sits two levels down, so its own surroundings hold no other session and no hidden tests.
     top = tempfile.mkdtemp(prefix='bench-')
+    with LIVE_LOCK:
+        TOPS.add(top)
     session = os.path.join(top, 's', 'project')
     pending = {'task': task, 'rec': rec, 'errors': [], 'top': top, 'copies': [], 'grade_copy': None,
                'grading_dir': None, 'graded': False, 'manifest': False}
@@ -575,6 +590,8 @@ def one_run(cfg, task, arm, repeat):
         session_and_copies(cfg, task, arm, repeat, pending, session)
     except Exception as e:  # one broken run must not stop the others
         pending['errors'].append('%s: %s' % (type(e).__name__, e))
+    with LIVE_LOCK:
+        TOPS.discard(top)
     if cfg['keep']:
         rec['session_dir'] = session
     else:
@@ -632,7 +649,9 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
         status, out, err = run(cmd, session, agent, cfg['timeout'])
     rec['wall_seconds'] = round(time.time() - started, 1)
     # run() killed the agent's process group; whatever it detached is stopped here, before anything reads the tree
-    rec['leftovers_killed'] = kill_under(top)
+    with LIVE_LOCK:
+        spare = sorted(TOPS - {top})
+    rec['leftovers_killed'] = kill_under(top, spare)
     if rec['leftovers_killed'] is None:
         rec['warnings'].append('leftover processes not checked: /proc is not available here')
     rec['exit_status'] = status

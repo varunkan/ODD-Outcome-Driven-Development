@@ -556,6 +556,24 @@ class PiecesTest(unittest.TestCase):
     def setUpClass(cls):
         cls.mod = module('run')
 
+    @unittest.skipUnless(os.path.isdir('/proc/self/fd'), 'needs /proc')
+    def test_leftovers_of_an_ended_session_are_killed_but_never_another_live_sessions_agent(self):
+        base = tempfile.mkdtemp(prefix='bench-kill-')
+        self.addCleanup(shutil.rmtree, base, True)
+        ended, live = os.path.join(base, 'bench-ended'), os.path.join(base, 'bench-live')
+        for d in (ended, live):
+            os.makedirs(os.path.join(d, 's', 'project'))
+        hold = 'import os, sys, time\nfd = os.open(sys.argv[1], os.O_RDONLY)\ntime.sleep(60)\n'
+        # another live session's agent, scanning ../../.. and holding a directory of the ended session open
+        peeker = subprocess.Popen([sys.executable, '-c', hold, ended], cwd=os.path.join(live, 's', 'project'))
+        # a process the ended session left behind
+        leftover = subprocess.Popen([sys.executable, '-c', hold, base], cwd=os.path.join(ended, 's', 'project'))
+        self.addCleanup(lambda: [p.kill() for p in (peeker, leftover)])
+        time.sleep(0.5)
+        self.assertEqual(self.mod.kill_under(ended, spare=[live]), 1)
+        self.assertIsNotNone(leftover.wait(10), 'the ended session\'s leftover is killed')
+        self.assertIsNone(peeker.poll(), 'a live session\'s agent is never killed for another session')
+
     def test_the_claim_is_the_last_result_line(self):
         claim = self.mod.parse_claim
         for text, want in (
