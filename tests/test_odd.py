@@ -60,6 +60,13 @@ class Repo(unittest.TestCase):
         if mode:
             os.chmod(self.path(rel), mode)
 
+    def peek(self, rel):
+        """read() while a check may be swapping the file: git removes and rewrites it, so it can be briefly absent."""
+        try:
+            return self.read(rel)
+        except FileNotFoundError:
+            return None
+
     def read(self, rel):
         with open(self.path(rel)) as f:
             return f.read()
@@ -198,7 +205,7 @@ class InPlaceCheck(Repo):
         self.write('calc.py', FIXED)
         p = subprocess.Popen([sys.executable, ODD, 'done', 'add'], cwd=self.dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         deadline = time.time() + 15
-        while time.time() < deadline and self.read('calc.py') != BROKEN:
+        while time.time() < deadline and self.peek('calc.py') != BROKEN:
             time.sleep(0.05)
         self.assertEqual(self.read('calc.py'), BROKEN, 'the check takes the change out in place')
         p.send_signal(sig)
@@ -237,7 +244,7 @@ class InPlaceCheck(Repo):
         self.write('other.py', 'hello\n')
         p = subprocess.Popen([sys.executable, ODD, 'done', 'slow'], cwd=self.dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         deadline = time.time() + 15
-        while time.time() < deadline and self.read('calc.py') != BROKEN:
+        while time.time() < deadline and self.peek('calc.py') != BROKEN:
             time.sleep(0.05)
         try:
             self.assertIn('another check is taking a change out', self.no('done', 'other', code=2))
