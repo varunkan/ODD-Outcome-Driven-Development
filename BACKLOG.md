@@ -97,6 +97,11 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   succeeds, the proof is too weak.
 - **Evidence:** 19.7% of passing patches rejected by such checks (arXiv 2603.00520); 29.6% of passing patches diverge
   in behaviour (arXiv 2503.15223). The only measured way, without a reference patch, to catch special-casing.
+- **Done** in the commit "R6: odd challenge" (`git log --grep '^R6:'`), a tool newer than 0.4.0: `odd challenge <slug>
+  [--agent CMD]`, advisory, exit 1 when a variant the challenger calls wrong passes the proof ([DESIGN 3i](DESIGN.md)).
+  Built on race's attempt machinery (`_attempts(judge=, seed=, counted=)`, `_contained()`). Tests: `Challenge`.
+  Measure: on the harness, how many verified outcomes a challenger breaks, and how many of those claims a person
+  confirms; not yet run.
 
 ### R7. Per-file inertness (opt-in)
 - **Outcome:** each changed file is taken out on its own, and a file whose removal leaves the proof green is flagged.

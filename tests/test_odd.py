@@ -4084,5 +4084,45 @@ class InertFiles(Repo):
         self.assertIn('"inert" has the wrong kind of value', self.no('done', 'add', code=2))
 
 
+class Challenge(Agents):
+    """R6: odd challenge: another agent tries to make the verified change wrong while its proof still passes (advisory)."""
+    SEEDED = 'grep -q "a + b" calc.py\n'  # the challenger starts from the change, not from the commit
+
+    def setUp(self):
+        super().setUp()
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+
+    def test_a_wrong_variant_that_passes_is_reported_and_not_applied(self):
+        self.config([self.agent('sly', self.SEEDED + self.writes('def add(a, b):\n    return a * b - 1\n') +
+                                '\necho "odd-wrong: add(1, 1) returns 0 instead of 2"')])
+        out = self.no('challenge', 'add')
+        self.assertIn('the proof passes a variant the challenger says is wrong', out)
+        self.assertIn('claim: add(1, 1) returns 0 instead of 2', out)
+        self.assertIn('+    return a * b - 1', out)
+        self.assertEqual(self.read('calc.py'), FIXED, 'a challenge never changes the working tree')
+
+    def test_a_proof_that_catches_the_variant_withstands_it(self):
+        self.config([self.agent('blunt', self.SEEDED + self.writes(BROKEN) + '\necho "odd-wrong: add returns 0"')])
+        out = self.ok('challenge', 'add')
+        self.assertIn('the proof withstood the challenge: the proof caught the variant', out)
+
+    def test_a_challenger_that_edits_the_proof_or_claims_nothing_proves_nothing(self):
+        self.config([self.agent('cheat', self.writes(BROKEN) + "\nprintf 'import unittest\\n' > tests/test_calc.py"
+                                + '\necho "odd-wrong: add returns 0"')])
+        self.assertIn('edited tests/test_calc.py', self.ok('challenge', 'add'))
+        self.assertEqual(self.read('tests/test_calc.py'), TEST)
+        self.config([self.agent('quiet', self.writes('def add(a, b):\n    return b + a\n') + '\necho "odd-wrong: none"')])
+        self.assertIn('named no input it gets wrong', self.ok('challenge', 'add'))
+
+    def test_it_needs_a_verified_outcome_and_never_counts_as_a_failed_attempt(self):
+        self.config([self.agent('blunt', self.writes(BROKEN) + '\necho "odd-wrong: add returns 0"')], max_attempts=1)
+        self.ok('done', 'add')
+        self.ok('challenge', 'add')
+        self.assertNotIn('attempt budget', self.ok('done', 'add'))
+        self.write('calc.py', FIXED + '\n# edited\n')
+        self.assertRegex(self.no('challenge', 'add', code=2), r'verify it first: .* done add')
+
+
 if __name__ == '__main__':
     unittest.main()

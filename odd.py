@@ -2440,8 +2440,9 @@ def _settle(root, at):
     return ''
 
 
-def _judge(root, cfg, o, base, at, fixed):
-    """Check one finished attempt inside its worktree: what it may not touch, then the checks of `odd done`."""
+def _contained(root, cfg, o, at, fixed):
+    """Why a finished attempt is refused before any proof runs (timed out, left a process, replaced .git, edited what
+    it must leave alone, changed files outside the boundary), or ''. Notes its changed files and lines on `at`."""
     wt, start = at['wt'], at['start']
     if at['rc'] is None:
         return 'timed out after %ss (killed with its process group)' % cfg['race_timeout']
@@ -2450,7 +2451,7 @@ def _judge(root, cfg, o, base, at, fixed):
         return why
     delta = changed_files(wt, start)
     control, exempt, tests, product = classify(delta, cfg)
-    at['delta'] = delta
+    at['delta'], at['product'] = delta, product
     at['lines'] = sum(sizes(wt, start, tests + product).values())
     moved = sorted(set(zlist(wt, *DIFF, '--name-only', start, '--', *fixed)) | set(control))
     if moved:
@@ -2458,6 +2459,15 @@ def _judge(root, cfg, o, base, at, fixed):
     outside = [p for p in product if not o.covers(p)]
     if outside:
         return 'changed files outside "in: %s": %s' % (o.get('in'), ', '.join(outside[:6]))
+    return ''
+
+
+def _judge(root, cfg, o, base, at, fixed):
+    """Check one finished attempt inside its worktree: what it may not touch, then the checks of `odd done`."""
+    wt = at['wt']
+    why = _contained(root, cfg, o, at, fixed)
+    if why:
+        return why
     try:
         at['res'] = prove(wt, Outcome.load(wt, o.slug), survey(wt, base))
     except (Fail, CouldNotRun) as e:
@@ -2545,7 +2555,7 @@ def _prompt(root, o, cfg, base, fixed):
                               slug=o.slug, read=read_first(root, o, base)) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
 
 
-def _worktree(root, run, name, head, fixed):
+def _worktree(root, run, name, head, fixed, seed=()):
     """A working tree of `head` at run/name, outside the repository (see _runs), with `fixed` (the outcome and its proof as
     they are in the user's tree) copied in and committed as its start. Returns its path. It is a clone that reads
     the user's objects (--shared) but has its own config, hooks, refs and index, not a linked worktree, which would
@@ -2557,10 +2567,10 @@ def _worktree(root, run, name, head, fixed):
     git(wt, 'remote', 'remove', 'origin')
     _exclude(root, wt)
     git(wt, 'checkout', '--quiet', '--detach', head)
-    for p in fixed:
+    for p in list(fixed) + list(seed):  # seed: files the start carries that an attempt may still change (challenge)
         os.makedirs(os.path.dirname(os.path.join(wt, p)), exist_ok=True)
         shutil.copy2(os.path.join(root, p), os.path.join(wt, p))
-    git(wt, 'add', '-f', '--', *fixed)
+    git(wt, 'add', '-f', '--', *(list(fixed) + list(seed)))
     git(wt, '-c', 'user.name=odd', '-c', 'user.email=odd@localhost', '-c', 'commit.gpgsign=false', 'commit',
         '--quiet', '--no-verify', '--allow-empty', '-m', 'odd: the outcome and its proof')
     shutil.copyfile(os.path.join(wt, '.git', 'config'), wt + '.config')
@@ -2589,7 +2599,7 @@ def _next(done):
             pass
 
 
-def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
+def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names, judge=None, seed=(), counted=True):
     """One attempt per command in `cmds`, the agents in parallel, each in a detached clone of `head` outside the
     repository (_runs) with `fixed` copied in as the start; each checked by _judge when its agent ends. Returns (attempts,
     ranked verified attempts, the best one's patch, seconds of setup and clean-up). The worktrees are removed before
@@ -2598,7 +2608,7 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
     run, attempts, procs, done = _run_dir(root), [], [], queue.Queue()
     try:
         for i, (cmd, name) in enumerate(zip(cmds, names), 1):
-            wt = _worktree(root, run, str(i), head, fixed)
+            wt = _worktree(root, run, str(i), head, fixed, seed)
             Cache.ALIAS[os.path.realpath(wt)] = root
             at = dict(n=i, name=name, wt=wt, start=rev(wt, 'HEAD'), cmd=cmd, lines=0, res=None,
                       prompt=os.path.join(keep, 'prompt-%s.md' % name), log=os.path.join(keep, 'agent-%s.log' % name))
@@ -2613,14 +2623,14 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
             print('  attempt %s: the agent ended after %ss (%s); verifying' % (
                 at['name'], at['agent_s'], 'killed at the timeout' if at['rc'] is None else 'exit %d' % at['rc']))
             v0 = time.time()
-            at['why'] = _judge(root, cfg, o, base, at, fixed)
+            at['why'] = (judge or _judge)(root, cfg, o, base, at, fixed)
             at['verify_s'] = round(time.time() - v0, 1)
             at['cost'] = _cost(at)
             # backlog item 16: every attempt's spend, for `odd stats`; a refused one is counted for the attempt budget
             # as a failed done is
             record(root, o.slug, attempt=at['name'], cost=at['cost'], seconds=round(at['agent_s'] + at['verify_s'], 1),
                    **dict(dict(failed='attempt %s' % at['name'], why=(at.get('detail') or at['why'])[:300])
-                          if at['why'] else {}, **_kind(o)))
+                          if at['why'] and counted else {}, **_kind(o)))
         ranked = sorted([x for x in attempts if not x['why']], key=_rank)
         patch = ''
         if ranked:
@@ -2731,6 +2741,70 @@ def cmd_race(a, root):
     _apply(root, o, head, ranked[0], patch, keep)
 
 
+# ---------------------------------------------------------------- challenge: try to break a verified change (R6)
+
+CHALLENGE_PROMPT = """You are testing whether a proof is strong enough. The current directory holds a change that passes its
+proof. Edit the product files so the code becomes plausibly WRONG: it no longer does what the outcome says for some
+input or case, while the proof below still passes. That would show the proof needs another case.
+
+Outcome: %(outcome)s
+Proof (it must still exit 0 on your version): %(proof)s
+Change only files inside: %(ins)s
+Leave alone: %(fixed)s. A version that edits them counts for nothing.
+
+When you have finished, print exactly one line:
+odd-wrong: <the input or case your version gets wrong, and what it does instead of what the outcome says>
+If you find no such version, print "odd-wrong: none". Then exit. Do not commit or push. Your version is never kept.
+"""
+WRONG = re.compile(r'(?m)^odd-wrong:[ \t]*(\S.*?)[ \t]*$')
+
+
+def _challenged(root, cfg, o, base, at, fixed):
+    """R6: '' when the challenger's variant passes the proof and names what it gets wrong (the proof may be weak);
+    otherwise why the proof withstood it. The verdict on the claim is a person's: odd only runs the proof."""
+    why = _contained(root, cfg, o, at, fixed)
+    if why:
+        return why
+    if not at['product']:
+        return 'the challenger changed no product file'
+    claim = _said(at, WRONG)
+    if not claim or claim.lower().rstrip('.') == 'none':
+        return 'the challenger named no input it gets wrong (no "odd-wrong: <case>" line)'
+    rc, tail, _ = run_proof(at['wt'], o.get('proof'), cfg['proof_timeout'])
+    if rc != 0:
+        return 'the proof caught the variant (%s): %s' % ('timeout' if rc is None else 'exit %d' % rc, says(tail))
+    at['claim'] = claim
+    return ''
+
+
+def cmd_challenge(a, root):
+    """R6, advisory: one agent starts from the verified change and tries to make it wrong while the proof passes.
+    Exit 1 when it succeeds (read the claim: if it is right, the proof needs that case), 0 when the proof withstood it.
+    Nothing is applied, recorded as a failed attempt, or read by the gate."""
+    cfg = load_config(root)
+    agent = _agents(cfg, [a.agent] if a.agent else cfg['agents'][:1], 'race')[0]
+    o, head, base, fixed = _race_start(root, cfg, a.slug, a.base)
+    changed = changed_files(root, base)
+    if o.skip or not standing(root, cfg, o, changed):
+        raise CouldNotRun('a challenge starts from a verified change with a take-out check; verify it first: %s done %s'
+                          % (ODD, o.slug))
+    seed = [p for p in classify(changed, cfg)[3] if o.covers(p) and os.path.isfile(os.path.join(root, p))]
+    keep = _keep(root, 'challenge', o.slug)
+    print('%s challenge %s: one agent tries to make the change wrong while the proof still passes (advisory)' % (ODD, o.slug))
+    text = CHALLENGE_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), fixed=', '.join(fixed))
+    attempts, ranked, patch, _ = _attempts(root, cfg, o, base, head, fixed, [agent], keep, text, ['challenge'],
+                                           judge=_challenged, seed=seed, counted=False)
+    if not ranked:
+        print('the proof withstood the challenge: %s' % attempts[0]['why'])
+        return
+    lines = patch.splitlines()
+    raise Fail('the proof passes a variant the challenger says is wrong (advisory; a person judges the claim):\n'
+               '  claim: %s\n  the variant, against the change:\n%s%s\n  if the claim is right, add a proof case '
+               'for it, then run %s done %s; if not, the proof stands. Agent log: %s'
+               % (ranked[0]['claim'], '\n'.join('    ' + l for l in lines[:60]), '\n    ...' if len(lines) > 60 else '',
+                  ODD, o.slug, attempts[0]['log']))
+
+
 # ---------------------------------------------------------------- cascade: the cheapest agent first, escalate on proof
 
 COST = re.compile(r'(?m)^odd-cost:\s*\$?(\d+(?:\.\d+)?)\s*$')
@@ -2741,16 +2815,22 @@ Earlier attempts at this outcome, by other agents, were NOT verified. This is wh
 """
 
 
-def _cost(at):
-    """The agent's own report of what the attempt cost: the last line "odd-cost: <usd>" it printed, else None."""
+def _said(at, pattern):
+    """The last match of `pattern` in what the agent printed (the last 64 KiB of its log), else None."""
     try:
         with open(at['log'], 'rb') as f:
             f.seek(0, 2)
             f.seek(max(0, f.tell() - 65536))
-            found = COST.findall(f.read().decode('utf-8', 'replace'))
+            found = pattern.findall(f.read().decode('utf-8', 'replace'))
     except OSError:
         return None
-    return float(found[-1]) if found else None
+    return found[-1] if found else None
+
+
+def _cost(at):
+    """The agent's own report of what the attempt cost: the last line "odd-cost: <usd>" it printed, else None."""
+    v = _said(at, COST)
+    return float(v) if v else None
 
 
 def _short(cmd, width=44):
@@ -3595,6 +3675,10 @@ def main(argv=None):
     s.add_argument('slug')
     s.add_argument('--n', type=int, help='how many attempts (default: one per configured agent, or 3 for one agent)')
     s.add_argument('--agent', help='the agent command for every attempt, instead of "agents" in .odd/config.json')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('challenge')
+    s.add_argument('slug')
+    s.add_argument('--agent', help='the challenger\'s agent command, instead of the first of "agents" in .odd/config.json')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('cascade')
     s.add_argument('slug')

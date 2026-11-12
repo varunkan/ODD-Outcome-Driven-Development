@@ -59,6 +59,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd cascade <slug> [--agents C1,C2,...] [--race N] [--base REF]` | the agents in order, cheapest first, each level's attempts run and checked as in `race`; the next level only when none is verified, with the failure in its prompt; park after the last (section 3c); needs a tool newer than 0.4.0 | 0 verified attempt applied, 1 parked or the winner left as a patch, 2 could not run |
 | `odd chain <ticket> [--race N] [--cascade] [--agents C1,C2,...] [--base REF]` | the outcomes in `.odd/chains/<ticket>.md` in order: each one without a checkpoint is raced (or cascaded), verified in your tree and committed as `odd: <slug> proven`; the first unproven one is parked and stops the chain, the tree back at the last checkpoint (section 3e); needs a tool newer than 0.4.0 | 0 every outcome proven, 1 an outcome parked, 2 could not run (a dirty tree, an unknown slug, a git failure: rolled back, not parked) |
 | `odd spec <slug> --proof-by CMD [--tries N] [--base REF]` | another agent command (in practice a stronger model) writes only the proof in its own worktree; the test files come back and are sealed red (section 3d); retried, then parked; needs a tool newer than 0.4.0 | 0 proof brought back and sealed, 1 parked or refused (the proof passes in your tree, or did not apply), 2 could not run |
+| `odd challenge <slug> [--agent CMD] [--base REF]` | advisory: one agent starts from the verified change and tries to make it wrong while the proof still passes; nothing is applied (section 3i); needs a tool newer than 0.4.0 | 0 the proof withstood it, 1 a variant passed (read the claim), 2 could not run (not verified, a skip, no agent) |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd ask <slug> "<question>"` | records one open question as `asked:`; the gate reports the outcome as waiting for an answer (section 4b); needs a tool newer than 0.4.0 | 0, 1 not a question or no such outcome |
@@ -344,6 +345,29 @@ race of three parallel attempts counts about three times its wall clock; they ar
 (the item's "turns" is not recorded: odd sees no turns, only a command's output). Work done outside race, cascade and
 chain (an agent session that ends in `odd done`, `odd spec --proof-by`) is not counted. The evidence is per machine and
 worktree, as for the budget. Not measured on real agents; the tests use fake agents that print a cost.
+
+### 3i. `odd challenge`: can the proof be fooled? (advisory)
+
+Needs a tool newer than 0.4.0 (R6). The take-out check shows the proof depends on the change; it cannot show the proof
+would notice a different, wrong change. `odd challenge <slug>` asks one agent (`--agent`, else the first of
+`"agents"`) to do exactly that: starting from the verified change, edit the product files inside `in:` so the code
+no longer does what the outcome says for some case, while the proof still passes, and print one line `odd-wrong:
+<the case it gets wrong>`. It runs in a clone outside the repository like a race attempt (`_attempts()` with its own
+judge, `_challenged()`; the clone's start carries the changed product files as `seed`, not held fixed), with the
+outcome, the changed tests and `.odd/config.json` held fixed. The challenger's version counts only when it stays
+inside the boundary, edits nothing held fixed (`_contained()`, shared with race), changes a product file, names a
+case (`odd-wrong: none` or no line names none), and the proof then exits 0 on it in the clone. Then the command
+exits 1 and prints the claim and the variant as a diff against the change (first 60 lines), and says: if the claim is
+right, add a proof case for it. Otherwise it exits 0 and says why the proof withstood it (for example `the proof
+caught the variant (exit 1): AssertionError: 0 != 5`). It requires the outcome to be verified for the files as they
+are now (the local evidence `done` records) and refuses a `counterfactual: skip` (exit 2). Nothing is applied, the
+working tree is not touched, and the gate never reads the result: following the research, an LLM is not the arbiter
+of done ([14](docs/evidence/14-research.md)); a person or the working agent judges the claim. The session is
+recorded for cost (section 3h, `odd-cost:`) but never as a failed attempt, so it does not count toward
+`"max_attempts"`. Cost: one agent session and one proof run. Limits: the claim is the challenger's; odd does not run
+the claimed case (there is no reference to run it against), so a wrong claim is possible, and a challenger that finds
+nothing shows only that this one did not. Whether it finds weak proofs on the harness is not measured (the research
+rejected 19.7% of passing patches with such checks, arXiv 2603.00520).
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
