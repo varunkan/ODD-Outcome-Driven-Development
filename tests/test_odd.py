@@ -399,7 +399,7 @@ class ProofStrength(Repo):
         self.solve()
         self.write('calc.py', self.TWO)
         out = self.ok('done', 'add')
-        self.assertIn('strength: the proof caught 1 of 2 mutant(s)', out)
+        self.assertIn('proof strength 1 of 2 (small breaks', out)
         self.assertIn('survived: calc.py:6 - -> +: return a - b', out)
         self.assertIn('next: add a proof case that tells calc.py:6 apart', out, 'a survivor says what to do next')
         self.assertEqual(self.read('calc.py'), self.TWO, 'every mutant is put back')
@@ -409,7 +409,7 @@ class ProofStrength(Repo):
         self.outcome()
         self.solve()
         out = self.ok('done', 'add')
-        self.assertIn('strength: the proof caught 1 of 1 mutant(s)', out)
+        self.assertIn('proof strength 1 of 1 (small breaks', out)
         self.assertNotIn('survived', out)
 
     def test_enforce_makes_a_survivor_a_fail_and_recompute_reads_it_from_the_target(self):
@@ -462,7 +462,7 @@ class ProofStrength(Repo):
         self.outcome('rc', '%s tests/check.py' % sys.executable, 'rc.py', 'A caller of rc.code() receives 126.')
         self.write('rc.py', 'def code():\n    return 126\n')
         out = self.ok('done', 'rc')
-        self.assertIn('strength: the proof caught 0 of 0 mutant(s); 1 could not run', out)
+        self.assertIn('proof strength 0 of 0 (small breaks in the changed lines the proof caught); 1 could not run', out)
         self.assertIn('could not run: rc.py:2 126 -> 127: return 126 (exit 127)', out)
 
     def test_the_cap_bounds_the_proof_runs(self):
@@ -470,7 +470,7 @@ class ProofStrength(Repo):
         self.outcome()
         self.solve()
         self.write('calc.py', self.TWO)
-        self.assertIn('strength: the proof caught 1 of 1 mutant(s) (1 of 2 sampled)', self.ok('done', 'add'))
+        self.assertIn('proof strength 1 of 1 (small breaks in the changed lines the proof caught) (1 of 2 sampled)', self.ok('done', 'add'))
 
     def test_a_kill_while_a_mutant_is_in_puts_it_back(self):
         marker = 'sleep 31.6'
@@ -497,6 +497,86 @@ class ProofStrength(Repo):
         self.assertEqual(self.read('calc.py'), redo, 'the newer edit is never overwritten')
         with open(out.split('your earlier version is at ')[1].split(')')[0]) as f:
             self.assertEqual(f.read(), FIXED)
+
+    def test_one_mutant_per_changed_line_first_spread_across_files(self):
+        where = lambda m: m[:2]  # noqa: E731
+        cands = [('a.py', 1, k) for k in range(5)] + [('b.py', 1, 0)]
+        self.assertEqual(oddmod.pick(cands, 2, where), [('a.py', 1, 0), ('b.py', 1, 0)], 'one per line, every file')
+        self.assertEqual(oddmod.pick(cands, 3, where), [('a.py', 1, 0), ('a.py', 1, 1), ('b.py', 1, 0)],
+                         'a second on a line only once every line has one')
+        many = [('a.py', n, 0) for n in range(1, 7)] + [('b.py', 1, 0)]
+        self.assertEqual(oddmod.pick(many, 3, where), [('a.py', 1, 0), ('a.py', 4, 0), ('b.py', 1, 0)],
+                         'files share the cap; lines within a file spread evenly')
+        self.assertEqual(oddmod.pick(cands, 0, where), [])
+        self.write('.odd/config.json', json.dumps({'mutants': 2}))
+        self.outcome('add', PROOF, 'calc.py,more.py')
+        self.solve()
+        self.write('calc.py', 'def add(a, b):\n    return a + b if a > 0 or b < 0 else b + a + 0\n')
+        self.write('more.py', 'X = 1\n')
+        out = self.ok('done', 'add')
+        self.assertIn('survived: more.py:1', out, 'the second break goes to the other file')
+
+    def test_a_changed_line_the_proof_never_runs_is_named_and_fails_under_enforce(self):
+        self.outcome()
+        self.solve()
+        self.write('calc.py', self.TWO)
+        out = self.ok('done', 'add')
+        self.assertIn('not run by the proof: calc.py:6', out)
+        self.assertIn('not run by the proof: calc.py:6', self.ok('gate'))
+        self.write('.odd/config.json', json.dumps({'strength': 'enforce'}))
+        out = self.no('done', 'add')
+        self.assertIn('not run by the proof: calc.py:6', out)
+        self.assertIn('the proof does not notice 1 of 2', out, 'both findings in one refusal')
+        self.write('calc.py', FIXED)
+        self.assertNotIn('not run by the proof', self.ok('done', 'add'))
+
+    def test_the_execution_check_follows_a_pytest_or_script_proof_and_says_not_measured_otherwise(self):
+        self.write('tests/check.py', 'import sys\nsys.path.insert(0, ".")\nimport calc\n'
+                                     'sys.exit(0 if calc.add(2, 3) == 5 else 1)\n')
+        self.outcome('add', '%s tests/check.py' % sys.executable)
+        self.write('calc.py', self.TWO)
+        self.assertIn('not run by the proof: calc.py:6', self.ok('done', 'add'))
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace(
+            'proof: %s tests/check.py' % sys.executable, "proof: grep -q 'a + b' calc.py"))
+        out = self.ok('done', 'add')
+        self.assertIn('lines run: not measured (the proof is not a Python run)', out)
+        self.assertNotIn('not run by the proof', out)
+
+    def test_strength_is_worded_k_of_n_and_never_verified(self):
+        self.outcome()
+        self.solve()
+        self.write('calc.py', self.TWO)
+        out = self.ok('done', 'add')
+        line = [l for l in out.splitlines() if 'proof strength' in l][-1]
+        self.assertIn('proof strength 1 of 2', line)
+        self.assertNotIn('verified', line)
+        self.commit('two')
+        self.ok('gate', '--recompute', '--base', 'main', '--summary', self.path('.git/s.md'))
+        md = self.read('.git/s.md')
+        self.assertIn('| proof strength |', md)
+        self.assertIn('1 of 2', md)
+        self.assertIn('not run by the proof: calc.py:6', md)
+        self.assertRegex(self.ok('stats'), r'add .* 1 of 2')
+
+    def test_a_proof_that_only_prints_is_refused(self):
+        show = '%s -c "import price; print(price.total(2, 3))"' % sys.executable
+        self.outcome('price', show, 'price.py', 'A caller of total(2, 3) receives 5.')
+        self.write('price.py', 'def total(a, b):\n    return a + b\n')  # new: taken out, the import fails, so red
+        proof = lambda new: self.write('.odd/outcomes/price.md', re.sub(  # noqa: E731
+            r'(?m)^proof: .*$', lambda m: 'proof: ' + new, self.read('.odd/outcomes/price.md')))
+        self.assertIn('it only prints', self.no('done', 'price'))
+        self.write('tests/show.py', 'import sys\nsys.path.insert(0, ".")\nfrom price import total\nprint(total(2, 3))\n')
+        proof('%s tests/show.py' % sys.executable)
+        self.assertIn('it only prints', self.no('done', 'price'))
+        proof('echo ok && %s -c "import price"' % sys.executable)
+        self.assertIn('it only prints', self.no('done', 'price'))
+        self.write('tests/show.py', 'import sys\nsys.path.insert(0, ".")\nfrom price import total\nassert total(2, 3) == 5\n')
+        proof('%s tests/show.py' % sys.executable)
+        self.ok('done', 'price')  # an assert is a check: the green control
+        self.write('tests/helper.py', 'def check(v):\n    assert v == 5\n')
+        self.write('tests/show.py', 'import sys\nsys.path[:0] = [".", "tests"]\nfrom price import total\nimport helper\n'
+                                    'print(helper.check(total(2, 3)))\n')
+        self.ok('done', 'price')  # it imports a helper from the repository: not cheap to tell, never refused
 
     def test_mutations_skip_strings_and_comments_in_a_fixed_order(self):
         text = ('x = a < b and c  # a > b\n'
@@ -990,7 +1070,7 @@ class RedTeam(Repo):
     # ---- proofs
 
     def test_a_proof_handed_to_an_interpreter_from_inside_the_change(self):
-        self.write('check.py', 'print("ok")\n')
+        self.write('check.py', 'import calc\nassert calc.add(2, 3) == 5\n')  # a check: a print-only one is refused first
         self.write('calc.py', FIXED)
         self.outcome('a', '%s check.py' % sys.executable, 'calc.py, check.py')
         self.assertIn('part of the change', self.no('done', 'a', code=2))
@@ -1346,12 +1426,12 @@ class EscapedDefects(Repo):
         self.ok('escaped', 'add', self.WHAT)
         self.ok('escaped', 'other', self.WHAT)
         out = self.ok('stats')
-        self.assertRegex(out, r'add\s+1\s+1\s+2\s+sealed\s+1/1')
+        self.assertRegex(out, r'add\s+1\s+1\s+2\s+sealed\s+1 of 1')
         self.assertRegex(out, r'other\s+skip\s+0\s+0\s+1\s+-\s+-')
         self.assertIn('escaped defects (self-reported): 4 against 3 of 3 outcome(s)', out)
         self.assertIn('sealed: 2 in 1 of 1; not sealed: 2 in 2 of 2', out)
         self.assertIn('skipped the take-out check: 1 in 1 of 1; checked: 3 in 2 of 2', out)
-        self.assertIn('strength, every mutant caught: 2 in 1 of 1; a mutant survived: 0 in 0 of 0; not measured '
+        self.assertIn('proof strength n of n: 2 in 1 of 1; a mutant survived: 0 in 0 of 0; not measured '
                       'here: 2 in 2 of 2', out)
 
 
@@ -1377,7 +1457,7 @@ class ReviewSummary(Repo):
         self.assertIn(SENTENCE, md)
         self.assertIn('\\|\\| false`', md, 'a pipe in the proof does not break the table row')
         self.assertIn('FAILED (failures=1)', md, 'what the proof said with the change taken out')
-        self.assertIn('caught 1 of 2', md)
+        self.assertIn('| 1 of 2; 1 survived', md)
         self.assertIn('calc.py:6 - -> +', md, 'each survivor is named')
         self.assertEqual((js['verdict'], js['exit']), ('PASS', 0))
         o = js['outcomes'][0]

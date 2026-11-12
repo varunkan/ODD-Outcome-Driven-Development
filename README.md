@@ -31,7 +31,7 @@ ODD keeps the one part that does not depend on the model agreeing: "done" is dec
 It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
 the model. Questions and objections: [FAQ](FAQ.md).
 
-> **Status: early (0.4.0).** The tool passes its own tests (127), including the ways an agent could fake "done". It
+> **Status: early (0.4.0).** The tool passes its own tests (132), including the ways an agent could fake "done". It
 > has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
 >
 > **Does it work better? Not claimed yet.** A same-task comparison is running: 16 tasks with hidden acceptance tests,
@@ -99,8 +99,14 @@ It checks that the proof **depends on the change**: with the change removed, the
 was changed outside the stated boundary, including files written from a shell.
 
 It then makes up to eight small breaks in the changed lines (a `<` for a `<=`, `and` for `or`, a number plus one),
-one at a time, and names each one the proof does not notice: a changed line the proof does not depend on. That is
-reported by default and can fail the gate (`"strength": "enforce"` in `.odd/config.json`, or `"off"`).
+one per changed line first and spread across files, one at a time, and names each one the proof does not notice: a
+changed line the proof does not depend on. The score reads "proof strength k of n" (k breaks caught of n), never
+"verified". For a Python proof (`python -m unittest`, `pytest`, a `.py` file) it also runs the proof once under a
+stdlib trace hook and names each changed line the proof never executed ("not run by the proof: calc.py:6"); for other
+languages it says "not measured". A proof that only prints (`echo`, or a Python script with no assert, no raise and
+no exit code of its own) is refused. All of this is reported by default and can fail the gate (`"strength":
+"enforce"` in `.odd/config.json`, or `"off"`); no new setting or field, so the v0.4.0 Action reads the same files and
+measures the 0.4.0 way.
 
 It does not check that the outcome is worth having, or that the proof is thorough. For new code, a proof that only
 imports the new function already fails without it; the small breaks catch some of that, not all. The outcome sentence and the proof command are a few lines, and
@@ -214,6 +220,8 @@ given over three months, each measured and ruled on. Most were dropped.
 - The check costs three runs of the proof, plus one per small break (at most eight by default; under `report` it
   stops once the breaks took about as long as the core runs), so the proof should be the narrowest command that
   shows the outcome. With a 0.8 s jest proof that is about 2.4 s for the core and about as much again for strength.
+  A Python proof adds one traced run: on the demo 0.1 s (core runs 0.1 s each), on a pytest fixture 0.4 s (core
+  runs 0.4 s each), measured on one machine with Python 3.13; tracing a long suite slows it more.
 - While the change is taken out, files are rewritten in place. They are put back on interruption and an edit made
   meanwhile is never overwritten, but a dev server or file watcher will see the revert.
 - State outside tracked files (installed dependencies, caches) is not reverted; a dependency bump or a pure refactor

@@ -126,8 +126,10 @@ a line no test reaches, without any language's coverage tool.
   `&&`/`||`, `+`/`-`, `true`/`false` in their usual spellings, an integer literal plus one. Strings and comments
   (quotes, triple quotes, `/* */`, `#`, `//`, a leading `--`) are blanked first; the detection is approximate and
   errs towards fewer mutants.
-- At most `mutants` (default 8) per outcome, spread evenly over the candidates in a fixed order, so two runs on the
-  same tree make the same breaks. Each costs one proof run.
+- At most `mutants` (default 8) per outcome, in a fixed order, so two runs on the same tree make the same breaks.
+  One break per changed line comes first, the files sharing the cap evenly and each file's lines spread; a second
+  break on a line only once every changed line has one (one mutant per line is enough, docs/evidence/14-research.md
+  section 2.4). Each costs one proof run.
 - Each mutant goes in and comes out through the same journal as the take-out: a kill puts it back, an edit made
   meanwhile stays.
 - A mutant whose run times out, exits 126 or 127, or dies by a signal is neither caught nor survived; it is listed.
@@ -139,6 +141,23 @@ a line no test reaches, without any language's coverage tool.
 - The setting `strength`: `"report"` (default) prints the score and each survivor (file:line, the swap, the line) in
   `odd done` and the gate; `"enforce"` makes a survivor a failure; `"off"` makes no mutant. `--recompute` measures
   it again with the settings of the target branch.
+- The score reads "proof strength k of n" everywhere (`odd done`, the gate, the pull-request summary, `odd stats`):
+  k of the n breaks the proof caught. It is never called "verified": a strong score on a proof written after the
+  code can still pin a bug (section 10).
+- **Changed lines the proof never runs (Python only).** When the proof calls Python (`python`, `python -m unittest`,
+  `pytest`, `python -m pytest`, or a `.py` file) and the outcome changed `.py` files, the strength check runs the
+  proof once more with a trace hook: a `sitecustomize.py` put first on `PYTHONPATH` installs `sys.settrace` (and
+  `threading.settrace`) in every Python process the proof starts, restricted to the changed files, and writes the
+  lines each ran when the process exits. The proof's own interpreter also says which lines are executable, so a
+  different Python version's line table is never guessed. Each changed executable line no process ran is listed:
+  "not run by the proof: file:line,line". Under `"enforce"` such a line is a failure, reported with any survivors.
+  Not measured, and said so ("lines run: not measured (...)"): a proof that calls no Python, a change with no
+  `.py` file, a traced run that does not exit 0, or a Python started with `-I`, `-S` or `-E` (it never loads the
+  hook). A project's own `sitecustomize` is run after the hook. Other languages are not measured. Limits: lines run
+  only in a process that leaves through `os._exit` (multiprocessing workers) are not seen and show as not run; this
+  run is the one place the proof's environment differs (`ODD_TRACE_DIR`, `PYTHONPATH`), so a proof could tell it
+  apart, but faking a line as run only hides it from this list, never from the mutants; a result recorded before
+  this check existed shows nothing here and passes `"enforce"` on the local gate (`--recompute` measures it).
 
 **Sealed proofs (optional).** `odd seal <slug>` runs the proof on the tree as it is and requires it to fail (run
 to completion, non-zero); a proof that passes is refused with exit 1, one that cannot run is exit 2. It then writes
@@ -157,7 +176,14 @@ first; what it does check, with the sealed test files in place, is the take-out:
 
 **A proof that ran no test is not a proof.** Before anything else, a proof that exited 0 is read for the signs
 that it showed nothing, and refused (exit 1) when one is there. This applies under `counterfactual: skip` too, where
-the take-out check would not catch it. What is read, from the last 20 lines of the proof's own output:
+the take-out check would not catch it. First, from the command itself: a proof whose every step only prints is
+refused ("it only prints"). A step only prints when it is `echo` or `printf`, or Python code (`python -c`, or a
+`.py` file the command names) that has no `assert`, no `raise`, no call named `exit`, `quit`, `abort`, `fail*`,
+`assert*`, `system`, `exec*` or the like, and imports nothing but the change's own modules and a few inert stdlib
+modules (`sys`, `os`, `json`, `math`, ...). That is the proof that prints a value and turns red only because the
+import of a new file fails. Any other step (a test runner, `-m`, `grep`, `test`, a helper module from the
+repository, any other import) may check something and is never refused; the rule reads one file, not what it
+imports. Then, from the last 20 lines of the proof's own output:
 
 - unittest: `Ran 0 tests`, or `OK (skipped=N)` where N is every test it ran.
 - pytest: `no tests ran`, or a summary with skipped tests and none passed, xpassed or failed.
@@ -319,9 +345,9 @@ found>"` appends `YYYY-MM-DD: <text>` (UTC date, whitespace collapsed) to that o
 joined by `; `, so the field stays one line. Then it becomes a new outcome whose proof fails on the escaped behaviour.
 Changing only the `escaped:` line of a merged outcome does not put it back in play; any other edit to the file does.
 
-`odd stats` prints, per outcome, the escape count, whether it is sealed, and the strength (caught/mutants) of the
+`odd stats` prints, per outcome, the escape count, whether it is sealed, and the proof strength (k of n) of the
 latest passing verification recorded on this machine; then, in total, escapes against outcomes split three ways:
-sealed or not, take-out skipped or checked, and every mutant caught, a mutant survived, or not measured here. Each
+sealed or not, take-out skipped or checked, and proof strength n of n, a mutant survived, or not measured here. Each
 split reads `N in K of M`: N escapes in K of the M outcomes of that kind. There is no lessons database.
 
 Limits: only recorded escapes are counted, so the figures are self-reported. Strength comes from local evidence, so
@@ -339,7 +365,8 @@ line still loads, and is now counted as one escape against the outcome that carr
   new symbol fails on the tree without it. The strength check narrows this only for the few textual breaks it makes,
   on at most `mutants` of them: a survivor is a real gap, but no survivor does not prove the proof complete, a
   change with no operator or number in it gets no mutant, and a break that makes the code invalid (a generic
-  `List<int>` read as a comparison) is "caught" by any proof. Each run moves the files' modification times a few
+  `List<int>` read as a comparison) is "caught" by any proof. Proof strength is not correctness: a proof written after the code can
+  catch every break and still pin a bug (arXiv 2607.22880), and every changed line run is not every case checked. Each run moves the files' modification times a few
   seconds further into the future. A flaky test counts as a failure. The last line of the failing run is
   printed for a person to read.
 - The proof is written by the party being checked, so it can tell the reverted tree from the real one (git state,

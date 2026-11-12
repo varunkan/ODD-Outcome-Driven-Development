@@ -19,6 +19,7 @@ Needs a POSIX system, git 2.23+ and Python 3.8+. One file, standard library only
 .odd/odd.py. Design and limits: DESIGN.md.
 """
 import argparse
+import ast
 import collections
 import datetime
 import hashlib
@@ -485,14 +486,15 @@ def test_change(root, base, tests, outcomes):
 
 # ---------------------------------------------------------------- proofs, and taking the change out
 
-def run_proof(root, cmd, timeout):
+def run_proof(root, cmd, timeout, env=None):
     """(exit code or None on timeout, last lines of output, seconds). The command's exit status is the verdict.
     Output goes to a file, so a process the proof leaves behind cannot hold the check open, and whatever is still
-    running in the proof's process group when it ends is stopped. No environment variable marks the run."""
+    running in the proof's process group when it ends is stopped. No environment variable marks the run, except
+    `env` for the one traced run of the execution check (ran), whose exit code is no verdict."""
     t0 = time.time()
     with tempfile.TemporaryFile() as out:
         p = subprocess.Popen(cmd, shell=True, cwd=root, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
-                             start_new_session=True)
+                             start_new_session=True, env=env)
         try:
             rc = p.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -544,10 +546,71 @@ SUMMARY = (  # (runner, how a proof command calls it, the summary line it prints
 QUIET = re.compile(r'(^|\s)(-qq+|-p\s*no:terminal|--json|-json|--reporter\S*|--junit\S*|--result-log\S*)(\s|=|$)')
 
 
-def hollow(proof, tail, seconds):
-    """Why a proof that exited 0 showed nothing, or '': it ran no test, skipped every test it ran, or ended before
-    its runner printed the summary it always prints. Read from the proof's own output for unittest, pytest, jest and
-    go test; conservative, so a proof it cannot read is never refused (DESIGN.md, section 4)."""
+PY = re.compile(r'^(python[\d.]*|pypy[\d.]*)$')
+CHECKS = re.compile(r'^(exit|_exit|quit|abort|fail\w*|assert\w*|system|popen|exec\w*|spawn\w*|eval|__import__|'
+                    r'import_module|run_path|run_module)$')  # a call that can end the run with a code, or run more
+INERT = {'sys', 'os', 'json', 'math', 'decimal', 'fractions', 'datetime', 'time', 're', 'string', 'textwrap',
+         'collections', 'itertools', 'functools', 'pprint', 'random'}  # imports that cannot check anything themselves
+
+
+def prints_only(root, proof, targets):
+    """True when every step of the proof only prints: an echo or printf, or Python code (-c, or a .py file) with no
+    assert, raise, exit call, assert* or fail* call, and no import but the change itself and a few inert stdlib
+    modules. Anything else (a test runner, grep, a helper module from the repository, -m) may check: never refused."""
+    try:
+        lex = shlex.shlex(proof, posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        words = list(lex)
+    except ValueError:
+        return False
+    steps, step = [], []
+    for w in words + [';']:
+        if w in ('&&', '||', ';', '|', '&', ';;'):
+            steps, step = steps + ([step] if step else []), []
+        elif step or not re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', w):
+            step.append(w)
+    mods = {t[:-3].replace('/', '.') for t in targets if t.endswith('.py')}
+    mods |= {m.rsplit('.', n)[0] for m in list(mods) for n in range(1, m.count('.') + 1)}  # packages above them
+    mods |= {m.split('.', n)[-1] for m in list(mods) for n in range(1, m.count('.') + 1)}  # run from inside one
+    mods = {m[:-9] if m.endswith('.__init__') else m for m in mods}
+    for step in steps:
+        name = os.path.basename(step[0])
+        if name in ('echo', 'printf'):
+            continue
+        if not PY.match(name) or '-m' in step:
+            return False
+        if '-c' in step:
+            code = step[step.index('-c') + 1] if step.index('-c') + 1 < len(step) else ''
+        else:
+            files = [w for w in step[1:] if w.endswith('.py')]
+            if not files or not os.path.isfile(os.path.join(root, files[0])):
+                return False
+            with open(os.path.join(root, files[0]), encoding='utf-8', errors='replace') as f:
+                code = f.read()
+        try:
+            tree = ast.parse(code)
+        except (SyntaxError, ValueError):
+            return False
+        for n in ast.walk(tree):
+            if isinstance(n, (ast.Assert, ast.Raise)):
+                return False
+            if isinstance(n, ast.Call) and CHECKS.match(getattr(n.func, 'id', None) or getattr(n.func, 'attr', '')):
+                return False
+            names = [a.name for a in n.names] if isinstance(n, ast.Import) else (
+                [n.module or ''] if isinstance(n, ast.ImportFrom) and not n.level else
+                ['.'] if isinstance(n, ast.ImportFrom) else [])
+            if any(m not in mods and m.split('.')[0] not in INERT for m in names):
+                return False
+    return bool(steps)
+
+
+def hollow(proof, tail, seconds, root=None, targets=()):
+    """Why a proof that exited 0 showed nothing, or '': it only prints (prints_only, given `root`), it ran no test,
+    skipped every test it ran, or ended before its runner printed the summary it always prints. Read from the
+    proof's own output for unittest, pytest, jest and go test; conservative, so a proof it cannot read is never
+    refused (DESIGN.md, section 4)."""
+    if root and prints_only(root, proof, targets):
+        return 'it only prints (no test runner, no assert, no exit with a code of its own)'
     tail = tail or ''
     m = re.findall(r'(?m)^Ran (\d+) tests? in ([\d.]+)s\s*\n\s*OK(?: \(.*?skipped=(\d+))?', tail)
     if m and m[-1][0] == '0' or re.search(r'(?m)NO TESTS RAN|^no tests ran\b|=+ no tests ran|No tests found, exiting with code 0', tail):
@@ -846,9 +909,31 @@ def mutations(text, lines=None):
     return out
 
 
-def pick(items, cap):
-    """At most `cap` of `items`, spread evenly over them, always the same ones."""
-    return list(items) if len(items) <= cap else [items[i * len(items) // cap] for i in range(cap)]
+def pick(items, cap, where=None):
+    """At most `cap` of `items`, spread evenly over them, always the same ones, in their order. Given `where(item)`
+    -> (file, line): one per line first, the files sharing the cap evenly and each file's lines spread, and a second
+    item on a line only once every line has one (one mutant per changed line is enough; DESIGN.md section 4)."""
+    if where is None:
+        return list(items) if len(items) <= cap else [items[i * len(items) // cap] for i in range(cap)]
+    lines = {}
+    for i, it in enumerate(items):
+        lines.setdefault(where(it), []).append(i)
+    out, depth = [], 0
+    while len(out) < cap:
+        files = {}
+        for (f, _), at in lines.items():
+            if len(at) > depth:
+                files.setdefault(f, []).append(at[depth])
+        if not files:
+            break
+        share, left = dict.fromkeys(files, 0), cap - len(out)
+        while left and any(share[f] < len(files[f]) for f in files):
+            for f in files:
+                if left and share[f] < len(files[f]):
+                    share[f], left = share[f] + 1, left - 1
+        out += [i for f in files for i in pick(files[f], share[f])]
+        depth += 1
+    return [items[i] for i in sorted(out)]
 
 
 def changed_lines(root, base, path):
@@ -860,6 +945,113 @@ def changed_lines(root, base, path):
     for m in re.finditer(r'^@@ -\S+ \+(\d+)(?:,(\d+))? @@', diff, re.M):
         out.update(range(int(m.group(1)), int(m.group(1)) + int(m.group(2) or 1)))
     return out
+
+
+TRACE = r"""# odd's execution check: which lines of the changed files this Python process runs (odd.py, ran)
+import atexit, json, os, sys, threading
+
+
+def _odd_trace(d):
+    import types
+    with open(os.path.join(d, 'targets.json')) as f:
+        want = set(json.load(f))
+    seen, keep = {}, {}
+
+    def line(frame, event, arg):
+        if event == 'line':
+            seen[frame.f_code.co_filename].add(frame.f_lineno)
+        return line
+
+    def call(frame, event, arg):
+        fn = frame.f_code.co_filename
+        if fn not in keep:
+            keep[fn] = os.path.realpath(fn) in want
+        if keep[fn]:
+            seen.setdefault(fn, set())
+            return line
+        return None
+
+    def lines(code):
+        import dis
+        out = {n for _, n in dis.findlinestarts(code) if n}
+        for c in code.co_consts:
+            if isinstance(c, types.CodeType):
+                out |= lines(c)
+        return out
+
+    def dump():
+        sys.settrace(None)
+        ran, can = {}, {}
+        for fn, got in seen.items():
+            ran.setdefault(os.path.realpath(fn), set()).update(got)
+        for path in want:
+            try:
+                with open(path, 'rb') as f:
+                    can[path] = sorted(lines(compile(f.read(), path, 'exec')))
+            except Exception:
+                pass
+        with open(os.path.join(d, 'ran-%d.json' % os.getpid()), 'w') as f:
+            json.dump({'ran': {k: sorted(v) for k, v in ran.items()}, 'can': can}, f)
+    atexit.register(dump)
+    sys.settrace(call)
+    threading.settrace(call)
+
+
+if os.environ.get('ODD_TRACE_DIR'):
+    _odd_trace(os.environ['ODD_TRACE_DIR'])
+    try:  # then a sitecustomize of the project's own, which this one hides
+        import importlib.machinery, importlib.util
+        here = os.path.dirname(os.path.abspath(__file__))
+        spec = importlib.machinery.PathFinder.find_spec('sitecustomize', [p for p in sys.path if os.path.abspath(p or '.') != here])
+        if spec:
+            spec.loader.exec_module(importlib.util.module_from_spec(spec))
+    except Exception:
+        pass
+"""
+
+
+def ran(root, cfg, o, base, targets):
+    """The execution check, for Python only: the proof run once more with a trace hook (a sitecustomize put first on
+    PYTHONPATH, sys.settrace) restricted to the changed .py files. Returns (["file:line,line", ...] for changed
+    executable lines no Python process of the proof ran, None, seconds), or (None, why it was not measured, seconds).
+    The proof's own interpreter says which lines are executable, so its version's line table is the one used."""
+    py = [p for p in targets if p.endswith('.py') and os.path.isfile(os.path.join(root, p))]
+    steps = [[w for w in step.split() if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', w)][:1]
+             for step in re.split(r'&&|\|\||[;|\n]', o.get('proof') or '')]
+    if not py:
+        return None, 'no Python file in the change', 0.0
+    if not any(w and re.match(r'^(python[\d.]*|pypy[\d.]*|pytest|py\.test)$', os.path.basename(w[0])) for w in steps):
+        return None, 'the proof is not a Python run', 0.0
+    real = {os.path.realpath(os.path.join(root, p)): p for p in py}
+    d = tempfile.mkdtemp(prefix='odd-trace-')
+    try:
+        with open(os.path.join(d, 'sitecustomize.py'), 'w') as f:
+            f.write(TRACE)
+        with open(os.path.join(d, 'targets.json'), 'w') as f:
+            json.dump(sorted(real), f)
+        env = dict(os.environ, ODD_TRACE_DIR=d, PYTHONPATH=os.pathsep.join(
+            [d] + [x for x in [os.environ.get('PYTHONPATH')] if x]))
+        rc, _, secs = run_proof(root, o.get('proof'), cfg['proof_timeout'], env)
+        dumps = []
+        for name in sorted(os.listdir(d)):
+            if name.startswith('ran-'):
+                with open(os.path.join(d, name)) as f:
+                    dumps.append(json.load(f))
+    finally:
+        shutil.rmtree(d, True)
+    if rc != 0:
+        return None, 'the traced run %s' % ('timed out' if rc is None else 'exited %d' % rc), secs
+    if not dumps:
+        return None, 'no Python process of the proof loaded the trace hook (python -I, -S or -E?)', secs
+    out = []
+    for path, p in sorted(real.items(), key=lambda kv: kv[1]):
+        done = set().union(*[x['ran'].get(path, []) for x in dumps])
+        can = set().union(*[x['can'].get(path, []) for x in dumps])
+        changed = changed_lines(root, base, p)
+        missing = sorted(n for n in can - done if changed is None or n in changed)
+        if missing:
+            out.append('%s:%s' % (p, ','.join(str(n) for n in missing)))
+    return out, None, secs
 
 
 def strength(root, cfg, o, base, targets, say=lambda s: None, core=None):
@@ -881,8 +1073,11 @@ def strength(root, cfg, o, base, targets, say=lambda s: None, core=None):
             continue
         if '\0' not in text:
             cands += [(p, data, text) + m for m in mutations(text, changed_lines(root, base, p))]
-    picked = pick(cands, cfg['mutants'])
+    picked = pick(cands, cfg['mutants'], lambda c: (c[0], c[3]))
     res = {'mutants': len(picked), 'of': len(cands), 'killed': 0, 'survivors': [], 'unrun': [], 'seconds': 0.0}
+    res['not_run'], why, res['trace_seconds'] = ran(root, cfg, o, base, targets)
+    if why:
+        res['not_measured'] = why
     budget = max(sum(core), 2.0) if core and cfg['strength'] == 'report' else None
     if picked:
         say('  proof strength: %d small break(s) in the changed lines, one proof run each, about %s s%s; '
@@ -928,7 +1123,8 @@ def _same(path, data):
 
 
 def weak(cfg, o, res):
-    """Under "strength": "enforce" a surviving mutant is a Fail, also for a verification recorded earlier."""
+    """Under "strength": "enforce" a surviving mutant, or a changed line the proof never ran (ran), is a Fail, also
+    for a verification recorded earlier."""
     if cfg['strength'] != 'enforce' or res.get('skip'):
         return
     st = res.get('strength')
@@ -939,11 +1135,17 @@ def weak(cfg, o, res):
                    'they show nothing about the proof; a proof that exits 126, 127, 129-192 or times out under a break '
                    'is not evidence of strength:\n%s\n  make the proof fail with an ordinary exit code (1) when what it '
                    'checks is wrong.' % (len(st['unrun']), st['mutants'], '\n'.join('    ' + w for w in st['unrun'])))
+    why = []
     if st['survivors']:
-        raise Fail('the proof does not notice %d of %d small break(s) in the changed lines ("strength": "enforce"); '
+        why.append('the proof does not notice %d of %d small break(s) in the changed lines ("strength": "enforce"); '
                    'each is a changed line the proof does not depend on:\n%s\n  make the proof assert what those '
                    'lines do, or take them out of the change.' % (len(st['survivors']), st['killed'] + len(st['survivors']),
                                                                   '\n'.join('    ' + w for w in st['survivors'])))
+    if st.get('not_run'):
+        why.append('%s\n  the proof never executes these changed lines ("strength": "enforce"), so it cannot show what '
+                   'they do: make the proof run them, or take them out of the change.' % lines_run(st))
+    if why:
+        raise Fail('\n'.join(why))
 
 
 def verify(root, cfg, o, base, changed, say=lambda s: None):
@@ -961,7 +1163,7 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
             '\n  it ran no tests: the runner may be wrong for these tests (pytest exits 5 when it collects none; '
             'unittest finds only unittest.TestCase classes); pick the runner in the proof yourself.')
             if rc == 5 or re.search(r'NO TESTS RAN|no tests ran|collected 0 items|Ran 0 tests', tail or '') else ''))
-    empty = hollow(o.get('proof'), tail, s1)
+    empty = hollow(o.get('proof'), tail, s1, root, targets)
     if empty:
         raise Fail('the proof exited 0 but %s, so it is not a proof: %s\n%s\n  make the proof run the test that shows '
                    'the outcome; a skip, an empty suite or an early exit 0 shows nothing.' % (empty, o.get('proof'), _indent(tail)))
@@ -1017,6 +1219,15 @@ def _indent(text):
     return '\n'.join('    ' + l for l in (text or '').splitlines()[-12:])
 
 
+def lines_run(st):
+    """What the execution check (ran) found, in one line; '' for a result recorded before it existed."""
+    if st.get('not_run'):
+        return 'not run by the proof: ' + ' '.join(st['not_run'])
+    if st.get('not_measured'):
+        return 'lines run: not measured (%s)' % st['not_measured']
+    return 'lines run: every changed executable line ran under the proof' if 'not_run' in st else ''
+
+
 def _describe(o, res):
     if res.get('skip'):
         return 'SKIPPED the take-out check (%s): the proof passes; %d line(s) in %d file(s) not verified' % (
@@ -1025,13 +1236,14 @@ def _describe(o, res):
         res['files'], res['lines'], res['red_says'], '+'.join(str(s) for s in res['seconds']))
     st = res.get('strength')
     if st:
-        text += '\n          strength: the proof caught %d of %d mutant(s)%s%s; %s s' % (
+        text += '\n          proof strength %d of %d (small breaks in the changed lines the proof caught)%s%s; %s s' % (
             st['killed'], st['killed'] + len(st['survivors']),
             ' (%d of %d sampled)' % (st['mutants'], st['of']) if st['of'] > st['mutants'] else '',
             '; %d could not run' % len(st['unrun']) if st['unrun'] else '', st['seconds'])
         text += '\n          ' + st['stopped'] if st.get('stopped') else ''
         text += ''.join('\n          survived: ' + w for w in st['survivors'])
         text += ''.join('\n          could not run: ' + w for w in st['unrun'])
+        text += '\n          ' + lines_run(st) if lines_run(st) else ''
         if st['survivors']:
             text += ('\n          next: add a proof case that tells %s apart from the break, or leave it (reported '
                      'only, unless "strength": "enforce")' % st['survivors'][0].split(' ', 1)[0])
@@ -1312,13 +1524,13 @@ def _cell(text, code=False, table=True):
 
 def markdown(f):
     """The gate's result for a person reviewing the change: the verdict, then per outcome its sentence, its proof,
-    what the proof said with the change taken out and how many small breaks it caught."""
+    what the proof said with the change taken out, and its proof strength: k of n small breaks caught."""
     md = [MARKER, '### odd gate: %s' % f['verdict']] + (['%s base %s, %s file(s) changed, %s outcome(s) in this change.' % (
         'Every proof run again (`--recompute`);' if f['recompute'] else 'Recorded local results;',
         _cell((f['base'] or 'none')[:10], True), f['changed'], f['in_play'])] if 'changed' in f else [])
     outs, survived = f.get('outcomes', []), []
     if outs:
-        md += ['', '| outcome | proof | with the change taken out | strength |', '|---|---|---|---|']
+        md += ['', '| outcome | proof | with the change taken out | proof strength |', '|---|---|---|---|']
     for o in outs:
         st = o.get('strength')
         if o['state'] == 'ok' and o.get('skip'):
@@ -1331,8 +1543,9 @@ def markdown(f):
                                   _cell(o.get('why', '').split('\n')[0][:200]))
         score = '-'
         if st:
-            score = 'caught %d of %d' % (st['killed'], st['killed'] + len(st['survivors']))
+            score = '%d of %d' % (st['killed'], st['killed'] + len(st['survivors']))
             score += ''.join('; %d %s' % (len(st[k]), w) for k, w in (('survivors', 'survived'), ('unrun', 'could not run')) if st[k])
+            score += '; ' + _cell(lines_run(st)) if st.get('not_run') or st.get('not_measured') else ''
             survived += st['survivors']
         md.append('| **%s**: %s | %s | %s | %s |' % (o['slug'], _cell(o.get('outcome') or ''), _cell(o.get('proof') or '', True),
                                                     red, score))
@@ -1377,7 +1590,7 @@ def cmd_escaped(a, root):
 def cmd_stats(a, root):
     outs = all_outcomes(root)
     print('self-reported, from this machine only; not a measurement')
-    print('%-28s %-8s %9s %8s %8s %-7s %s' % ('outcome', 'state', 'attempts', 'passed', 'escaped', 'sealed', 'strength'))
+    print('%-28s %-8s %9s %8s %8s %-7s %s' % ('outcome', 'state', 'attempts', 'passed', 'escaped', 'sealed', 'proof strength'))
     kind = {}  # slug -> how strong the latest verification recorded here said the proof was
     for o in outs:
         ev = evidence(root, o.slug)
@@ -1389,7 +1602,7 @@ def cmd_stats(a, root):
         kind[o.slug] = 'survived' if n and st['survivors'] else ('caught' if n else '')
         state = 'parked' if o.parked else ('skip' if o.skip else '')
         print('%-28s %-8s %9d %8d %8d %-7s %s' % (o.slug, state, len(ev), sum(1 for e in ev if e.get('ok')), escapes(o),
-                                               o.sealed_here, '%d/%d' % (st['killed'], n) if n else '-'))
+                                               o.sealed_here, '%d of %d' % (st['killed'], n) if n else '-'))
     print('%d outcome(s): %d parked, %d skip the take-out check, %d record an escaped defect' % (
         len(outs), sum(1 for o in outs if o.parked), sum(1 for o in outs if o.skip), sum(1 for o in outs if o.get('escaped'))))
     split = lambda name, pick: '%s: %d in %d of %d' % (  # noqa: E731
@@ -1400,7 +1613,7 @@ def cmd_stats(a, root):
     print('  ' + '; '.join([split('sealed', lambda o: o.sealed_here == 'sealed'),
                             split('not sealed', lambda o: o.sealed_here != 'sealed')]))
     print('  ' + '; '.join([split('skipped the take-out check', lambda o: o.skip), split('checked', lambda o: not o.skip)]))
-    print('  ' + '; '.join([split('strength, every mutant caught', lambda o: kind[o.slug] == 'caught'),
+    print('  ' + '; '.join([split('proof strength n of n', lambda o: kind[o.slug] == 'caught'),
                             split('a mutant survived', lambda o: kind[o.slug] == 'survived'),
                             split('not measured here', lambda o: not kind[o.slug])]))
 

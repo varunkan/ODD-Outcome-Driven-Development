@@ -62,6 +62,15 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   wording "proof strength k of n" (never "verified"), and print-only proofs refused.
 - **Evidence:** 64.8% of Python agent PRs execute no changed line (arXiv 2607.18057); coupled mutants on covered lines
   for 70% of serious bugs (arXiv 2103.07189); mutation score is not correctness (arXiv 2607.22880).
+- **Done** in the commit "R4: proof strength k of n, one mutant per line, unrun lines, print-only proofs"
+  (`git log --grep '^R4:'`): `pick()` takes one mutant per changed line first, the files sharing the cap; `ran()`
+  runs a Python proof once under a `sys.settrace` sitecustomize restricted to the changed `.py` files and lists
+  "not run by the proof: file:line,..." (a Fail under `"enforce"`), "not measured" for other languages;
+  `prints_only()` in `hollow()` refuses an echo or a Python script with no assert, raise or exit call; "proof
+  strength k of n" in done, gate, summary and stats. Measured on one machine (Python 3.13): the demo's traced run
+  added 0.1 s (core runs 0.1 s each) and flagged 0 lines; a pytest fixture with an uncalled function added 0.4 s
+  (core 0.4 s each) and flagged its 3 unrun lines. Not measured: the bench share of proofs with unrun lines, the
+  per-task correlation with hidden-test failures, and the overhead on a large suite.
 
 ### R5. An independent author for the proof
 - **Outcome:** the proof can be written by a different, stronger model (`--proof-by <cmd>`) and sealed before the
