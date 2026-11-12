@@ -97,8 +97,12 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 It checks that the proof **depends on the change**: with the change removed, the proof fails. It checks that nothing
 was changed outside the stated boundary, including files written from a shell.
 
+It then makes up to eight small breaks in the changed lines (a `<` for a `<=`, `and` for `or`, a number plus one),
+one at a time, and names each one the proof does not notice: a changed line the proof does not depend on. That is
+reported by default and can fail the gate (`"strength": "enforce"` in `.odd/config.json`, or `"off"`).
+
 It does not check that the outcome is worth having, or that the proof is thorough. For new code, a proof that only
-imports the new function already fails without it. The outcome sentence and the proof command are a few lines, and
+imports the new function already fails without it; the small breaks catch some of that, not all. The outcome sentence and the proof command are a few lines, and
 the gate prints what the proof said when it failed; a person should read both.
 
 **Where the enforcement is real.** On a developer's machine, an agent with shell access can bypass any local check.
@@ -154,7 +158,8 @@ given over three months, each measured and ruled on. Most were dropped.
 
 - Evidence so far is one project, measured by itself. The comparison harness is in [`bench/`](bench/SPEC.md); its
   results will be published with their spread, whatever they show.
-- The check costs three runs of the proof, so the proof should be the narrowest command that shows the outcome.
+- The check costs three runs of the proof, plus one per small break (at most eight by default), so the proof
+  should be the narrowest command that shows the outcome.
 - While the change is taken out, files are rewritten in place. They are put back on interruption and an edit made
   meanwhile is never overwritten, but a dev server or file watcher will see the revert.
 - State outside tracked files (installed dependencies, caches) is not reverted; a dependency bump or a pure refactor

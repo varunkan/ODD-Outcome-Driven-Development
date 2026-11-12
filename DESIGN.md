@@ -71,7 +71,7 @@ delete and an add. It is computed from git, so files written through a shell are
 3. The change is put back and the proof passes again.
 
 This shows the proof depends on the change. For new code it shows only that the proof reaches it. It costs three
-proof runs per outcome.
+proof runs per outcome, plus one per mutant of the strength check below.
 
 Rules of the in-place check:
 
@@ -88,6 +88,24 @@ Rules of the in-place check:
 - With the change taken out, a timeout, exit 126 or 127, or death by signal is "could not run", not a failure.
 - If nothing inside `in` changed, the check stops with exit 1 before a second run.
 - If the proof runs a file that would be taken out, the check stops and says to keep it under a test path.
+
+**Proof strength: small breaks in the changed lines.** After green, red, green, the check makes small deliberate
+breaks ("mutants") in the changed lines of the outcome's product files, one at a time, and runs the proof against
+each. A mutant the proof still passes ("survivor") is a changed line the proof does not depend on: a weak proof, or
+a line no test reaches, without any language's coverage tool.
+
+- The breaks are textual and the same in every language: `<` `<=` `>` `>=` `==` `!=` swapped, `and`/`or`,
+  `&&`/`||`, `+`/`-`, `true`/`false` in their usual spellings, an integer literal plus one. Strings and comments
+  (quotes, triple quotes, `/* */`, `#`, `//`, a leading `--`) are blanked first; the detection is approximate and
+  errs towards fewer mutants.
+- At most `mutants` (default 8) per outcome, spread evenly over the candidates in a fixed order, so two runs on the
+  same tree make the same breaks. Each costs one proof run.
+- Each mutant goes in and comes out through the same journal as the take-out: a kill puts it back, an edit made
+  meanwhile stays.
+- A mutant whose run times out, exits 126 or 127, or dies by a signal is neither caught nor survived; it is listed.
+- The setting `strength`: `"report"` (default) prints the score and each survivor (file:line, the swap, the line) in
+  `odd done` and the gate; `"enforce"` makes a survivor a failure; `"off"` makes no mutant. `--recompute` measures
+  it again with the settings of the target branch.
 
 **A skip is an exemption with a reason, not a verification.** `counterfactual: skip - <reason>` is for a change
 where nothing can fail first: a pure refactor, a dependency bump, a removal, a submodule pointer. The proof must
@@ -174,7 +192,11 @@ no lessons database.
 - CI is the authority only under the three conditions in section 5. Nothing inside a repository can protect its own
   CI configuration. The change that adopts the tool is judged by its own copy and default settings; a person reviews it.
 - The check shows that the proof depends on the change, not that it checks the outcome. A proof that only imports a
-  new symbol fails on the tree without it. A flaky test counts as a failure. The last line of the failing run is
+  new symbol fails on the tree without it. The strength check narrows this only for the few textual breaks it makes,
+  on at most `mutants` of them: a survivor is a real gap, but no survivor does not prove the proof complete, a
+  change with no operator or number in it gets no mutant, and a break that makes the code invalid (a generic
+  `List<int>` read as a comparison) is "caught" by any proof. Each run moves the files' modification times a few
+  seconds further into the future. A flaky test counts as a failure. The last line of the failing run is
   printed for a person to read.
 - The proof is written by the party being checked, so it can tell the reverted tree from the real one (git state,
   file hashes). This is not closed. The proof text is in the diff.

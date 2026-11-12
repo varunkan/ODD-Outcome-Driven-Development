@@ -379,6 +379,114 @@ class Attacks(Repo):
         self.assertIn('PASS', self.ok('gate'))
 
 
+class ProofStrength(Repo):
+    """After green, red, green: small breaks ("mutants") in the changed lines, one at a time. A mutant the proof does
+    not notice ("survivor") is a changed line the proof does not depend on."""
+    TWO = FIXED + '\n\ndef sub(a, b):\n    return a - b\n'   # the proof checks add only
+
+    def test_a_weak_proof_is_reported_with_each_survivor(self):
+        self.outcome()
+        self.solve()
+        self.write('calc.py', self.TWO)
+        out = self.ok('done', 'add')
+        self.assertIn('strength: the proof caught 1 of 2 mutant(s)', out)
+        self.assertIn('survived: calc.py:6 - -> +: return a - b', out)
+        self.assertEqual(self.read('calc.py'), self.TWO, 'every mutant is put back')
+        self.assertIn('survived: calc.py:6', self.ok('gate'), 'the local gate reports what done measured')
+
+    def test_a_strong_proof_catches_every_mutant(self):
+        self.outcome()
+        self.solve()
+        out = self.ok('done', 'add')
+        self.assertIn('strength: the proof caught 1 of 1 mutant(s)', out)
+        self.assertNotIn('survived', out)
+
+    def test_enforce_makes_a_survivor_a_fail_and_recompute_reads_it_from_the_target(self):
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/config.json', json.dumps({'strength': 'enforce'}))
+        self.commit('enforce')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.outcome()
+        self.solve()
+        self.write('calc.py', self.TWO)
+        out = self.no('done', 'add')
+        self.assertIn('the proof does not notice 1 of 2', out)
+        self.assertIn('calc.py:6 - -> +', out)
+        self.commit('weak')
+        self.assertIn('the proof does not notice 1 of 2', self.no('gate', '--recompute', '--base', 'main'))
+        self.write('calc.py', FIXED)
+        self.commit('only what the proof checks')
+        self.assertIn('PASS', self.ok('gate', '--recompute', '--base', 'main'))
+
+    def test_off_runs_no_mutant_and_a_wrong_value_stops(self):
+        self.write('.odd/config.json', json.dumps({'strength': 'off'}))
+        self.outcome()
+        self.solve()
+        self.assertNotIn('strength', self.ok('done', 'add'))
+        self.write('.odd/config.json', json.dumps({'strength': 'loud'}))
+        self.assertIn('"strength" has the wrong kind of value', self.no('gate', code=2))
+        self.write('.odd/config.json', json.dumps({'mutants': -1}))
+        self.assertIn('"mutants" has the wrong kind of value', self.no('gate', code=2))
+
+    def test_a_mutant_the_proof_cannot_run_on_is_neither_caught_nor_survived(self):
+        self.write('tests/check.py', 'import sys\nsys.path.insert(0, ".")\nimport rc\n'
+                                     'sys.exit(0 if rc.code() == 126 else rc.code())\n')
+        self.outcome('rc', '%s tests/check.py' % sys.executable, 'rc.py', 'A caller of rc.code() receives 126.')
+        self.write('rc.py', 'def code():\n    return 126\n')
+        out = self.ok('done', 'rc')
+        self.assertIn('strength: the proof caught 0 of 0 mutant(s); 1 could not run', out)
+        self.assertIn('could not run: rc.py:2 126 -> 127: return 126 (exit 127)', out)
+
+    def test_the_cap_bounds_the_proof_runs(self):
+        self.write('.odd/config.json', json.dumps({'mutants': 1}))
+        self.outcome()
+        self.solve()
+        self.write('calc.py', self.TWO)
+        self.assertIn('strength: the proof caught 1 of 1 mutant(s) (1 of 2 sampled)', self.ok('done', 'add'))
+
+    def test_a_kill_while_a_mutant_is_in_puts_it_back(self):
+        marker = 'sleep 31.6'
+        self.outcome('add', "grep -q 'a - b' calc.py && %s; grep -q 'a + b' calc.py" % marker)
+        self.write('calc.py', FIXED)
+        p = subprocess.Popen([sys.executable, ODD, 'done', 'add'], cwd=self.dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        deadline = time.time() + 15
+        while time.time() < deadline and 'a - b' not in self.read('calc.py'):
+            time.sleep(0.05)
+        self.assertIn('a - b', self.read('calc.py'), 'the mutant is made in place')
+        p.send_signal(signal.SIGKILL)
+        p.wait(10)
+        subprocess.run(['pkill', '-f', marker], capture_output=True)
+        self.assertIn('1 file(s) were put back', self.no('gate', code=2))
+        self.assertEqual(self.read('calc.py'), FIXED)
+
+    def test_an_edit_made_while_a_mutant_is_in_is_kept_and_the_earlier_version_saved(self):
+        redo = 'def add(a, b):\n    return b + a\n'
+        self.outcome('add', "grep -q 'a - b' calc.py && printf 'def add(a, b):\\n    return b + a\\n' > calc.py; "
+                            "grep -q 'a + b' calc.py")
+        self.write('calc.py', FIXED)
+        out = self.no('done', 'add', code=2)
+        self.assertIn('your earlier version is at', out)
+        self.assertEqual(self.read('calc.py'), redo, 'the newer edit is never overwritten')
+        with open(out.split('your earlier version is at ')[1].split(')')[0]) as f:
+            self.assertEqual(f.read(), FIXED)
+
+    def test_mutations_skip_strings_and_comments_in_a_fixed_order(self):
+        text = ('x = a < b and c  # a > b\n'
+                's = "1 + 2"\n'
+                'if y >= 10 or not z: return True\n'
+                'f = (a) => a->b === c; i++; k = 1e-5 + 1.5 && d\n'
+                '"""prose with and or 3\n'
+                'more prose or 4"""\n'
+                'q = r != s')
+        got = [(n, old, new) for n, _, old, new in oddmod.mutations(text, None)]
+        self.assertEqual(got, [(1, '<', '<='), (1, 'and', 'or'), (3, '>=', '>'), (3, '10', '11'), (3, 'or', 'and'),
+                               (3, 'True', 'False'), (4, '+', '-'), (4, '&&', '||'), (7, '!=', '==')])
+        self.assertEqual([n for n, _, _, _ in oddmod.mutations(text, {3})], [3, 3, 3, 3])
+        self.assertEqual(oddmod.pick(list(range(20)), 4), [0, 5, 10, 15])
+        self.assertEqual(oddmod.pick([1, 2], 8), [1, 2])
+        self.assertEqual(oddmod.pick([1, 2], 0), [])
+
+
 class Exemptions(Repo):
     def test_a_few_lines_need_no_outcome_and_more_do(self):
         self.write('calc.py', BROKEN + '# note\n')

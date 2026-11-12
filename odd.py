@@ -45,6 +45,8 @@ DEFAULTS = {
                    '**/*.test.*', '**/*.spec.*'],   # a proof's own files: never taken out, need no outcome
     'proof_timeout': 900,  # seconds per proof run
     'default_branch': None,
+    'strength': 'report',  # small breaks in the changed lines after green-red-green: off, report, or enforce (a survivor fails)
+    'mutants': 8,          # at most this many per outcome; each one is one proof run
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json')   # no outcome needed; always reported; read from the target in CI
 FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped')
@@ -155,7 +157,8 @@ def _globs(v):
 SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'proof_timeout': lambda v: type(v) in (int, float) and 0 < v < float('inf'),
             'default_branch': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
-            'exempt': _globs, 'test_globs': _globs}
+            'exempt': _globs, 'test_globs': _globs,
+            'strength': lambda v: v in ('off', 'report', 'enforce'), 'mutants': lambda v: type(v) is int and v >= 0}
 
 
 def load_config(root, at=None):
@@ -518,7 +521,9 @@ def put_back(root, jdir, j):
         for e in j['files']:
             full, was = os.path.join(root, e['path']), e['was']
             try:
-                cur = _state(full)
+                cur, tmp = _state(full), full + '.odd-putback'
+                if cur == was and os.path.lexists(tmp):  # killed before a mutant was moved into place
+                    os.remove(tmp)
                 if cur != was:
                     as_left = cur == e['left'] if 'left' in e else e['base'] and e['path'] not in differs
                     if cur is not None and not as_left:
@@ -538,7 +543,6 @@ def put_back(root, jdir, j):
                         os.remove(full)
                         _prune(root, os.path.dirname(e['path']))
                     else:  # written beside the path and moved over it, so a kill never leaves half a file
-                        tmp = full + '.odd-putback'
                         os.makedirs(os.path.dirname(full) or '.', exist_ok=True)
                         if os.path.lexists(tmp):
                             os.remove(tmp)
@@ -600,21 +604,46 @@ def without_change(root, cfg, o, base, targets):
     if named:
         raise CouldNotRun('the proof runs %s, which is part of the change and would be taken out by the check. Keep '
                           'what the proof runs under a test path (for example tests/).' % ', '.join(named))
+    at_base = (set(zlist(root, 'ls-tree', '-r', '--name-only', '-z', base)) & set(targets)) if base else set()
+    for p in targets:  # nothing has been touched yet
+        parts = p.split('/')
+        for n in range(1, len(parts) + 1):
+            full = os.path.join(root, *parts[:n])
+            real_dir = os.path.isdir(full) and not os.path.islink(full)
+            if real_dir if n == len(parts) else (os.path.lexists(full) and not real_dir):
+                raise CouldNotRun('%s: this change turns a directory into a file or a link, or the reverse, or '
+                                  'moves a submodule pointer. That cannot be taken out and put back safely: add '
+                                  '"counterfactual: skip - <reason>" to the outcome.' % '/'.join(parts[:n]))
+
+    def take_out(entries, save, lock):
+        for e in entries:  # removals first, then git writes the base versions (content, mode, links, filters)
+            if not e['base'] and e['was']:
+                os.remove(os.path.join(root, e['path']))
+                _prune(root, os.path.dirname(e['path']))
+        for part in chunks([e['path'] for e in entries if e['base']]):
+            # git holds the lock too: were odd killed now, nothing would be put back under a git still writing
+            r = sh(['git', 'restore', '--source=' + base, '--worktree', '--'] + part, root, pass_fds=[lock])
+            if r.returncode != 0:
+                raise CouldNotRun('git could not write the base versions (git 2.23 or newer is needed): %s'
+                                  % r.stderr.strip()[:200])
+        for e in entries:
+            full = os.path.join(root, e['path'])
+            e['left'] = _state(full)
+            if e['left']:
+                e['touched'] = _bump(full, e.get('mtime'))
+        save()
+    return in_place(root, cfg, o, base, targets, at_base, take_out, 'take the change out')
+
+
+def in_place(root, cfg, o, base, targets, at_base, alter, what):
+    """Change `targets` in the working tree with `alter(entries, save, lock)`, run the proof, and put every target
+    back from a journal written before the first byte changes (put_back; recover after a kill). Returns (exit code or
+    None on timeout, output tail, seconds). `alter` notes in each entry what it `left`, then calls save()."""
     lock = _lock(root)
     if lock is None:
         raise CouldNotRun('another check is taking a change out of this working tree; retry when it ends (and leave '
                           '%s alone meanwhile)' % state_dir(root))
     try:
-        at_base = (set(zlist(root, 'ls-tree', '-r', '--name-only', '-z', base)) & set(targets)) if base else set()
-        for p in targets:  # nothing has been touched yet
-            parts = p.split('/')
-            for n in range(1, len(parts) + 1):
-                full = os.path.join(root, *parts[:n])
-                real_dir = os.path.isdir(full) and not os.path.islink(full)
-                if real_dir if n == len(parts) else (os.path.lexists(full) and not real_dir):
-                    raise CouldNotRun('%s: this change turns a directory into a file or a link, or the reverse, or '
-                                      'moves a submodule pointer. That cannot be taken out and put back safely: add '
-                                      '"counterfactual: skip - <reason>" to the outcome.' % '/'.join(parts[:n]))
         jdir = state_dir(root, 'cf-%s-%d' % (o.slug, os.getpid()))
         os.makedirs(jdir)
         entries = []
@@ -637,24 +666,9 @@ def without_change(root, cfg, o, base, targets):
         save()  # everything needed to undo is on disk before the first file is touched
         try:
             try:
-                for e in entries:  # removals first, then git writes the base versions (content, mode, links, filters)
-                    if not e['base'] and e['was']:
-                        os.remove(os.path.join(root, e['path']))
-                        _prune(root, os.path.dirname(e['path']))
-                for part in chunks([e['path'] for e in entries if e['base']]):
-                    # git holds the lock too: were odd killed now, nothing would be put back under a git still writing
-                    r = sh(['git', 'restore', '--source=' + base, '--worktree', '--'] + part, root, pass_fds=[lock])
-                    if r.returncode != 0:
-                        raise CouldNotRun('git could not write the base versions (git 2.23 or newer is needed): %s'
-                                          % r.stderr.strip()[:200])
-                for e in entries:
-                    full = os.path.join(root, e['path'])
-                    e['left'] = _state(full)
-                    if e['left']:
-                        e['touched'] = _bump(full, e.get('mtime'))
-                save()
-            except OSError as err:  # never run a proof on a half-reverted tree
-                raise CouldNotRun('could not take the change out (%s); nothing was verified' % err)
+                alter(entries, save, lock)
+            except OSError as err:  # never run a proof on a half-changed tree
+                raise CouldNotRun('could not %s (%s); nothing was verified' % (what, err))
             rc, tail, secs = run_proof(root, o.get('proof'), cfg['proof_timeout'])
         finally:
             _, left = put_back(root, jdir, journal)
@@ -663,6 +677,156 @@ def without_change(root, cfg, o, base, targets):
     if left:
         raise CouldNotRun('files changed while the check was running and were left as they are: ' + '; '.join(left))
     return rc, tail, secs
+
+
+def unrunnable(rc):
+    """Timeout, not found, not runnable, or killed by a signal: the proof did not run to completion."""
+    return rc is None or rc in (126, 127) or 129 <= rc <= 192 or rc < 0
+
+
+# ---------------------------------------------------------------- proof strength: small breaks in the changed lines
+
+SWAPS = (  # (pattern, replacement); textual and language-agnostic, applied to code with strings and comments blanked
+    (r'(?<![<>=!\-])(?:<=|>=|==|!=|<|>)(?![<>=])', {'<': '<=', '<=': '<', '>': '>=', '>=': '>', '==': '!=', '!=': '=='}),
+    (r'&&|\|\|', {'&&': '||', '||': '&&'}),
+    (r'\b(?:and|or)\b', {'and': 'or', 'or': 'and'}),
+    (r'(?<![+\-=<>!*/%&|^])(?<!\d[eE])[+-](?![+\-=>])', {'+': '-', '-': '+'}),
+    (r'\b(?:true|false|True|False|TRUE|FALSE)\b', {'true': 'false', 'false': 'true', 'True': 'False',
+                                                    'False': 'True', 'TRUE': 'FALSE', 'FALSE': 'TRUE'}),
+    (r'(?<![\w.])(?<!\d[eE][+-])\d+(?![\w.])', None),  # an integer literal, plus one
+)
+
+
+def _code(text):
+    """`text` with string literals and comments blanked to spaces, same length and lines. Cheap and approximate:
+    quotes, triple quotes, /* */, and # or // or a leading -- to the end of the line. Python's // and a C #define
+    are blanked too, which only means fewer mutants."""
+    out, i, n, end = [], 0, len(text), None
+    while i < n:
+        c = text[i]
+        if end is None:
+            lead = text[text.rfind('\n', 0, i) + 1:i].strip() == ''
+            for start, close in (('"""', '"""'), ("'''", "'''"), ('/*', '*/'), ('//', '\n'), ('#', '\n'),
+                                 ('"', '"'), ("'", "'"), ('`', '`')) + ((('-- ', '\n'),) if lead else ()):
+                if text.startswith(start, i):
+                    out.append(' ' * len(start))
+                    i, end = i + len(start), close
+                    break
+            else:
+                out.append(c)
+                i += 1
+        elif end != '\n' and text.startswith(end, i):
+            out.append(' ' * len(end))
+            i, end = i + len(end), None
+        elif c == '\n' and (end == '\n' or len(end) == 1):  # a comment, or an unclosed one-line string, ends here
+            out.append(c)
+            i, end = i + 1, None
+        else:
+            skip = 2 if c == '\\' and end in ('"', "'", '`', '"""', "'''") else 1
+            out.append(''.join('\n' if x == '\n' else ' ' for x in text[i:i + skip]))
+            i += skip
+    return ''.join(out)
+
+
+def mutations(text, lines=None):
+    """Every small break of `lines` (1-based; None for all) of `text`: [(line, column, old, new)], in the order of
+    the lines, then the column, then SWAPS."""
+    out = []
+    for n, code in enumerate(_code(text).split('\n'), 1):
+        if lines is not None and n not in lines:
+            continue
+        found = []
+        for k, (pat, swap) in enumerate(SWAPS):
+            found += [(m.start(), k, m.group(), swap[m.group()] if swap else str(int(m.group()) + 1))
+                      for m in re.finditer(pat, code)]
+        out += [(n, c, old, new) for c, _, old, new in sorted(found)]
+    return out
+
+
+def pick(items, cap):
+    """At most `cap` of `items`, spread evenly over them, always the same ones."""
+    return list(items) if len(items) <= cap else [items[i * len(items) // cap] for i in range(cap)]
+
+
+def changed_lines(root, base, path):
+    """The lines of `path` in the working tree that differ from the base; None (all) for a file the base lacks."""
+    if not base or sh(['git', 'cat-file', '-e', '%s:%s' % (base, path)], root).returncode != 0:
+        return None
+    diff = git(root, 'diff', '-U0', '--no-renames', '--no-ext-diff', '--no-textconv', base, '--', path)
+    out = set()
+    for m in re.finditer(r'^@@ -\S+ \+(\d+)(?:,(\d+))? @@', diff, re.M):
+        out.update(range(int(m.group(1)), int(m.group(1)) + int(m.group(2) or 1)))
+    return out
+
+
+def strength(root, cfg, o, base, targets, say=lambda s: None):
+    """Small breaks ("mutants") in the changed lines of this outcome's product files, put in one at a time through
+    in_place, each run against the proof. A mutant the proof does not notice survives: a changed line the proof
+    does not depend on. One whose run could not run counts as neither."""
+    cands = []
+    for p in targets:
+        full = os.path.join(root, p)
+        if os.path.islink(full) or not os.path.isfile(full):
+            continue
+        with open(full, 'rb') as f:
+            data = f.read()
+        try:
+            text = data.decode('utf-8')
+        except ValueError:
+            continue
+        if '\0' not in text:
+            cands += [(p, data, text) + m for m in mutations(text, changed_lines(root, base, p))]
+    picked = pick(cands, cfg['mutants'])
+    res = {'mutants': len(picked), 'of': len(cands), 'killed': 0, 'survivors': [], 'unrun': [], 'seconds': 0.0}
+    if picked:
+        say('  proof strength: %d small break(s) in the changed lines, one proof run each' % len(picked))
+    for p, data, text, line, col, old, new in picked:
+        lines = text.split('\n')
+        was = lines[line - 1]
+        lines[line - 1] = was[:col] + new + was[col + len(old):]
+        after = '\n'.join(lines).encode('utf-8')
+
+        def swap_in(entries, save, lock, p=p, data=data, after=after):
+            e, full = entries[0], os.path.join(root, p)
+            if e['was'] is None or e['was'][0] != 'file' or not _same(full, data):
+                raise CouldNotRun('%s changed while the proof-strength check was running; run the command again' % p)
+            e['left'] = ['file', hashlib.sha256(after).hexdigest(), e['was'][2]]
+            save()  # what will be left is noted first, so a kill at any point is put back
+            tmp = full + '.odd-putback'
+            with open(tmp, 'wb') as f:
+                f.write(after)
+            os.chmod(tmp, e['was'][2])
+            e['touched'] = _bump(tmp, e.get('mtime'))
+            os.replace(tmp, full)
+        rc, _, secs = in_place(root, cfg, o, base, [p], set(), swap_in, 'put a mutant in')
+        res['seconds'] = round(res['seconds'] + secs, 1)
+        where = '%s:%d %s -> %s: %s' % (p, line, old, new, was.strip()[:80])
+        if rc == 0:
+            res['survivors'].append(where)
+        elif unrunnable(rc):
+            res['unrun'].append('%s (%s)' % (where, 'timeout' if rc is None else 'exit %d' % rc))
+        else:
+            res['killed'] += 1
+    return res
+
+
+def _same(path, data):
+    with open(path, 'rb') as f:
+        return f.read() == data
+
+
+def weak(cfg, o, res):
+    """Under "strength": "enforce" a surviving mutant is a Fail, also for a verification recorded earlier."""
+    if cfg['strength'] != 'enforce' or res.get('skip'):
+        return
+    st = res.get('strength')
+    if st is None:
+        raise Fail('verified before the proof\'s strength was measured; run: %s done %s' % (ODD, o.slug))
+    if st['survivors']:
+        raise Fail('the proof does not notice %d of %d small break(s) in the changed lines ("strength": "enforce"); '
+                   'each is a changed line the proof does not depend on:\n%s\n  make the proof assert what those '
+                   'lines do, or take them out of the change.' % (len(st['survivors']), st['killed'] + len(st['survivors']),
+                                                                  '\n'.join('    ' + w for w in st['survivors'])))
 
 
 def verify(root, cfg, o, base, changed, say=lambda s: None):
@@ -697,7 +861,7 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
                    'from an installed dependency or a cache rather than these files; the test lives in a file that '
                    'was taken out (keep it under a test path); this change removes or restructures code (then add '
                    '"counterfactual: skip - <reason>").' % ', '.join(targets[:8]))
-    if crc is None or crc in (126, 127) or 129 <= crc <= 192 or crc < 0:  # not found, not runnable, or killed
+    if unrunnable(crc):
         raise CouldNotRun('with the change taken out the proof did not fail, it could not run (%s). A proof must run '
                           'to completion and exit non-zero.\n%s' % ('timeout' if crc is None else 'exit %d' % crc, _indent(ctail)))
     rc3, tail3, s3 = run_proof(root, o.get('proof'), cfg['proof_timeout'])
@@ -706,6 +870,9 @@ def verify(root, cfg, o, base, changed, say=lambda s: None):
                    '(%s). A proof must give the same answer each time it runs; this one may leave state behind.\n%s'
                    % ('timeout' if rc3 is None else 'exit %d' % rc3, _indent(tail3)))
     res.update(seconds=[s1, s2, s3], red_says=(ctail.strip().splitlines() or ['(no output)'])[-1][:160])
+    if cfg['strength'] != 'off':
+        res['strength'] = strength(root, cfg, o, base, targets, say)
+        weak(cfg, o, res)
     return res
 
 
@@ -717,8 +884,17 @@ def _describe(o, res):
     if res.get('skip'):
         return 'SKIPPED the take-out check (%s): the proof passes; %d line(s) in %d file(s) not verified' % (
             res['skip'].split('-', 1)[-1].strip() or 'no reason', res['lines'], res['files'])
-    return 'took out %d file(s), %d line(s); without them the proof said: %s; %s s' % (
+    text = 'took out %d file(s), %d line(s); without them the proof said: %s; %s s' % (
         res['files'], res['lines'], res['red_says'], '+'.join(str(s) for s in res['seconds']))
+    st = res.get('strength')
+    if st:
+        text += '\n          strength: the proof caught %d of %d mutant(s)%s%s; %s s' % (
+            st['killed'], st['killed'] + len(st['survivors']),
+            ' (%d of %d sampled)' % (st['mutants'], st['of']) if st['of'] > st['mutants'] else '',
+            '; %d could not run' % len(st['unrun']) if st['unrun'] else '', st['seconds'])
+        text += ''.join('\n          survived: ' + w for w in st['survivors'])
+        text += ''.join('\n          could not run: ' + w for w in st['unrun'])
+    return text
 
 
 # ---------------------------------------------------------------- the gate
@@ -770,6 +946,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None):
                 res = standing(root, cfg, o, changed)
                 if not res:
                     raise Fail('run: %s done %s' % (ODD, o.slug))
+                weak(cfg, o, res)
             if res.get('skip'):
                 skips.append('%s - %s, %d line(s)' % (o.slug, res['skip'].split('-', 1)[-1].strip(), res['lines']))
             lines += ['  ok      %s: %s' % (o.slug, o.get('outcome')[:100]), '          ' + _describe(o, res)]
