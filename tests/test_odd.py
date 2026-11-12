@@ -1790,7 +1790,7 @@ class Adoption(Repo):
                      tool='.odd/odd_mcp.py')
         self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
         self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
-        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'chain', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec'])
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'chain', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec', 'stats'])
         self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
         done = r[4]['result']
         self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)
@@ -3744,6 +3744,97 @@ class CostPerOutcome(Agents):
         self.no('done', 'add')
         out = self.table(self.ok('stats'))
         self.assertIn('no race, cascade or chain attempt recorded here', out)
+
+
+
+class ProofQualityTrends(Repo):
+    """Backlog item 17: `odd stats` groups escaped defects by outcome kind, seal, proof strength band and whether a
+    different agent wrote the proof (proof-by), with outcomes, escapes and the rate per group, a small-count line
+    under each group of fewer than 10 outcomes, and `odd stats --json`. Fixture evidence only."""
+
+    def fixture(self, slug, *lines, seal=None, strength=None):
+        """An outcome file with extra lines, and the local evidence a seal or a verified done would have left."""
+        self.write('.odd/outcomes/%s.md' % slug, '---\noutcome: %s\nproof: %s\nin: %s.py\n%s---\n' % (
+            SENTENCE, PROOF, slug, ''.join(l + '\n' for l in lines)))
+        if seal:
+            oddmod.record(self.dir, slug, seal=seal)
+        if strength:
+            oddmod.record(self.dir, slug, ok=True, strength={'killed': strength[0],
+                                                             'survivors': ['m'] * (strength[1] - strength[0])})
+
+    def four(self):
+        e = 'escaped: 2026-01-01: wrong total in checkout'
+        self.fixture('a', 'kind: bug', 'sealed: s1', e + '; 2026-01-02: wrong tax in checkout', seal='s1', strength=(2, 2))
+        self.fixture('b', 'kind: feature', 'proof-by: strong-agent', e, strength=(1, 3))
+        self.fixture('c', 'kind: refactor')
+        self.fixture('d')
+
+    def trends(self, out):
+        return out[out.index('proof quality trends'):out.index('cost per proven outcome')]
+
+    def test_escapes_are_grouped_by_kind_seal_strength_and_proof_author_with_rates(self):
+        self.four()
+        out = self.trends(self.ok('stats'))
+        self.assertIn('self-reported', out.split('\n')[0])
+        for row in (r'kind: bug\s+1\s+2\s+2\.00', r'kind: feature\s+1\s+1\s+1\.00', r'kind: refactor\s+1\s+0\s+0\.00',
+                    r'kind: none\s+1\s+0\s+0\.00', r'sealed\s+1\s+2\s+2\.00', r'not sealed\s+3\s+1\s+0\.33',
+                    r'strength: full\s+1\s+2\s+2\.00', r'strength: partial\s+1\s+1\s+1\.00',
+                    r'strength: not measured\s+2\s+0\s+0\.00', r'proof by another agent\s+1\s+1\s+1\.00',
+                    r'proof by the same author\s+3\s+2\s+0\.67'):
+            self.assertRegex(out, r'(?m)^' + row + r'$', out)
+
+    def test_a_group_of_fewer_than_ten_outcomes_says_its_counts_are_small(self):
+        self.four()
+        for i in range(9):  # with b, exactly 10 features: not small
+            self.fixture('f%d' % i, 'kind: feature')
+        out = self.trends(self.ok('stats'))
+        rows = out.split('\n')
+        small = [rows[i - 1] for i, r in enumerate(rows) if 'fewer than 10 outcomes' in r]
+        self.assertTrue(all('self-reported' in r for r in rows if 'fewer than 10 outcomes' in r), out)
+        self.assertIn('kind: bug', ' '.join(small))
+        self.assertNotIn('kind: feature', ' '.join(small), 'ten outcomes are not a small group: ' + out)
+        self.assertNotIn('not sealed', ' '.join(small), out)
+        self.assertRegex(out, r'(?m)^kind: feature\s+10\s+1\s+0\.10$', out)
+
+    def test_an_empty_group_has_no_rate(self):
+        self.fixture('d')
+        out = self.trends(self.ok('stats'))
+        self.assertRegex(out, r'(?m)^kind: bug\s+0\s+0\s+-$', out)
+
+    def test_a_seal_line_without_a_seal_recorded_here_is_not_sealed(self):
+        self.fixture('h', 'sealed: by-hand', 'escaped: 2026-01-01: wrong total in checkout')
+        out = self.trends(self.ok('stats'))
+        self.assertRegex(out, r'(?m)^sealed\s+0\s+0\s+-$', out)
+        self.assertRegex(out, r'(?m)^not sealed\s+1\s+1\s+1\.00$', out)
+
+    def test_stats_json_carries_the_outcomes_the_groups_and_the_spend(self):
+        self.four()
+        data = json.loads(self.ok('stats', '--json'))
+        self.assertTrue(data['self_reported'])
+        rows = {(g['by'], g['group']): g for g in data['trends']}
+        self.assertEqual(rows[('kind', 'bug')], {'by': 'kind', 'group': 'bug', 'outcomes': 1, 'escaped': 2,
+                                                 'rate': 2.0, 'small': True})
+        self.assertEqual(rows[('proof-by', 'another agent')]['escaped'], 1)
+        self.assertEqual(rows[('strength', 'partial')]['outcomes'], 1)
+        self.assertEqual(rows[('seal', 'not sealed')]['rate'], round(1 / 3, 4))
+        self.assertIsNone(data['spend']['per_proven_outcome'])
+        oddmod.record(self.dir, 'a', attempt='1', cost=0.5, seconds=2.0)
+        spent = json.loads(self.ok('stats', '--json'))['spend']
+        self.assertEqual((spent['per_proven_outcome'], spent['attempts'], spent['proven']),
+                         ({'dollars': 0.5, 'seconds': 2.0}, 1, 1))
+        a = [o for o in data['outcomes'] if o['slug'] == 'a'][0]
+        self.assertEqual((a['kind'], a['sealed'], a['strength'], a['escaped'], a['proof_by']),
+                         ('bug', 'sealed', {'killed': 2, 'of': 2}, 2, None))
+        self.assertEqual([o['slug'] for o in data['outcomes']], ['a', 'b', 'c', 'd'])
+        b, c = data['outcomes'][1:3]
+        self.assertEqual((b['strength'], b['proof_by'], c['strength'], c['kind']), ({'killed': 1, 'of': 3}, 'strong-agent',
+                                                                                    None, 'refactor'))
+
+    def test_the_mcp_stats_tool_runs_odd_stats(self):
+        sys.path.insert(0, os.path.dirname(MCP))
+        import odd_mcp
+        self.assertEqual(odd_mcp.argv_for('stats', {'json': True}), ['stats', '--json'])
+        self.assertEqual(odd_mcp.argv_for('stats', {}), ['stats'])
 
 
 if __name__ == '__main__':

@@ -237,6 +237,13 @@ with failed attempts counted in the spend. The dollars are only what your agent 
 attempt rather than wall clock, and it is this machine's record only, so it is labelled self-reported. Work an agent
 does outside race, cascade and chain is not counted.
 
+**Which of our proofs let defects through?**
+With a tool newer than 0.4.0, `odd stats` prints the escape rate (defects recorded with `odd escaped`, per outcome)
+for bug, feature and refactor outcomes, sealed or not, full, partial or unmeasured proof strength, and proofs written by
+another agent (`odd spec --proof-by`) or not; `--json` for a dashboard. Under 10 outcomes in a group it says the counts
+are small. Only recorded escapes count, strength is this machine's record, and an outcome without `proof-by:` is
+counted as the same author even when nobody recorded who wrote its proof.
+
 **Can an agent work through a long ticket unattended without leaving a mess when it gets stuck?**
 `odd chain <ticket>` (a tool newer than 0.4.0) runs the outcome slugs listed in `.odd/chains/<ticket>.md` in order.
 Each one not yet proven is attempted by your agents in their own git worktrees (as `odd race`, or `odd cascade` with

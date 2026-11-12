@@ -61,7 +61,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd ask <slug> "<question>"` | records one open question as `asked:`; the gate reports the outcome as waiting for an answer (section 4b); needs a tool newer than 0.4.0 | 0, 1 not a question or no such outcome |
 | `odd escaped <slug> "<what, where found>"` | records a defect that got past this outcome (section 9) | 0, 1 vague report or no such outcome |
-| `odd stats` | counts, labelled self-reported, with escaped defects split by kind of proof, and dollars and seconds per proven outcome from agent attempts (section 3h; the cost table needs a tool newer than 0.4.0) | 0 |
+| `odd stats [--json]` | counts, labelled self-reported, with escaped defects split by kind of proof and grouped by outcome kind, seal, strength band and proof author with a rate per group (section 9), and dollars and seconds per proven outcome from agent attempts (section 3h; the cost table needs a tool newer than 0.4.0) | 0 |
 
 `odd hook stop|session-start` is an internal entry point called only by the opt-in Claude Code hooks.
 
@@ -933,6 +933,23 @@ Changing only the `escaped:` line of a merged outcome does not put it back in pl
 latest passing verification recorded on this machine; then, in total, escapes against outcomes split three ways:
 sealed or not, take-out skipped or checked, and proof strength n of n, a mutant survived, or not measured here. Each
 split reads `N in K of M`: N escapes in K of the M outcomes of that kind. There is no lessons database.
+
+Proof quality trends (backlog item 17; a tool newer than 0.4.0, no new setting). After those splits `odd stats`
+prints a table headed `proof quality trends (self-reported: ...)`, one row per group: `kind: bug`, `kind: feature`,
+`kind: refactor`, `kind: none`; `sealed`, `not sealed` (sealed as above: the `sealed:` line matches a seal recorded on
+this machine); `strength: full` (the latest passing verification here caught every small break), `strength: partial`
+(a mutant survived), `strength: not measured`; `proof by another agent` (the outcome has a `proof-by:` line, written by
+`odd spec --proof-by`, section 3d) and `proof by the same author`. Each row gives the outcomes in the group, the escaped
+defects recorded against them and the rate (escaped defects per outcome, two decimals; `-` for an empty group). Under
+every group of fewer than 10 outcomes a line says `fewer than 10 outcomes: the counts are small and self-reported, not
+a trend`. The groups are a table (`TRENDS` in `odd.py`) counted by one function (`tally()`), which also renders the
+`N in K of M` splits. `odd stats --json` prints instead one JSON object: `self_reported`, `outcomes` (slug, kind,
+proof_by, sealed, parked, skip, attempts, passed, escaped, strength `{killed, of}` or null), `trends` (`by`, `group`,
+`outcomes`, `escaped`, `rate` or null, `small`) and `spend` (the cost table's totals, section 3h, with
+`per_proven_outcome` null when nothing is proven). The MCP server has a `stats` tool with a `json` flag.
+Limits, besides those below: "proof by the same author" includes every outcome whose proof's author was not recorded,
+so it is "not known to be a different agent", not "known to be the same"; kind and proof-by are read from the outcome
+file as it is now; a rate over a few outcomes says little, which the small-count line states rather than hides.
 
 Limits: only recorded escapes are counted, so the figures are self-reported. Strength comes from local evidence, so
 on another machine, or for an outcome verified before strength existed, it is "not measured here". Seal and skip are

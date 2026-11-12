@@ -74,6 +74,10 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
      [SLUG, ('question', S, 'one precise question, ending in "?"')], ('slug', 'question')),
     ('escaped', 'Record a defect that got past a merged outcome.',
      [SLUG, ('what', S, 'what went wrong, and where it was found')], ('slug', 'what')),
+    ('stats', 'Counts, self-reported: per outcome, escaped defects grouped by outcome kind, seal, proof strength band '
+              'and proof author (rate per group; a group under 10 outcomes is said to be small), and cost per proven '
+              'outcome (odd newer than 0.4.0).',
+     [('json', B, 'the same counts as JSON')], ()),
 )
 OUTPUT = {'type': 'object', 'properties': {'exit_code': {'type': 'integer'}, 'output': {'type': 'string'},
                                          'next': {'type': 'array', 'items': {'type': 'string'}}},

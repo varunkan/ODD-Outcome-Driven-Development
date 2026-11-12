@@ -96,7 +96,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
 | `odd ask <slug> "<question>"` | the outcome cannot be made checkable from the ticket: record one precise question; the gate says "waiting for an answer" until the `asked:` line is deleted (a tool newer than 0.4.0) |
 | `odd escaped <slug> "<what, where found>"` | a defect got past a verified outcome: record it on that outcome |
-| `odd stats` | counts, self-reported, including escaped defects by kind of proof, and dollars and seconds per proven outcome from race, cascade and chain attempts (the cost table needs a tool newer than 0.4.0) |
+| `odd stats [--json]` | counts, self-reported, including escaped defects by kind of proof, the escape rate per outcome kind, seal, strength band and proof author, and dollars and seconds per proven outcome from race, cascade and chain attempts (the rate table, `--json` and the cost table need a tool newer than 0.4.0) |
 
 **Racing agents.** With `"agents": ["<agent command>", ...]` in `.odd/config.json` (any CLI agent; `{prompt_file}`
 in the command becomes the prompt's path, else the prompt goes to stdin), `odd race <slug>` starts one attempt per
@@ -267,7 +267,10 @@ was found>"`. It appends a dated entry to that outcome's `escaped:` line and tel
 whose proof fails on the escaped behaviour. `odd stats` then counts escapes against outcomes that were sealed or not,
 that skipped the take-out check or not, and whose proof caught every small break or not (when that was measured on
 this machine). Over time that shows which kinds of proof let defects through. It counts only what people record, so
-it is self-reported, not a measurement.
+it is self-reported, not a measurement. With a tool newer than 0.4.0 it also prints a table of escape rates (escaped
+defects per outcome) grouped by outcome kind (bug, feature, refactor, none), sealed or not, proof strength band (full,
+partial, not measured) and whether another agent wrote the proof (`odd spec --proof-by`), and says under each group of
+fewer than 10 outcomes that its counts are small; `odd stats --json` gives the same as JSON.
 
 ## In CI
 

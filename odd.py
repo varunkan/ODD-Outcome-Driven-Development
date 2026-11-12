@@ -17,7 +17,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
   odd escaped <slug> "<what went wrong, where found>"     a defect got past this outcome; record it
-  odd stats                                               counts (self-reported)
+  odd stats [--json]                                      counts and proof quality trends (self-reported)
 
 Needs a POSIX system, git 2.23+ and Python 3.8+. One file, standard library only, so a project vendors it as
 .odd/odd.py. Design and limits: DESIGN.md.
@@ -3059,44 +3059,90 @@ def cmd_escaped(a, root):
           % (a.slug, escapes(o), o.rel, ODD, ODD, ODD, ODD))
 
 
+def _band(st):
+    """The proof strength band of a recorded strength score: full (no mutant survived), partial, or not measured."""
+    n = st and st['killed'] + len(st['survivors'])
+    return 'partial' if n and st['survivors'] else ('full' if n else 'not measured')
+
+
+# backlog item 17: the groups `odd stats` counts escaped defects in; each picks outcomes by what cmd_stats read
+TRENDS = ([('kind', k, (lambda k: lambda o: o.get('kind') == k)(k)) for k in KINDS] +
+          [('kind', 'none', lambda o: not o.get('kind')),
+           ('seal', 'sealed', lambda o: o.sealed_here == 'sealed'), ('seal', 'not sealed', lambda o: o.sealed_here != 'sealed')] +
+          [('strength', b, (lambda b: lambda o: o.band == b)(b)) for b in ('full', 'partial', 'not measured')] +
+          [('proof-by', 'another agent', lambda o: bool(o.get('proof-by'))),
+           ('proof-by', 'the same author', lambda o: not o.get('proof-by'))])
+SMALL = 10  # a group of fewer outcomes than this is said to be small
+
+
+def tally(outs, pick):
+    """(outcomes, escaped defects, outcomes with an escape) among the outcomes pick() selects."""
+    got = [o for o in outs if pick(o)]
+    return len(got), sum(escapes(o) for o in got), sum(1 for o in got if escapes(o))
+
+
 def cmd_stats(a, root):
     outs = all_outcomes(root)
-    print('self-reported, from this machine only; not a measurement')
-    print('%-28s %-8s %9s %8s %8s %-7s %s' % ('outcome', 'state', 'attempts', 'passed', 'escaped', 'sealed', 'proof strength'))
-    kind = {}  # slug -> how strong the latest verification recorded here said the proof was
     for o in outs:
         ev = evidence(root, o.slug)
         seals = [e['seal'] for e in ev if e.get('seal')]
         o.sealed_here = 'sealed' if o.get('sealed') and o.get('sealed') in seals else ('unseen' if o.get('sealed') else '-')
-        ev = [e for e in ev if 'ok' in e]  # attempts are done runs; a seal is not one
-        st = ([e['strength'] for e in ev if e.get('ok') and e.get('strength')] or [None])[-1]
-        n = st and st['killed'] + len(st['survivors'])
-        kind[o.slug] = 'survived' if n and st['survivors'] else ('caught' if n else '')
+        o.runs = [e for e in ev if 'ok' in e]  # attempts are done runs; a seal is not one
+        o.st = ([e['strength'] for e in o.runs if e.get('ok') and e.get('strength')] or [None])[-1]
+        o.band = _band(o.st)
+    trends = []
+    for by, group, pick in TRENDS:
+        n, k, _ = tally(outs, pick)
+        trends.append({'by': by, 'group': group, 'outcomes': n, 'escaped': k,
+                       'rate': round(k / n, 4) if n else None, 'small': n < SMALL})
+    if getattr(a, 'json', False):
+        print(json.dumps({'self_reported': True, 'outcomes': [{
+            'slug': o.slug, 'kind': o.get('kind') or None, 'proof_by': o.get('proof-by') or None, 'sealed': o.sealed_here,
+            'parked': bool(o.parked), 'skip': bool(o.skip), 'attempts': len(o.runs),
+            'passed': sum(1 for e in o.runs if e.get('ok')), 'escaped': escapes(o),
+            'strength': {'killed': o.st['killed'], 'of': o.st['killed'] + len(o.st['survivors'])}
+            if o.band != 'not measured' else None} for o in outs],
+            'trends': trends, 'spend': spend(root, outs, say=lambda s: None)}, indent=1, sort_keys=True))
+        return
+    print('self-reported, from this machine only; not a measurement')
+    print('%-28s %-8s %9s %8s %8s %-7s %s' % ('outcome', 'state', 'attempts', 'passed', 'escaped', 'sealed', 'proof strength'))
+    for o in outs:
         state = 'parked' if o.parked else ('asked' if o.asked else ('skip' if o.skip else ''))
-        print('%-28s %-8s %9d %8d %8d %-7s %s' % (o.slug, state, len(ev), sum(1 for e in ev if e.get('ok')), escapes(o),
-                                               o.sealed_here, '%d of %d' % (st['killed'], n) if n else '-'))
+        print('%-28s %-8s %9d %8d %8d %-7s %s' % (o.slug, state, len(o.runs), sum(1 for e in o.runs if e.get('ok')),
+                                               escapes(o), o.sealed_here, '%d of %d' % (
+                                                   o.st['killed'], o.st['killed'] + len(o.st['survivors']))
+                                               if o.band != 'not measured' else '-'))
     print('%d outcome(s): %d parked, %d skip the take-out check, %d record an escaped defect' % (
         len(outs), sum(1 for o in outs if o.parked), sum(1 for o in outs if o.skip), sum(1 for o in outs if o.get('escaped'))))
-    split = lambda name, pick: '%s: %d in %d of %d' % (  # noqa: E731
-        name, sum(escapes(o) for o in outs if pick(o)), sum(1 for o in outs if pick(o) and escapes(o)),
-        sum(1 for o in outs if pick(o)))
+    split = lambda name, pick: '%s: %d in %d of %d' % ((name,) + tuple(tally(outs, pick)[i] for i in (1, 2, 0)))  # noqa: E731
     print('escaped defects (self-reported): %d against %d of %d outcome(s)' % (
         sum(escapes(o) for o in outs), sum(1 for o in outs if escapes(o)), len(outs)))
     print('  ' + '; '.join([split('sealed', lambda o: o.sealed_here == 'sealed'),
                             split('not sealed', lambda o: o.sealed_here != 'sealed')]))
     print('  ' + '; '.join([split('skipped the take-out check', lambda o: o.skip), split('checked', lambda o: not o.skip)]))
-    print('  ' + '; '.join([split('proof strength n of n', lambda o: kind[o.slug] == 'caught'),
-                            split('a mutant survived', lambda o: kind[o.slug] == 'survived'),
-                            split('not measured here', lambda o: not kind[o.slug])]))
+    print('  ' + '; '.join([split('proof strength n of n', lambda o: o.band == 'full'),
+                            split('a mutant survived', lambda o: o.band == 'partial'),
+                            split('not measured here', lambda o: o.band == 'not measured')]))
+    print('proof quality trends (self-reported: only escapes recorded with `%s escaped`; seal, kind and proof-by as the '
+          'outcome files say now; strength from this machine; rate = escaped defects per outcome)' % ODD)
+    rows = [('group', 'outcomes', 'escaped', 'rate')] + [(
+        ('kind: %s' if t['by'] == 'kind' else 'strength: %s' if t['by'] == 'strength' else
+         'proof by %s' if t['by'] == 'proof-by' else '%s') % t['group'], str(t['outcomes']), str(t['escaped']),
+        '%.2f' % t['rate'] if t['rate'] is not None else '-') for t in trends]
+    wide = [max(len(r[c]) for r in rows) for c in range(3)]
+    for r, t in zip(rows, [None] + trends):
+        print('  '.join(r[c].ljust(wide[c]) for c in range(3)) + '  ' + r[3])
+        if t and t['small']:
+            print('  fewer than %d outcomes: the counts are small and self-reported, not a trend' % SMALL)
     spend(root, outs)
 
 
-def spend(root, outs):
+def spend(root, outs, say=print):
     """Backlog item 16: dollars and seconds per proven outcome, from the attempt lines _attempts() records (race,
     cascade, chain). Dollars are the agents' own "odd-cost:" lines; seconds are summed per attempt (agent plus
     verification), not wall clock. All spend, failed attempts and unproven outcomes included, over the outcomes with
     an attempt that a `done` here has verified."""
-    print('cost per proven outcome (self-reported: the agents\' own "odd-cost:" lines and this machine\'s clock; '
+    say('cost per proven outcome (self-reported: the agents\' own "odd-cost:" lines and this machine\'s clock; '
           'race, cascade and chain attempts only)')
     rows, tot = [], [0, 0, 0.0, 0.0, 0]  # attempts, cost reported, dollars, seconds, proven outcomes
     for o in outs:
@@ -3112,16 +3158,20 @@ def spend(root, outs):
         rows.append((o.slug, str(row[0]), '%d of %d' % (row[1], row[0]), '$%g' % round(row[2], 6),
                      '%g' % round(row[3], 1), 'yes' if proven else 'no'))
     if not rows:
-        print('no race, cascade or chain attempt recorded here')
-        return
+        say('no race, cascade or chain attempt recorded here')
+        return {'attempts': 0, 'outcomes': 0, 'dollars': 0, 'cost_reported': 0, 'seconds': 0, 'proven': 0,
+                'per_proven_outcome': None}
     rows.insert(0, ('outcome', 'attempts', 'cost reported', 'dollars', 'seconds', 'proven'))
     wide = [max(len(r[c]) for r in rows) for c in range(5)]
     for r in rows:
-        print('  '.join(r[c].ljust(wide[c]) for c in range(5)) + '  ' + r[5])
+        say('  '.join(r[c].ljust(wide[c]) for c in range(5)) + '  ' + r[5])
     n, k, usd, sec, won = tot
-    print('total: $%g and %g s over %d attempt(s) at %d outcome(s); %s; cost reported for %d of %d attempt(s)' % (
+    say('total: $%g and %g s over %d attempt(s) at %d outcome(s); %s; cost reported for %d of %d attempt(s)' % (
         round(usd, 6), round(sec, 1), n, len(rows) - 1, '%d proven outcome(s): $%g and %g s per proven outcome (failed '
         'attempts included)' % (won, round(usd / won, 6), round(sec / won, 1)) if won else 'no proven outcome', k, n))
+    return {'attempts': n, 'outcomes': len(rows) - 1, 'dollars': round(usd, 6), 'cost_reported': k,
+            'seconds': round(sec, 1), 'proven': won, 'per_proven_outcome': {
+                'dollars': round(usd / won, 6), 'seconds': round(sec / won, 1)} if won else None}
 
 
 # when parking is the answer: the method, `odd park` and the Stop hook say it in the same words (ImpossibleBench's
@@ -3416,7 +3466,8 @@ def main(argv=None):
     s = sub.add_parser('escaped')
     s.add_argument('slug')
     s.add_argument('what', help='what went wrong, and where it was found')
-    sub.add_parser('stats')
+    sub.add_parser('stats').add_argument('--json', action='store_true', help='print the counts, the proof quality '
+                                         'groups and the spend as JSON instead (a tool newer than 0.4.0)')
     sub.add_parser('hook').add_argument('event', choices=[arg for _, arg in HOOKS])
     for name in ('race', 'cascade', 'chain'):
         sub.choices[name].add_argument('--no-cache', action='store_true', help='verify each attempt in full')

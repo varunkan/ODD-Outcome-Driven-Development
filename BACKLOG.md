@@ -461,6 +461,22 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Outcome:** a project sees which kinds of outcomes and proofs let defects through, from the escaped-defect log and
   strength scores, so the method sharpens on its own failures.
 - **How:** `odd stats` grouped by outcome kind, seal and strength.
+- **Done** (commit "B17: proof quality trends", a tool newer than 0.4.0, no new setting): `odd stats` prints a table
+  `proof quality trends (self-reported: ...)` with one row per group (kind bug, feature, refactor, none; sealed or not;
+  strength full, partial, not measured; proof by another agent, from the `proof-by:` line, or not): outcomes, escaped
+  defects and the rate (escaped defects per outcome), and under each group of fewer than 10 outcomes a line saying the
+  counts are small and self-reported. The groups are one table (`TRENDS`) counted by `tally()`, which also renders the
+  existing `N in K of M` splits. `odd stats --json` prints the outcomes, the groups and the cost totals (`spend()` now
+  returns them); the MCP server gains a `stats` tool. DESIGN.md section 9. Measured with `tests/test_odd.py` class
+  `ProofQualityTrends` (6 tests, fixture outcome files and evidence written directly); the first 4 seen RED before
+  the code (no trends table; `--json` unknown, exit 2), the seal-line, MCP and exact-10 checks added after the code
+  when mutants survived; 16 hand-made mutants (band swapped, proof-by inverted, empty rate 0, rate inverted, `<` to
+  `<=`, threshold 100, small line dropped, tally swapped, escapes counted per outcome, no `kind: none`, sealed read from
+  the file alone, `--json` ignored, JSON polluted by the cost print, per-proven spend always null, JSON strength only
+  when full, MCP flag as string) each turned a new test red. Suites: 281 and 89 tests OK. Not done: no trend over
+  time (a single snapshot, not dated buckets); kind, seal and proof-by are read as the outcome files are now, not as
+  they were when a defect escaped; "the same author" includes outcomes whose proof author was never recorded; no
+  real project's escape log has been run through it.
 
 ## Evidence
 
