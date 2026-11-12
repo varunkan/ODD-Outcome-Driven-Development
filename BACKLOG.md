@@ -1,0 +1,134 @@
+# Backlog
+
+What comes after the five additions now being built (proof strength, PR evidence comment, sealed proofs, escaped-defect
+log, adoption aids). Built in this order unless a measurement says otherwise.
+
+Every item ships the ODD way: an outcome sentence, a proof that fails without the change, tests written first, and the
+number that decides whether it stays. An item whose number does not move is reverted, not kept. Measurements run on
+the comparison harness ([`bench/`](bench/SPEC.md)) unless stated.
+
+The aim: make development **quicker, cheaper and more accurate**, not only checked. A proof the agent cannot fake is
+a trustworthy verifier, and a trustworthy verifier is what lets cheap models, parallel attempts and less human review
+be used safely.
+
+## Accuracy and productivity
+
+### 1. `odd race`: parallel attempts, the proof picks the winner
+- **Outcome:** a developer runs one outcome as N parallel agent attempts, each in its own git worktree, and gets back
+  the attempt that is proven, strongest on the deliberate breaks and smallest, with the others discarded.
+- **How:** the proof is written and sealed once; the agent command is a setting (any CLI agent); attempts run in
+  parallel; the winner is merged into the working tree; the race result says why it won.
+- **Measure:** accuracy and cost per proven outcome for Haiku x 3 race against plain Sonnet x 1 and plain Haiku x 1, as
+  a new bench arm.
+
+### 2. `odd cascade`: cheap model first, pay more only when the proof says so
+- **Outcome:** an outcome is attempted by the cheapest configured model first and escalated to a stronger one only when
+  the attempt is not proven.
+- **How:** an ordered list of agent commands in settings; each attempt is verified by `odd done`; escalation stops at
+  the first proven attempt or parks after the last.
+- **Measure:** cost per proven outcome and accuracy for Haiku-then-Sonnet against plain Sonnet. The Haiku half of the
+  comparison already shows how often a cheap first attempt is proven, which bounds the saving.
+
+### 3. Strong model writes the spec, cheap model writes the code
+- **Outcome:** the outcome sentence and the proof are written by the strongest model and sealed; the implementation is
+  done by a cheaper model or a race of them.
+- **How:** separate agent commands for `new`/proof and for implementation; sealing from the build's step 3.
+- **Measure:** accuracy and cost against the strong model doing both.
+
+### 4. Requirement coverage check
+- **Outcome:** before code, every requirement in the ticket is mapped to an outcome, and a requirement no outcome
+  covers is reported, so "works, but not what was asked" is caught at the cheapest point.
+- **How:** the ticket is split into numbered requirements (by the agent, recorded in the outcome files); `odd gate`
+  reports any requirement without an outcome.
+- **Measure:** requirements missed per task on the vague and feature tasks, with and without.
+
+### 5. Reproduce first for bugs
+- **Outcome:** for a bug, the proof must fail on the unfixed code by reproducing the reported behaviour before any fix
+  is written.
+- **How:** an outcome kind `bug` whose seal requires the proof to fail at the base revision with the reported symptom.
+- **Measure:** pass rate and false "done" on the bugfix and trap tasks, with and without.
+
+### 6. Ambiguity stop
+- **Outcome:** when the outcome cannot be made checkable from the ticket, the agent asks one precise question instead
+  of guessing.
+- **How:** a method rule plus `odd new` refusing an outcome sentence with no observable; an "ask" result distinct from
+  park.
+- **Measure:** rework and wrong-problem rate on the vague tasks.
+
+### 7. Outcome templates by kind of change
+- **Outcome:** a bug, a feature and a refactor each start from the right proof shape: reproduce-then-fix; new
+  behaviour plus existing behaviour unchanged; existing suite green with the take-out check skipped and the reason
+  recorded.
+- **How:** `odd new --kind bug|feature|refactor` filling the matching fields and hints.
+- **Measure:** turns and failed `done` attempts per outcome.
+
+### 8. Precise failure feedback
+- **Outcome:** when `odd done` fails, the agent is told exactly what is unproven (the line, the surviving break, the
+  proof output) so it fixes that instead of guessing.
+- **How:** a compact machine-readable failure block in `done` output and through the MCP server.
+- **Measure:** turns between the first failed `done` and the first passing one.
+
+### 9. Regression guard
+- **Outcome:** every proven outcome's proof joins a guard set, and the proofs of outcomes touching the same files run
+  again on later changes, so an agent cannot silently break earlier proven work.
+- **How:** the guard set derived from merged outcome files; `odd gate` runs the guards whose files the change touches.
+- **Measure:** earlier outcomes broken by later changes, on a multi-step task sequence.
+
+### 10. Long tasks as a chain of proven outcomes
+- **Outcome:** a large ticket is done as a sequence of small outcomes, each proven and checkpointed before the next,
+  and a failed one rolls back alone, so agents can run for hours and leave proven slices.
+- **How:** an ordered outcome list for one ticket; a checkpoint commit per proven outcome; rollback to the last one.
+- **Measure:** size and length of tasks completed unattended, with and without.
+
+### 11. Auto-merge lane
+- **Outcome:** a proven, strong, small change inside its stated files can merge with the reviewer reading only the
+  outcome and the proof.
+- **How:** a gate result flag and an action output the repository's merge rules can use; off by default.
+- **Measure:** human review minutes per merged change ([docs/review-time.md](docs/review-time.md) protocol), and
+  escaped defects through the lane.
+
+## Speed and cost
+
+### 12. Run only the affected proofs, and cache verification
+- **Outcome:** during the loop only the proofs that cover the changed files run, and a verification whose inputs did
+  not change is not repeated, locally or in CI.
+- **How:** a file-to-proof map learned from past runs; the content hash already used by the local gate, shared as a CI
+  cache.
+- **Measure:** seconds per `done` and per CI gate, and that no false pass appears.
+
+### 13. Boundary as context
+- **Outcome:** the agent is given the outcome's file boundary up front, so it explores less of the repository.
+- **How:** `odd new` and the MCP server return the boundary and the relevant files for the agent to read first.
+- **Measure:** turns and tokens per task.
+
+### 14. Stop when proven
+- **Outcome:** the method tells the agent to stop as soon as the outcome is proven and strong, with no further planning
+  or review rounds.
+- **Measure:** cost and seconds per task at unchanged accuracy.
+
+### 15. Attempt budget per outcome
+- **Outcome:** after N failed attempts an outcome is parked or escalated instead of consuming tokens without end.
+- **How:** counted by ODD from local evidence, never shown to the agent as a budget (the pilot showed a visible budget
+  makes agents skip work, [12](docs/evidence/12-pilot.md)).
+- **Measure:** spend on tasks that end unsolved.
+
+### 16. Cost per proven outcome
+- **Outcome:** ODD reports dollars, seconds and turns per proven outcome, the figure the race and the cascade optimise.
+- **How:** from the agent's own usage where available (bench records, MCP) and local evidence.
+
+## Learning
+
+### 17. Proof quality trends
+- **Outcome:** a project sees which kinds of outcomes and proofs let defects through, from the escaped-defect log and
+  strength scores, so the method sharpens on its own failures.
+- **How:** `odd stats` grouped by outcome kind, seal and strength.
+
+## Evidence
+
+### 18. The comparison on real repositories
+- **Outcome:** the comparison is repeated on real open-source issues with their own tests (SWE-bench style), where
+  agents do fail, because our hand-written tasks proved too easy for a strong model.
+- **Measure:** the same measures as today, published with spread, whatever they show.
+
+### 19. New arms for the comparison
+- Haiku x 3 race, Haiku-then-Sonnet cascade, and strong-spec / cheap-code, against plain Sonnet and plain Haiku.
