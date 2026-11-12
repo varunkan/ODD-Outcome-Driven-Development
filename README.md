@@ -90,6 +90,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd race <slug> [--n N] [--agent CMD]` | run N agent attempts in parallel, each in its own git worktree; the verified one with the strongest proof and fewest changed lines is applied to your tree (a tool newer than 0.4.0) |
 | `odd cascade <slug> [--agents C1,C2] [--race N]` | try the agents in order, cheapest first, each attempt in its own worktree; stop at the first verified one and apply it, else escalate with the failure in the next prompt, and park after the last (a tool newer than 0.4.0) |
+| `odd chain <ticket> [--race N] [--cascade]` | do a long task as the outcomes listed in `.odd/chains/<ticket>.md`, in order: each one not yet proven is raced (or cascaded), verified and committed as the checkpoint `odd: <slug> proven`; an unproven one stops the chain, is parked with its reasons, and a rerun continues from it (a tool newer than 0.4.0) |
 | `odd spec <slug> --proof-by CMD [--tries N]` | another agent (in practice a stronger model) writes only the proof in its own worktree; it is brought back and sealed red before any code, retried up to 3 times, then parked (a tool newer than 0.4.0) |
 | `odd gate [--recompute]` | is every changed file inside a verified outcome? (`--recompute` for CI) |
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
@@ -118,6 +119,17 @@ agent prints a final line `odd-cost: <usd>`, else "not reported". On fake agents
 verified, 0.74-0.87 s when it escalates to level 2, 0.42-0.49 s to park after two (5 runs each, three-file repository).
 Not measured: real agents and whether Haiku-then-Sonnet is cheaper than Sonnet alone (BACKLOG item 2). Details:
 [DESIGN.md](DESIGN.md) section 3c.
+
+**Long tasks as a chain.** Split a ticket into small outcomes (`odd new` each, proofs written), list their slugs in
+order in `.odd/chains/<ticket>.md`, and run `odd chain <ticket>` (`--race N`, or `--cascade` to use the agents as
+levels). Each outcome is attempted in worktrees as race or cascade would, verified again in your tree, and committed
+as its own checkpoint `odd: <slug> proven`; the next one starts from that commit. When one cannot be proven the chain
+stops, the tree is at the last checkpoint, the outcome is parked with the reasons, and the status lists every outcome
+as proven, parked or not started. Run it again to continue. It refuses to start if your tree has changes outside the
+chain's outcomes and their tests, and it only ever reverses the patch it applied itself. On fake agents, three
+outcomes took 3.9-4.2 s with three checkpoint commits; a chain stopping at the second took 1.7-1.9 s and its resume
+2.8-3.1 s (5 runs each, a repository of six small files). Not measured: real agents, and how much longer an unattended task gets
+with chains than without (BACKLOG item 10). Details: [DESIGN.md](DESIGN.md) section 3e.
 
 **Every requirement covered.** Write the ticket's requirements once, one per line, in
 `.odd/requirements/<ticket>.md` (`R1: ...`, `R2: ...`), and let each outcome name the ones it covers (`covers: R1, R3`,

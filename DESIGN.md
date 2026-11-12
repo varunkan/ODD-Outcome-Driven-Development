@@ -55,6 +55,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
 | `odd cascade <slug> [--agents C1,C2,...] [--race N] [--base REF]` | the agents in order, cheapest first, each level's attempts run and checked as in `race`; the next level only when none is verified, with the failure in its prompt; park after the last (section 3c); needs a tool newer than 0.4.0 | 0 verified attempt applied, 1 parked or the winner left as a patch, 2 could not run |
+| `odd chain <ticket> [--race N] [--cascade] [--agents C1,C2,...] [--base REF]` | the outcomes in `.odd/chains/<ticket>.md` in order: each one without a checkpoint is raced (or cascaded), verified in your tree and committed as `odd: <slug> proven`; the first unproven one is parked and stops the chain, the tree back at the last checkpoint (section 3e); needs a tool newer than 0.4.0 | 0 every outcome proven, 1 an outcome parked, 2 could not run (a dirty tree, an unknown slug, a git failure: rolled back, not parked) |
 | `odd spec <slug> --proof-by CMD [--tries N] [--base REF]` | another agent command (in practice a stronger model) writes only the proof in its own worktree; the test files come back and are sealed red (section 3d); retried, then parked; needs a tool newer than 0.4.0 | 0 proof brought back and sealed, 1 parked or refused (the proof passes in your tree, or did not apply), 2 could not run |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
@@ -224,6 +225,48 @@ tests the outcome rather than something easier to fail (a stronger author, the s
 reviewer reading the proof are the defences). A kill during the author's run leaves your tree untouched (the
 worktree is removed on the next race, cascade or spec); a kill between bringing the proof back and sealing it can
 leave the unsealed test files in your tree. The author can write outside its worktree, as in race.
+
+### 3e. `odd chain`: a long task as a chain of proven outcomes
+
+`odd chain <ticket> [--race N] [--cascade] [--agents C1,C2] [--base REF]` reads `.odd/chains/<ticket>.md`: one outcome
+slug per line, in order (blank lines, `#` comments and a leading `- ` or `* ` are allowed; each slug once; every slug
+must name an outcome file, else exit 2 before any agent runs). It takes the outcomes one at a time:
+
+1. **Already proven** when HEAD's history holds a commit whose subject is exactly `odd: <slug> proven` and no newer
+   `Revert "odd: <slug> proven"` (`_checkpoint()`): skipped, no agent runs.
+2. **Otherwise attempted** by race's machinery (`_race_run()`, the core `odd race` now calls: N attempts, the agents
+   in turn, default as race) or with `--cascade` by cascade's (`_cascade_run()`: the agents as levels, `--race` per
+   level, default 1). Nothing new judges an attempt: `_attempts()`, `_judge()` and `prove()` in each attempt's own
+   working tree under the git directory, as section 3b describes.
+3. **Applied, verified here, checkpointed**: the winner is applied with `_apply()`, verified again in the user's tree
+   with `prove()` (as `odd done` would, recording local evidence through `_verified()`, shared with done), and
+   committed as `odd: <slug> proven` with only these paths: the winner's files, the outcome file, the chain file and
+   the test files the proof names (`proof_runs()`) or its seal holds. A later outcome's red test stays uncommitted, so
+   no checkpoint carries a failing proof of an outcome not yet done.
+4. **An unproven outcome stops the chain**: no attempt verified (or the apply or the check here failed) parks it with
+   `parked: odd chain <ticket> (<date>): attempt 1: <why>; attempt 2: ...`, exit 1, with the next: block of every
+   attempt. If the winner was already applied when something failed, its patch is reversed (`git apply -R`, the same
+   `_patch()`), so the tree is back at the last checkpoint; this also runs on Ctrl-C and SIGTERM. A git failure (the
+   checkpoint commit refused by a hook, say) rolls back the same way but does not park: exit 2, status `stopped`.
+5. **Status**: every run ends with one line per outcome: `proven (<commit>)`, `parked: <reason>`, `stopped: ...` or
+   `not started`.
+
+**Resume**: run the same command again; proven outcomes are skipped by their checkpoint commit and the chain
+continues at the first one without it. A parked outcome in the chain is attempted again (the rerun is the request);
+its `parked:` line goes when it is proven. To skip an outcome, take it out of the chain file.
+
+**The user's work is never at risk**: the chain refuses to start (exit 2) when the tree or index differs from HEAD
+anywhere but the chain file, the chain's outcome files and test files, and it never resets: the only write it undoes
+is the patch it applied. New command and MCP tool `chain`; no new setting (it uses `agents`, `race_timeout`,
+`race_seal`), so it needs a tool newer than 0.4.0.
+
+Limits: a kill with SIGKILL between applying a winner and committing its checkpoint leaves the winner's files
+uncommitted; the next run refuses to start and names them (nothing is lost, nothing is guessed). The checkpoint is
+recognised by its commit subject, so a checkpoint commit squashed or reworded away is attempted again, and an outcome
+whose proof or `in:` was edited after its checkpoint is not re-proven by the chain (`odd gate` and the regression
+guard of section 5b still judge it). Commit hooks of the repository run on every checkpoint. Outcomes run one after
+another; nothing runs two outcomes of one chain in parallel. Measured (fake agents, this machine): see BACKLOG
+item 10.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
@@ -716,6 +759,8 @@ line still loads, and is now counted as one escape against the outcome that carr
 - Within one change a file belongs to one outcome.
 - The regression guard (section 5b) runs an earlier proof only when the change touches a file inside its `in:`; a
   break through any other file is not seen, and deleting the earlier outcome file removes its guard.
+- `odd chain` (section 3e) knows a proven outcome by its checkpoint commit's subject only; a SIGKILL between applying
+  a winner and committing it leaves the winner's files uncommitted (the next run refuses and names them).
 - Changes are measured against the target branch. Work committed directly on it is not seen. A shallow clone is
   "could not run". Editing a merged outcome file puts it back in play.
 - Windows, Git LFS and `autocrlf` are untested. A submodule change needs a skip.

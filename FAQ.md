@@ -215,6 +215,18 @@ with every reason. You put the agents in order; odd does not know prices. Costs 
 prints a line `odd-cost: <usd>` at the end. Under `"strength": "report"` an attempt with a surviving break still counts
 as verified and stops the cascade; use `"enforce"` to escalate on it. Real agents are not measured yet.
 
+**Can an agent work through a long ticket unattended without leaving a mess when it gets stuck?**
+`odd chain <ticket>` (a tool newer than 0.4.0) runs the outcome slugs listed in `.odd/chains/<ticket>.md` in order.
+Each one not yet proven is attempted by your agents in their own git worktrees (as `odd race`, or `odd cascade` with
+`--cascade`), verified in your tree as `odd done` would, and committed as a checkpoint `odd: <slug> proven`. The first
+outcome that cannot be proven stops the chain: it is parked with every attempt's reason, the tree stays at the last
+checkpoint (a winner already applied is reversed), later outcomes are not started, and the status says which are
+proven, parked or not started. Running it again continues at the first outcome without a checkpoint. It refuses to
+start when your tree has changes other than the chain's outcome files and tests, and it never resets your tree. What
+it does not do: run outcomes of one chain in parallel, re-prove an outcome whose proof changed after its checkpoint,
+or survive a SIGKILL between applying and committing without leaving those files for you to look at. Measured only on
+fake agents (DESIGN.md section 3e, BACKLOG item 10).
+
 **Can a stronger model write the proof and a cheaper one the code?**
 Yes: `odd spec <slug> --proof-by "<command>"` (a tool newer than 0.4.0). The command writes only the proof, in its own
 git worktree; odd refuses it if it changed anything but test files or if the proof does not fail before the code, and

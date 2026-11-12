@@ -1790,7 +1790,7 @@ class Adoption(Repo):
                      tool='.odd/odd_mcp.py')
         self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
         self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
-        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec'])
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'chain', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec'])
         self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
         done = r[4]['result']
         self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)
@@ -2896,6 +2896,136 @@ class RegressionGuard(Repo):
         self.write('calc.py', FIXED)
         out = self.ok('gate')
         self.assertNotIn('guard', out)
+
+
+class Chain(Agents):
+    """odd chain <ticket>: the outcomes of .odd/chains/<ticket>.md one at a time, each attempted by race or cascade,
+    verified and committed as a checkpoint; an unproven one parks and stops the chain; a rerun resumes. Fake agents."""
+    SLUGS = ('one', 'two', 'three')
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.bin = tempfile.mkdtemp(prefix='odd-agents-')
+        self.addCleanup(shutil.rmtree, self.bin, True)
+        for s in self.SLUGS:
+            self.write('%s.py' % s, 'def f():\n    return 0\n')
+        self.commit('products')
+        for i, s in enumerate(self.SLUGS, 1):
+            self.ok('new', s, 'A caller of %s.f() receives %d.' % (s, i), '--proof',
+                    '%s -m unittest -q tests.test_%s' % (sys.executable, s), '--in', '%s.py' % s)
+            self.write('tests/test_%s.py' % s, 'import unittest\nfrom %s import f\n\n\nclass T(unittest.TestCase):\n'
+                       '    def test_f(self):\n        self.assertEqual(f(), %d)\n' % (s, i))
+        self.write('.odd/chains/T-1.md', '# the ticket, in order\none\n\n- two\nthree\n')
+
+    def solver(self, name, wrong=()):
+        """A fake agent that solves whichever outcome its prompt names (wrongly for the slugs in `wrong`), and leaves
+        a mark per slug outside its worktree."""
+        body = ''
+        for i, s in enumerate(self.SLUGS, 1):
+            body += ('if grep -qF "Outcome: A caller of %s.f()" "$1"; then touch %s; printf "def f():\\n    return %d\\n" '
+                     '> %s.py; fi\n' % (s, os.path.join(self.bin, '%s-%s.ran' % (name, s)), i + 10 * (s in wrong), s))
+        return self.agent(name, body)
+
+    def ran(self, name, slug):
+        return os.path.exists(os.path.join(self.bin, '%s-%s.ran' % (name, slug)))
+
+    def use(self, agents):
+        self.config(agents)
+        self.git('add', '.odd/config.json')
+        self.git('commit', '-qm', 'config', '--', '.odd/config.json')
+
+    def subjects(self):
+        return self.git('log', '--format=%s').splitlines()
+
+    def test_three_outcomes_are_proven_with_one_checkpoint_commit_each(self):
+        self.use([self.solver('good')])
+        out = self.ok('chain', 'T-1', '--race', '1')
+        self.assertEqual(self.subjects()[:3], ['odd: three proven', 'odd: two proven', 'odd: one proven'], out)
+        for i, s in enumerate(self.SLUGS, 1):
+            self.assertEqual(self.read('%s.py' % s), 'def f():\n    return %d\n' % i)
+            self.assertRegex(out, r'(?m)^\s+%s\s+proven \([0-9a-f]{7}' % s, out)
+        self.assertIn('tests/test_one.py', self.git('show', '--name-only', '--format=', 'HEAD~2'))
+        self.assertNotIn('tests/test_two.py', self.git('show', '--name-only', '--format=', 'HEAD~2'),
+                         "a later outcome's red proof went into an earlier checkpoint")
+        self.assertEqual(self.git('status', '--porcelain'), '', 'everything the chain proved is committed')
+        self.no_worktrees_left()
+
+    def test_a_failing_middle_outcome_stops_parks_and_a_rerun_resumes(self):
+        self.use([self.solver('bad', wrong=('two',))])
+        out = self.no('chain', 'T-1', '--race', '1')
+        self.assertEqual(self.subjects()[0], 'odd: one proven', out)
+        self.assertNotIn('odd: two proven', self.subjects())
+        self.assertEqual(self.read('two.py'), 'def f():\n    return 0\n', 'the unproven attempt reached the tree')
+        self.assertFalse(self.ran('bad', 'three'), 'the chain went past an unproven outcome')
+        self.assertRegex(self.read('.odd/outcomes/two.md'), r'(?m)^parked: odd chain T-1 .*attempt 1: the proof fails')
+        self.assertRegex(out, r'(?m)^\s+one\s+proven', out)
+        self.assertRegex(out, r'(?m)^\s+two\s+parked', out)
+        self.assertRegex(out, r'(?m)^\s+three\s+not started', out)
+        self.assertIn('rerun: ', out)
+        self.no_worktrees_left()
+        self.use([self.solver('bad', wrong=('two',)), self.solver('good')])
+        os.remove(os.path.join(self.bin, 'bad-one.ran'))
+        out = self.ok('chain', 'T-1', '--cascade')
+        self.assertFalse(self.ran('bad', 'one'), 'a proven outcome was attempted again')
+        self.assertFalse(self.ran('good', 'three'), 'cascade escalated past a verified level')
+        self.assertEqual(self.subjects()[:3], ['odd: three proven', 'odd: two proven', 'config'], out)
+        self.assertNotIn('parked', self.read('.odd/outcomes/two.md'))
+        self.assertEqual(self.read('two.py'), 'def f():\n    return 2\n')
+        self.assertEqual(self.git('status', '--porcelain'), '')
+
+    def test_a_reverted_checkpoint_is_proven_again(self):
+        self.use([self.solver('good')])
+        self.ok('chain', 'T-1', '--race', '1')
+        self.git('commit', '-q', '--allow-empty', '-m', 'notes on odd: two proven')
+        self.git('revert', '--no-edit', 'HEAD~1')
+        self.assertEqual(self.read('three.py'), 'def f():\n    return 0\n')
+        self.git('checkout', 'HEAD~2', '--', '.odd/outcomes/three.md', 'tests/test_three.py')  # the revert took them too
+        os.remove(os.path.join(self.bin, 'good-two.ran'))
+        out = self.ok('chain', 'T-1', '--race', '1')
+        self.assertFalse(self.ran('good', 'two'), 'a commit merely mentioning a checkpoint counted against it')
+        self.assertEqual(self.subjects()[0], 'odd: three proven', out)
+        self.assertEqual(self.read('three.py'), 'def f():\n    return 3\n')
+
+    def test_a_checkpoint_that_cannot_be_committed_rolls_the_tree_back(self):
+        self.use([self.solver('good')])
+        hook = self.path('.git/hooks/pre-commit')
+        self.write('.git/hooks/pre-commit', '#!/bin/sh\ngit diff --cached --name-only | grep -qx two.py && exit 1\nexit 0\n',
+                   mode=0o755)
+        out = self.no('chain', 'T-1', '--race', '1', code=2)
+        self.assertTrue(os.path.exists(hook))
+        self.assertEqual(self.subjects()[0], 'odd: one proven', out)
+        self.assertEqual(self.read('two.py'), 'def f():\n    return 0\n', 'not rolled back to the last checkpoint')
+        self.assertEqual(self.read('tests/test_two.py').count('assertEqual'), 1, 'the proof was lost')
+        self.assertNotIn('parked', self.read('.odd/outcomes/two.md'))
+        self.assertFalse(self.ran('good', 'three'))
+        self.assertRegex(out, r'(?m)^\s+two\s+stopped', out)
+
+    def test_it_refuses_a_tree_with_changes_outside_the_chain(self):
+        self.use([self.solver('good')])
+        self.write('README.md', 'my unsaved work\n')
+        out = self.no('chain', 'T-1', code=2)
+        self.assertIn('README.md', out)
+        self.assertFalse(self.ran('good', 'one'))
+        self.assertEqual(self.read('README.md'), 'my unsaved work\n')
+        self.assertEqual(self.subjects()[0], 'config')
+
+    def test_a_missing_chain_or_outcome_cannot_run(self):
+        self.use([self.solver('good')])
+        self.assertIn('.odd/chains/T-2.md', self.no('chain', 'T-2', code=2))
+        self.write('.odd/chains/T-1.md', 'one\nnope\n')
+        self.assertIn('nope', self.no('chain', 'T-1', code=2))
+        self.assertFalse(self.ran('good', 'one'))
+
+    def test_the_mcp_tool_runs_the_same_command(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('odd_mcp_for_test', MCP)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        argv = mod.argv_for('chain', {'ticket': 'T-1', 'race': '1', 'cascade': True})
+        self.assertEqual(argv, ['chain', '--race', '1', '--cascade', '--', 'T-1'])
+        self.use([self.solver('good')])
+        self.ok(*argv)
+        self.assertEqual(self.subjects()[0], 'odd: three proven')
 
 
 if __name__ == '__main__':

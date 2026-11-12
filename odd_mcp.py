@@ -22,7 +22,7 @@ MEANING = {0: 'pass', 1: 'fail / not shown', 2: 'could not run'}
 S, B = {'type': 'string'}, {'type': 'boolean'}
 SLUG = ('slug', S, 'the outcome, as named in .odd/outcomes/<slug>.md')
 BASE = ('base', S, 'measure from this revision instead of the target branch')
-POSITIONAL = ('slug', 'outcome', 'reason', 'what', 'question')
+POSITIONAL = ('slug', 'ticket', 'outcome', 'reason', 'what', 'question')
 TOOLS = (  # name, description, arguments (name, schema, description), the required ones
     ('new', 'State an outcome before the code: writes .odd/outcomes/<slug>.md. proof "auto" picks a narrow command '
             'from the test runner the repository uses and says what it detected.',
@@ -51,6 +51,14 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
                 'no attempt is verified; park the outcome with every reason after the last.',
      [SLUG, ('agents', S, 'agent commands, cheapest first, comma-separated (default: "agents" in .odd/config.json)'),
       ('race', S, 'attempts per level in parallel, as a number (default 1)'), BASE], ('slug',)),
+    ('chain', 'Do a long task as a chain of proven outcomes: .odd/chains/<ticket>.md lists outcome slugs in order; each '
+              'one not yet proven is attempted as race (or cascade) would, verified, and committed as the checkpoint '
+              '"odd: <slug> proven". An unproven one stops the chain, the tree is back at the last checkpoint and the '
+              'outcome is parked with the reasons; calling it again continues from the first unproven outcome.',
+     [('ticket', S, 'the chain, as named in .odd/chains/<ticket>.md'),
+      ('race', S, 'attempts per outcome in parallel, as a number (with cascade: per level, default 1)'),
+      ('cascade', B, 'attempt each outcome with the agents in order, cheapest first, as cascade does'),
+      ('agents', S, 'agent commands, comma-separated (default: "agents" in .odd/config.json)'), BASE], ('ticket',)),
     ('spec', 'Have another agent (in practice a stronger model) write only the proof, in its own git worktree; the '
              'test files come back and are sealed red before any code; retried, then parked, if the proof does not '
              'fail first.',

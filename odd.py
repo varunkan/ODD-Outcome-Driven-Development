@@ -12,6 +12,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd done <slug> [--base REF]                            exit 0 verified, 1 not shown, 2 could not run
   odd race <slug> [--n N] [--agent CMD] [--base REF]      N agent attempts in worktrees; the proof picks the winner
   odd cascade <slug> [--agents C1,C2] [--race N]          agents in order, cheapest first; escalate until one is proven
+  odd chain <ticket> [--race N] [--cascade]               .odd/chains/<ticket>.md: each outcome proven, checkpointed
   odd spec <slug> --proof-by CMD [--tries N]              another agent writes only the proof; sealed red first
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
@@ -1483,9 +1484,9 @@ def next_block(items, rerun):
 def _rerun(a):
     """The command line of `a` (parsed arguments of done, race or cascade), to paste: odd, the command, the slug, then
     every option that was given."""
-    opts = ['--%s %s' % (k.rstrip('_').replace('_', '-'), shlex.quote(str(v))) for k, v in sorted(vars(a).items())
-            if k not in ('cmd', 'slug') and v is not None]
-    return ' '.join([ODD, a.cmd, shlex.quote(a.slug)] + opts)
+    opts = [('--%s %s' % (k.rstrip('_').replace('_', '-'), shlex.quote(str(v)))).replace(' True', '')
+            for k, v in sorted(vars(a).items()) if k not in ('cmd', 'slug', 'ticket') and v not in (None, False)]
+    return ' '.join([ODD, a.cmd, shlex.quote(getattr(a, 'slug', None) or a.ticket)] + opts)
 
 
 def _indent(text):
@@ -1830,6 +1831,16 @@ def prove(root, o, s, say=lambda s: None):
     return verify(root, cfg, o, base, changed_files(root, base), say)
 
 
+def _verified(root, o, s, res):
+    """What a verified outcome leaves: its "parked:" line gone, and the local evidence the gate reads. Shared by done
+    and chain."""
+    if o.parked:
+        del o.f['parked']
+        o.save()
+    h, tests = content_hash(root, s['cfg'], o, changed_files(root, s['base']))  # read again: a proof may write files
+    record(root, o.slug, ok=True, hash=h, tests=tests, **dict(res, **_kind(o)))
+
+
 def cmd_done(a, root):
     o, s = Outcome.load(root, a.slug), survey(root, a.base)
     cfg, base = s['cfg'], s['base']
@@ -1838,11 +1849,7 @@ def cmd_done(a, root):
     except Fail as e:
         record(root, a.slug, ok=False, why=str(e)[:300], **_kind(o))
         raise Fail('%s\n%s' % (e, next_block(e.items, _rerun(a))) if e.items else e, e.items)  # no item: rerunning fails alike
-    if o.parked:
-        del o.f['parked']
-        o.save()
-    h, tests = content_hash(root, cfg, o, changed_files(root, base))  # read again: a proof may write files of its own
-    record(root, a.slug, ok=True, hash=h, tests=tests, **dict(res, **_kind(o)))
+    _verified(root, o, s, res)
     print('%s: verified. %s' % (a.slug, _describe(o, res)))
     code, lines = gate(root, a.base)
     print('\n'.join(['', 'the change as a whole:'] + lines))
@@ -2200,7 +2207,7 @@ def _patch(root, patch, path, apply=True, reverse=False):
     return (r.stderr or r.stdout).strip()[:300] if r is not None and r.returncode != 0 else ''
 
 
-def _apply(root, o, head, w, patch, keep):
+def _apply(root, o, head, w, patch, keep, hint=True):
     """Apply the verified winner's patch to the user's working tree, only when nothing inside the boundary changed
     there; otherwise leave it as a patch (Fail)."""
     path = os.path.join(keep, 'winner.patch')
@@ -2212,8 +2219,10 @@ def _apply(root, o, head, w, patch, keep):
                    % (o.get('in'), ', '.join(mine[:6]), path, shlex.quote(path), ODD, o.slug))
     if err:
         raise Fail('not applied (git apply: %s), so the winner was written as a patch: %s' % (err, path))
-    print('applied to your working tree: %s\nnext: %s done %s, then %s gate (the attempt was verified in its worktree; '
-          'done records it here)' % (', '.join(w['delta'][:8]) or 'nothing', ODD, o.slug, ODD))
+    print('applied to your working tree: %s' % (', '.join(w['delta'][:8]) or 'nothing') + (
+        '\nnext: %s done %s, then %s gate (the attempt was verified in its worktree; done records it here)'
+        % (ODD, o.slug, ODD) if hint else ''))
+    return path
 
 
 def _agents(cfg, given, what):
@@ -2230,13 +2239,18 @@ def _none_verified(msg, attempts, a):
     return Fail('%s\n%s' % (msg, next_block(items, _rerun(a))), items)
 
 
-def cmd_race(a, root):
-    cfg = load_config(root)
-    agents = _agents(cfg, [a.agent] if a.agent else cfg['agents'], 'race')
-    n = a.n if a.n is not None else (len(agents) if len(agents) > 1 else 3)
+def _race_n(agents, n, flag):
+    """How many attempts: `n` as given, else one per configured agent, or 3 for one agent."""
+    n = n if n is not None else (len(agents) if len(agents) > 1 else 3)
     if not 1 <= n <= 32:
-        raise CouldNotRun('--n must be between 1 and 32')
-    o, head, base, fixed = _race_start(root, cfg, a.slug, a.base)
+        raise CouldNotRun('%s must be between 1 and 32' % flag)
+    return n
+
+
+def _race_run(root, cfg, slug, base_arg, agents, n):
+    """One race: n attempts (the agents in turn), judged and ranked, the table printed; nothing applied. Shared by race
+    and chain. Returns (o, head, attempts, ranked, the winner's patch, keep)."""
+    o, head, base, fixed = _race_start(root, cfg, slug, base_arg)
     keep = _keep(root, 'race', o.slug)
     print('%s race %s: %d attempt(s) from %s, agents in parallel; each verified as %s done would, in its own worktree'
           % (ODD, o.slug, n, head[:10], ODD))
@@ -2246,6 +2260,13 @@ def cmd_race(a, root):
     _table(attempts, ranked)
     print('setup and clean-up: %s s per attempt (worktree, copies, start commit, removal); prompts and agent logs: %s'
           % (round(overhead / n, 2), keep))
+    return o, head, attempts, ranked, patch, keep
+
+
+def cmd_race(a, root):
+    cfg = load_config(root)
+    agents = _agents(cfg, [a.agent] if a.agent else cfg['agents'], 'race')
+    o, head, attempts, ranked, patch, keep = _race_run(root, cfg, a.slug, a.base, agents, _race_n(agents, a.n, '--n'))
     if not ranked:
         raise _none_verified('no attempt was verified; each one\'s reason is in the table above', attempts, a)
     print('winner: attempt %s, %s' % (ranked[0]['name'], _why_won(ranked)))
@@ -2279,13 +2300,11 @@ def _short(cmd, width=44):
     return cmd if len(cmd) <= width else cmd[:width // 2 - 2] + '...' + cmd[-(width // 2 - 1):]
 
 
-def cmd_cascade(a, root):
-    cfg = load_config(root)
-    levels = _agents(cfg, [c for c in a.agents.split(',') if c.strip()] if a.agents else cfg['agents'], 'cascade')
-    n = a.race if a.race is not None else 1
-    if not 1 <= n <= 32:
-        raise CouldNotRun('--race must be between 1 and 32')
-    o, head, base, fixed = _race_start(root, cfg, a.slug, a.base)
+def _cascade_run(root, cfg, slug, base_arg, levels, n):
+    """One cascade: the levels in order until one has a verified attempt, the table and cascade.json written; nothing
+    applied or parked. Shared by cascade and chain. Returns (o, head, attempts, ranked, the winner's patch, keep,
+    the path of cascade.json)."""
+    o, head, base, fixed = _race_start(root, cfg, slug, base_arg)
     keep = _keep(root, 'cascade', o.slug)
     print('%s cascade %s: %d level(s), %d attempt(s) per level from %s; the next level runs only when no attempt at this '
           'one is verified as %s done would' % (ODD, o.slug, len(levels), n, head[:10], ODD))
@@ -2312,6 +2331,20 @@ def cmd_cascade(a, root):
     record_path = os.path.join(keep, 'cascade.json')
     write_json(record_path, {'slug': o.slug, 'head': head, 'levels': levels, 'attempts': [
         {k: at.get(k) for k in ('name', 'cmd', 'why', 'detail', 'items', 'lines', 'agent_s', 'verify_s', 'cost')} for at in history]})
+    return o, head, history, ranked, patch, keep, record_path
+
+
+def _levels(cfg, agents):
+    return _agents(cfg, [c for c in agents.split(',') if c.strip()] if agents else cfg['agents'], 'cascade')
+
+
+def cmd_cascade(a, root):
+    cfg = load_config(root)
+    levels = _levels(cfg, a.agents)
+    n = a.race if a.race is not None else 1
+    if not 1 <= n <= 32:
+        raise CouldNotRun('--race must be between 1 and 32')
+    o, head, history, ranked, patch, keep, record_path = _cascade_run(root, cfg, a.slug, a.base, levels, n)
     if not ranked:
         o.f['parked'] = ' '.join(('odd cascade: no level verified (%s): %s' % (now()[:10], '; '.join(
             'level %s (%s): %s' % (at['name'], _short(at['cmd']), at['why']) for at in history))).split())
@@ -2321,6 +2354,127 @@ def cmd_cascade(a, root):
                              '"parked:" line.' % (o.slug, o.rel, record_path), history, a)
     print('verified at level %s: %s' % (ranked[0]['name'].split('.')[0], _why_won(ranked)))
     _apply(root, o, head, ranked[0], patch, keep)
+
+
+
+# ---------------------------------------------------------------- chain: a long task as a sequence of proven outcomes
+
+CHECKPOINT = 'odd: %s proven'
+
+
+def _chain(root, ticket):
+    """(the chain file's path relative to root, its slugs in order): .odd/chains/<ticket>.md holds one outcome slug
+    per line; blank lines, # comments and a leading "- " or "* " are allowed. Every slug must name an outcome."""
+    rel = '.odd/chains/%s.md' % ticket
+    if '/' in ticket or not os.path.isfile(os.path.join(root, rel)):
+        raise CouldNotRun('no chain %s: write %s with one outcome slug per line, in order' % (ticket, rel))
+    slugs = [re.sub(r'^[-*]\s+', '', line.strip()) for line in read_text(os.path.join(root, rel)).splitlines()]
+    slugs = [x for x in slugs if x and not x.startswith('#')]
+    if not slugs or len(set(slugs)) != len(slugs):
+        raise CouldNotRun('%s must list each outcome slug once, one per line' % rel)
+    for x in slugs:
+        try:
+            Outcome.load(root, x)
+        except Fail as e:
+            raise CouldNotRun('%s: %s' % (rel, e))
+    return rel, slugs
+
+
+def _checkpoint(root, slug):
+    """The short hash of the newest commit in HEAD's history whose subject is exactly "odd: <slug> proven", or None,
+    also when a newer commit reverts it (git revert's subject: Revert "odd: <slug> proven")."""
+    want = CHECKPOINT % slug
+    for line in git(root, 'log', '--format=%h %s', '-F', '--grep=' + want, 'HEAD').splitlines():
+        h, _, subject = line.partition(' ')
+        if subject in (want, 'Revert "%s"' % want):
+            return h if subject == want else None
+    return None
+
+
+def _dirty(root):
+    """Every path that differs from HEAD in the working tree or the index, plus untracked files."""
+    return set(zlist(root, *DIFF, '--name-only', 'HEAD')) | set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z'))
+
+
+def _chain_step(root, cfg, a, slug, agents, n, rel):
+    """One outcome of a chain: race (or cascade) it, apply the winner, verify it here as done would, and commit the
+    checkpoint: the winner's files, the outcome file, the chain file and the test files its proof names or its seal
+    holds. Any failure after the winner was applied reverses the winner's patch, so the tree is back at the last
+    checkpoint with the user's other files as they were."""
+    if a.cascade:
+        o, head, attempts, ranked, patch, keep, _ = _cascade_run(root, cfg, slug, a.base, agents, n)
+    else:
+        o, head, attempts, ranked, patch, keep = _race_run(root, cfg, slug, a.base, agents, n)
+    if not ranked:
+        e = _none_verified('no attempt at %s was verified' % slug, attempts, a)
+        e.why = '; '.join('attempt %s: %s' % (at['name'], at['why']) for at in attempts)
+        raise e
+    path = _apply(root, o, head, ranked[0], patch, keep, hint=False)
+    try:
+        s = survey(root, a.base)
+        res = prove(root, o, s)
+        _verified(root, o, s, res)
+        sealed = [e.rsplit('@', 1)[0] for e in o.get('sealed').split(', ')[1:]] if o.get('sealed') else []
+        dirty = sorted(_dirty(root))
+        paths = sorted(set(dirty) & (set(ranked[0]['delta']) | {o.rel, rel} | set(sealed) |
+                                     set(proof_runs(o.get('proof'), dirty))))
+        if paths:
+            git(root, 'add', '--', *paths)
+        git(root, 'commit', '-q', '--only', '--allow-empty', '-m', CHECKPOINT % slug, '--', *paths)
+    except BaseException:
+        err = _patch(root, patch, path, reverse=True)
+        if err:
+            print('odd: the rollback failed (git apply -R: %s); the winner\'s patch is %s' % (err, path), file=sys.stderr)
+        raise
+    print('%s: verified and committed as the checkpoint %s. %s' % (slug, rev(root, 'HEAD')[:7], _describe(o, res)))
+
+
+def cmd_chain(a, root):
+    cfg = load_config(root)
+    rel, slugs = _chain(root, a.ticket)
+    if a.cascade:
+        agents, n = _levels(cfg, a.agents), a.race if a.race is not None else 1
+        _race_n(agents, n, '--race')
+    else:
+        agents = _agents(cfg, [c for c in a.agents.split(',') if c.strip()] if a.agents else cfg['agents'], 'chain')
+        n = _race_n(agents, a.race, '--race')
+    if not rev(root, 'HEAD'):
+        raise CouldNotRun('each checkpoint is a commit on top of one: commit first')
+    dirty = _dirty(root)
+    other = sorted(dirty - {rel} - {Outcome(root, x).rel for x in slugs} - set(classify(sorted(dirty), cfg)[2]))
+    if other:
+        raise CouldNotRun('your working tree has changes outside the chain\'s outcomes and their proofs: %s%s. Commit or '
+                          'stash them first, so a rollback to the last checkpoint can never touch your work'
+                          % (', '.join(other[:6]), ', ...' if len(other) > 6 else ''))
+    status, stop = collections.OrderedDict(), None
+    for i, slug in enumerate(slugs, 1):
+        cp = _checkpoint(root, slug)
+        if cp or stop:
+            status[slug] = 'proven (%s)' % cp if cp else 'not started'
+            continue
+        print('%s chain %s: outcome %d of %d: %s' % (ODD, a.ticket, i, len(slugs), slug))
+        try:
+            _chain_step(root, cfg, a, slug, agents, n, rel)
+            status[slug] = 'proven (%s)' % rev(root, 'HEAD')[:7]
+        except Fail as e:
+            o = Outcome.load(root, slug)
+            o.f['parked'] = ' '.join(('odd chain %s (%s): %s' % (a.ticket, now()[:10], getattr(e, 'why', '') or
+                                                                str(e).strip().split('\n')[0])).split())
+            o.save()
+            status[slug], stop = 'parked: %s' % o.parked, (slug, e, 'parked; the reasons are in the "parked:" line of ' + o.rel)
+        except CouldNotRun as e:
+            status[slug], stop = 'stopped: could not run: %s' % str(e).split('\n')[0][:160], (slug, e, 'stopped, not parked')
+    wide = max(len(x) for x in slugs)
+    lines = ['chain %s:' % a.ticket] + ['  %s  %s' % (x.ljust(wide), status[x][:200]) for x in slugs]
+    if not stop:
+        print('\n'.join(lines))
+        return 0
+    slug, e, what = stop
+    head = ('the chain stopped at %s, %s. The working tree is at the last checkpoint; a rerun continues from the first '
+            'unproven outcome.' % (slug, what))
+    if isinstance(e, CouldNotRun):
+        raise CouldNotRun('%s\n%s\n%s' % (str(e), head, '\n'.join(lines)))
+    raise Fail('%s\n%s\n%s' % (head, '\n'.join(lines), next_block(e.items, _rerun(a))), e.items)
 
 
 # ---------------------------------------------------------------- spec: another agent writes the proof, sealed red
@@ -2876,6 +3030,13 @@ def main(argv=None):
     s.add_argument('slug')
     s.add_argument('--agents', help='agent commands, cheapest first, comma-separated (default: "agents" in .odd/config.json)')
     s.add_argument('--race', type=int, help='attempts per level, in parallel (default 1)')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('chain')
+    s.add_argument('ticket')
+    s.add_argument('--race', type=int, help='attempts per outcome in parallel (default: as odd race; with --cascade, per '
+                   'level, default 1)')
+    s.add_argument('--cascade', action='store_true', help='attempt each outcome as odd cascade does: the agents in order')
+    s.add_argument('--agents', help='agent commands, comma-separated (default: "agents" in .odd/config.json)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('spec')
     s.add_argument('slug')

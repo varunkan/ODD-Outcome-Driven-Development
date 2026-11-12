@@ -303,6 +303,28 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   and a failed one rolls back alone, so agents can run for hours and leave proven slices.
 - **How:** an ordered outcome list for one ticket; a checkpoint commit per proven outcome; rollback to the last one.
 - **Measure:** size and length of tasks completed unattended, with and without.
+- **Done** in the commit "B10: odd chain ..." (`git log --grep '^B10:'`): `odd chain <ticket> [--race N] [--cascade]
+  [--agents C1,C2] [--base REF]` over `.odd/chains/<ticket>.md` (one slug per line), the MCP tool `chain`; DESIGN.md
+  section 3e. No new attempt machinery: `cmd_race` and `cmd_cascade` were split into `_race_run()` and
+  `_cascade_run()`, which chain calls; the winner goes through `_apply()`, is verified again in the user's tree by
+  `prove()` and recorded by `_verified()` (factored out of `cmd_done`), then committed as `odd: <slug> proven` with
+  only its own files (winner's files, outcome file, chain file, the tests its proof names or its seal holds). An
+  outcome is proven when that commit is in HEAD's history and not reverted. An unproven outcome is parked with each
+  attempt's reason and stops the chain (exit 1); a failure after the apply reverses the winner's patch (`_patch()`);
+  a git failure rolls back without parking (exit 2); the chain refuses to start on changes outside the chain's
+  outcome files and tests. Measured with fake agents (`tests/test_odd.py` class `Chain`, 7 tests; the 6 first
+  written seen RED on the missing command and MCP tool, the revert test added after a mutant of the subject match
+  survived): three outcomes proven with three checkpoint commits and a clean tree; a failing middle outcome keeps
+  the first checkpoint, parks the second ("attempt 1: the proof fails"), leaves the third not started, and the
+  resume (with `--cascade`) skips the first without running an agent and proves the other two; a checkpoint refused
+  by a pre-commit hook rolls the tree back; a dirty file outside the chain refuses the start. Mutants: 19 hand-made
+  of the new code, each turned a `Chain` test red. Wall time, 5 runs each on a repository of six small files: 3.9-4.2
+  s for three outcomes with `--race 1`, 1.7-1.9 s for a chain stopping at the second, 2.8-3.1 s for its resume.
+  Suites: 221 tests and 89 bench tests green. Not measured or not tested: real agents; size and length of tasks
+  completed unattended with and without chains (the backlog's measure); the rollback on Ctrl-C or SIGTERM (by code,
+  `except BaseException`, no test); a SIGKILL between apply and checkpoint (leaves the winner's files uncommitted;
+  the next run refuses and names them); the sealed-file part of the checkpoint paths and the flags in the `rerun:` line
+  (no test pins them).
 
 ### 11. Auto-merge lane
 - **Outcome:** a proven, strong, small change inside its stated files can merge with the reviewer reading only the
