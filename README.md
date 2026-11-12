@@ -34,12 +34,9 @@ the model. Questions and objections: [FAQ](FAQ.md).
 > **Status: early (0.4.0).** The tool passes its own tests (132), including the ways an agent could fake "done". It
 > has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
 >
-> **Does it work better? Not claimed yet.** A same-task comparison is running: 16 tasks with hidden acceptance tests,
-> each done by plain Claude Code, ODD, Spec Kit, BMAD and Superpowers, three times each, on Sonnet and on Haiku. It
-> measures whether the work is really right, whether the agent claims "done" falsely, and the cost and time. The
-> results will be published here with their spread, whatever they show. Early signs from the
-> [pilot](docs/evidence/12-pilot.md), too small to be results: on Sonnet, plain Claude Code got the work right on
-> every task tried, so correctness may not separate the five; on an impossible task, one framework claimed "done".
+> **Does it work better? Measured, and mostly no difference.** In a same-task comparison (16 tasks with hidden
+> acceptance tests, five ways of working, three runs each, two models, 480 runs) every arm, plain Claude Code included, got every doable task right on both Sonnet and Haiku (42 of 42 runs; one Superpowers miss on Sonnet). ODD did not make the code more correct; nothing did. The arms separated only on the impossible tasks with Haiku: ODD and Superpowers claimed "done" falsely in 2 of 6 runs, plain, BMAD and Spec Kit in 3 of 6, and ODD never edited a visible test: a hint, not a finding. ODD cost about a quarter to a half more than plain; BMAD and Spec Kit two to five times as much. These runs used ODD from before the 0.4.0 features.
+> Full results and both grades: [15](docs/evidence/15-comparison.md).
 
 ## The idea
 

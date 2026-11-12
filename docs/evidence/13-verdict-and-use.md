@@ -1,7 +1,7 @@
 # 13. Verdict so far, and where ODD is really useful
 
-*Written 2026-11-12, while the Haiku half of the comparison is still running. Every figure links to its source; what
-is not shown is said to be not shown. This page is updated when the comparison is published.*
+*Written 2026-11-12 and updated when both halves of the comparison finished ([15](15-comparison.md)). Every figure
+links to its source; what is not shown is said to be not shown.*
 
 ## The verdict in one paragraph
 
@@ -53,7 +53,10 @@ to 12, reverts from 2.7 to 1.0 a week ([01](01-method-measured.md)). One project
 - That ODD makes agents produce better code. On Sonnet it did not, and could not, since plain was already right.
 - That ODD prevents false "done" better than the others. Its zero matches plain's zero; the others' one each is too
   few to call a difference.
-- Anything about Haiku, a weaker model: that half is still running.
+- That ODD helps a weaker model get work right: on Haiku every arm, plain included, got all 42 doable runs right. On
+  the impossible tasks ODD and Superpowers claimed "done" falsely in 2 of 6 runs, plain, BMAD and Spec Kit in 3 of
+  6, and ODD never edited a visible test (others 1 to 3 times): a hint in six runs, not a finding
+  ([15](15-comparison.md)).
 - Review time saved, adoption by other teams, or any agent other than Claude Code running the method.
 
 ## Where it is really useful
@@ -62,7 +65,7 @@ to 12, reverts from 2.7 to 1.0 a week ([01](01-method-measured.md)). One project
 |---|---|---|
 | agents open pull requests | a reviewer cannot read every diff; ODD makes "done" checkable at the merge gate | the GitHub Action as a required check |
 | agents run unattended (overnight, background, many at once) | nobody is watching the "done" claims; the gate is the referee and `odd park` gives an honest "blocked" | the Action, plus `odd init` so agents follow the method |
-| cheaper or weaker models | mistakes are commoner, so a proof that must fail without the change catches more (to be tested: the Haiku half) | the same |
+| cheaper or weaker models | on our tasks Haiku got every doable task right without help; where it slipped (claiming "done" on a contradiction) ODD's arm slipped least often, by one run in six | the same |
 | a team that must show what was promised and what was proven | each outcome file is a three-line record, kept in the repository | `odd init` |
 | teams already on Spec Kit, BMAD or Superpowers | they plan; nothing in them proves the code meets the plan | ODD underneath as the last check |
 

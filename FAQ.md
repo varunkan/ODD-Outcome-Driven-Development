@@ -112,12 +112,10 @@ help the agent plan; ODD checks whether the work is actually done. Use them toge
 ## Does it work?
 
 **Is it proven to make agents better?**
-Not yet, and nothing here claims it. A same-task comparison is running: 16 tasks with hidden acceptance tests (bug
-fixes, features, traps, vague requests, impossible ones), each done by plain Claude Code, ODD, Spec Kit, BMAD and
-Superpowers, three times each, on two models. It measures whether the work is really right, whether the agent claims
-"done" falsely (claim precision and silent failures), whether it cheats or stops on tasks that cannot be done (cheat
-and park rates, counted by the routes a script can see), and cost and time. The results will be published whatever they show. The harness is open in
-[`bench/`](bench/SPEC.md).
+No. In a same-task comparison (16 tasks with hidden acceptance tests, five ways of working, three runs each, Sonnet
+and Haiku, 480 runs), every arm, plain Claude Code included, got every doable task right on both Sonnet and Haiku (42 of 42 runs; one Superpowers miss on Sonnet). ODD did not make the code more correct; nothing did. The arms separated only on the impossible tasks with Haiku: ODD and Superpowers claimed "done" falsely in 2 of 6 runs, plain, BMAD and Spec Kit in 3 of 6, and ODD never edited a visible test: a hint, not a finding. ODD cost about a quarter to a half more than plain; BMAD and Spec Kit two to five times as much. These runs used ODD from before the 0.4.0 features. Results, both grades and every reason verbatim:
+[15](docs/evidence/15-comparison.md); the harness is open in [`bench/`](bench/SPEC.md). ODD's case is a "done" that
+can be checked at the merge gate, not better code.
 
 **What has been measured so far?**
 - The tool itself: 82 tests, a design review (23 changes) and a red team (48 confirmed defects, each now a test).

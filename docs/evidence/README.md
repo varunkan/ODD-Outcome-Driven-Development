@@ -18,8 +18,9 @@ documents behind it.
 | 10 | [Design review](10-design-review.md) | What was wrong with the first design of the lean tool, and what changed? | Four critics (tamper, correctness, friction, portability) and one ruling: 23 required changes. |
 | 11 | [Red team of 0.2.0](11-red-team.md) | Can the tool be made to report done, lose work or crash? | Six attackers, each finding reproduced independently; each confirmed one is now a test. |
 | 12 | [Pilot of the comparison](12-pilot.md) | Does the harness measure fairly, and what will the full run cost? | 15 real sessions; harness evidence, not a result. |
-| 13 | [Verdict so far, and where ODD is useful](13-verdict-and-use.md) | Is it worth using, for whom, and what is not shown? | The comparison's Sonnet half, the red team and the source project; updated when the comparison is published. |
+| 13 | [Verdict so far, and where ODD is useful](13-verdict-and-use.md) | Is it worth using, for whom, and what is not shown? | Both halves of the comparison, the red team and the source project. |
 | 14 | [What research says would make ODD more valuable](14-research.md) | Can anything make ODD 100 times better (no), which augmentations have evidence, and what will not help? | Three research angles over about 30 papers with URLs, each claim re-checked by a skeptic pass; numbers from the papers, none yet measured on our harness. |
+| 15 | [The comparison](15-comparison.md) | Does ODD, Spec Kit, BMAD or Superpowers do better than plain Claude Code? | 480 runs on two models, hidden tests, both grades and every reason verbatim. |
 
 ## Data and tools
 

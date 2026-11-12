@@ -54,7 +54,8 @@ GitHub Actions, one step at the end of your test job, made a required check:
 
 On a strong model (Sonnet), plain Claude Code already got 48 of 48 hidden-test tasks right, as did ODD; ODD cost
 about three cents more per task, less than Spec Kit or BMAD ([13](../docs/evidence/13-verdict-and-use.md)). So ODD's
-value shown so far is a "done" that can be checked, not more correct code. A weaker model (Haiku) is being measured.
+value shown so far is a "done" that can be checked, not more correct code. On Haiku too, every arm got every doable
+task right ([15](../docs/evidence/15-comparison.md)).
 What the research literature supports and does not: [14](../docs/evidence/14-research.md).
 
 ## What is not claimed
