@@ -3,7 +3,7 @@
 
 usage: run.py --model M [--tasks ID ...] [--arms ARM ...] [--repeats N] [--max-turns T] [--max-budget-usd B]
               [--timeout SECONDS] [--jobs J] [--out DIR] [--keep] [--dry-run] [--pass-env NAME ...] [--allow-dirty]
-              [--resume] [--odd-commit SHA]
+              [--resume] [--odd-commit SHA] [--strong-model M]
 
 One run, in this order:
   1. a fresh copy of tasks/<id>/repo as <temp>/bench-<random>/s/project, a directory of its own outside any git
@@ -11,7 +11,8 @@ One run, in this order:
   2. arms/<arm>/setup.sh run there (env BENCH_CACHE, ODD_PY, BENCH_PRIVATE), committed as "arm setup"; branch "work"
   3. the agent, prompted with arms/<arm>/prompt.md ({ticket} replaced), a blank line and arms/TAIL.md, in an
      environment built from an allow-list (agent_env) with TMPDIR=<top>/tmp; when it exits its process group is
-     killed, then every process whose cwd or open files are under <top> (Linux /proc)
+     killed, then every process whose cwd or open files are under <top> (Linux /proc). An arm that ships agent.sh
+     runs it instead of the one claude session (run_arm_agent; SPEC.md "An arm-supplied agent")
   4. changed lines measured against the "arm setup" commit, in a scratch index outside the session
   5. two copies made outside the session at once: P, where arms/<arm>/post.sh runs (its exit status is the arm's own
      check), and G, which waits
@@ -51,6 +52,10 @@ import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+# The transcript readers and the claim parser are shared with the helper an arm-supplied agent runs (arm_agent.py).
+from arm_agent import (EMPHASIS, LEADING_MARKS, VERDICT, USAGE_KEYS, events, parse_claim, parse_result,  # noqa: E402,F401
+                       stream_usage, tokens, total, transcripts)
 BENCH_REPO = os.path.dirname(HERE)
 GIT = ['git', '-c', 'user.name=bench', '-c', 'user.email=bench@example.com']
 # What lets a headless session edit files and run commands in its directory. Evidence: RUNNER-NOTES.md.
@@ -60,6 +65,7 @@ PERMISSION_FLAGS = ['--permission-mode', 'acceptEdits', '--permission-prompts', 
 # (RUNNER-NOTES.md); whatever another machine needs is named with --pass-env.
 ENV_ALLOW = ('PATH', 'HOME', 'LANG', 'TERM', 'USER', 'LOGNAME', 'SHELL')  # TMPDIR is always the session's own
 SETUP_TIMEOUT, POST_TIMEOUT, GRADE_TIMEOUT = 900, 300, 180
+ARM_SPAN = 4  # an arm-supplied agent may run this many --timeout spans in all (its sessions run one after another)
 # The result subtypes CLI 2.1.322 printed (exit 1, is_error true, result null) when --max-turns 1 and
 # --max-budget-usd 0.00001 were reached live on 2026-11-11 (RUNNER-NOTES.md). Such a run is graded as it stands.
 CAPS = {'error_max_turns': 'max_turns', 'error_max_budget_usd': 'max_budget'}
@@ -322,33 +328,6 @@ def first_line(path):
 
 # Markdown around the claim line: emphasis (an underscore only at a word's edge, so snake_case in a reason survives),
 # then list, quote and heading marks. A framework that wraps the line must not lose its claim (SPEC.md, the claim).
-EMPHASIS = re.compile(r'[*`]|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])')
-LEADING_MARKS = re.compile(r'^(?:[\s>#+-]+|\d+[.)]\s+)+')
-VERDICT = re.compile(r'RESULT:\s*(NOT\s+DONE|DONE)\s*(?:[:\-\u2013\u2014]\s*(.*))?$', re.IGNORECASE)
-
-
-def parse_claim(final):
-    """(claim, reason): the last line of the final message that contains RESULT:, cleaned of Markdown, must read
-    RESULT: DONE or RESULT: NOT DONE, optionally with ':' or a dash and a reason; anything else is ('none', '')."""
-    line = next((x for x in reversed(final.splitlines()) if 'RESULT:' in x), '')
-    line = LEADING_MARKS.sub('', EMPHASIS.sub('', line)).strip()
-    found = VERDICT.match(line) if line.startswith('RESULT:') else None
-    if not found:
-        return 'none', ''
-    return ('NOT DONE' if found.group(1).upper() != 'DONE' else 'DONE'), (found.group(2) or '').strip()
-
-
-def events(transcript):
-    """The stream-json events of a transcript, in order; lines that are not JSON objects are skipped."""
-    for line in transcript.splitlines():
-        try:
-            event = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(event, dict):
-            yield event
-
-
 def strings(value):
     """Every string in a decoded JSON value: tool inputs, tool results, text, a subagent's events alike."""
     if isinstance(value, str):
@@ -391,54 +370,6 @@ def contamination(transcript, repos, tmp, own_top, cache):
             if m.group(0) != own:
                 return m.group(0)
     return None
-
-
-def parse_result(stdout):
-    """The agent's result object: the whole output, or failing that its last line that is such an object."""
-    for text in [stdout] + stdout.strip().splitlines()[::-1]:
-        try:
-            found = json.loads(text)
-        except ValueError:
-            continue
-        if isinstance(found, list):
-            found = next((o for o in reversed(found) if isinstance(o, dict) and o.get('type') == 'result'), None)
-        if isinstance(found, dict) and ('result' in found or found.get('type') == 'result'):
-            return found
-    return None
-
-
-USAGE_KEYS = ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')
-
-
-def tokens(result):
-    """(input, output, cache read, cache write) tokens. The CLI's "modelUsage" counts subagents too, so it is used
-    when present; "usage" is the main conversation only."""
-    per_model = [m for m in (result.get('modelUsage') or {}).values() if isinstance(m, dict)]
-    if per_model:
-        return [sum(m.get(k) or 0 for m in per_model)
-                for k in ('inputTokens', 'outputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens')]
-    usage = result.get('usage') or {}
-    return [usage.get(k) for k in USAGE_KEYS]
-
-
-def stream_usage(transcript):
-    """(tokens, turns, models) rebuilt from the assistant events of a transcript that has no result event (a session
-    stopped by the timeout), or None when it has no assistant event with usage. The CLI repeats one message's usage
-    on every event it splits that message into, so each message id counts once (its last event). Subagents' messages
-    count too, as modelUsage would; turns count the main conversation's messages only."""
-    last, main = {}, set()
-    for n, event in enumerate(events(transcript)):
-        message = event.get('message') if event.get('type') == 'assistant' else None
-        if not isinstance(message, dict) or not isinstance(message.get('usage'), dict):
-            continue
-        key = message.get('id') or n
-        last[key] = message
-        if not event.get('parent_tool_use_id'):
-            main.add(key)
-    if not last:
-        return None
-    totals = [sum(m['usage'].get(k) or 0 for m in last.values()) for k in USAGE_KEYS]
-    return totals, len(main), sorted({m['model'] for m in last.values() if isinstance(m.get('model'), str)})
 
 
 def context_overflow(result, transcript):
@@ -641,9 +572,12 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
     agent = agent_env(os.environ, cfg['pass_env'], gitconfig, agent_tmp)
     rec['env_passed'] = sorted(agent)
     started = time.time()
-    if cfg['fake']:
+    arm_agent = os.path.join(arm_dir, 'agent.sh')
+    if cfg['fake']:  # no model: the fake replaces an arm-supplied agent too
         fake_env = dict(agent, BENCH_TASK=task['id'], BENCH_ARM=arm, BENCH_REPEAT=str(repeat), BENCH_TASK_DIR=task_dir)
         status, out, err = run(cfg['fake'], session, fake_env, cfg['timeout'], stdin=prompt)
+    elif os.path.isfile(arm_agent):
+        status, out, err = run_arm_agent(cfg, rec, arm_agent, prompt, session, top, agent)
     else:
         cmd = agent_command(prompt, cfg['model'], cfg['max_turns'], cfg['max_budget_usd'], session)
         status, out, err = run(cmd, session, agent, cfg['timeout'])
@@ -656,24 +590,40 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
         rec['warnings'].append('leftover processes not checked: /proc is not available here')
     rec['exit_status'] = status
     rec['transcript'] = '%s.%s.%d.transcript.jsonl' % (task['id'], arm, repeat)
+    summed = total(os.path.join(top, 'transcripts')) if 'sessions' in rec else None
+    texts = dict(transcripts(os.path.join(top, 'transcripts'))) if summed is not None else {}
     with open(os.path.join(cfg['out'], rec['transcript']), 'w', encoding='utf-8') as f:
+        if summed is not None:  # every claude session the arm started, then the arm's own output
+            for name, text in sorted(texts.items()):
+                f.write(json.dumps({'type': 'bench_session', 'file': name}) + '\n' + text)
+            f.write(json.dumps({'type': 'bench_arm_agent_output'}) + '\n')
         f.write(out)
-    # A cap or a context overflow is the arm's own outcome and is graded; anything else without a clean result is
-    # the machine's failure and enters no rate, so a rate limit or a crash never counts against an arm.
     result = parse_result(out) or {}
-    if status is None:
-        rec['stopped_at'] = 'timeout'
-    elif result.get('subtype') in CAPS:
-        rec['stopped_at'] = CAPS[result['subtype']]
-    elif result and context_overflow(result, out):
-        rec['stopped_at'] = 'context'
-    elif not result:
-        errors.append('the agent printed no result object: %s' % (err or out).strip()[-300:])
-    elif result.get('is_error') or str(result.get('subtype') or 'success') != 'success':
-        errors.append('the agent reported %s: %s' % (
-            'an error' if result.get('subtype') in (None, 'success') else result['subtype'],
-            str(result.get('result') or result.get('errors') or '')[:300]))
-    measure(rec, result, out)
+    rec['stopped_at'], error = outcome_of(status, result, out, err)
+    if error:
+        errors.append('the agent ' + error)
+    if summed is not None:
+        for s in summed['sessions']:
+            stopped, error = outcome_of(s['exit'], s['result'] or {}, texts[s['file']], '')
+            if error:
+                errors.append('claude session %s: %s' % (s['file'], error))
+            s.update(stopped_at=stopped, result=None)
+        rec['sessions'] = summed['sessions']
+        if result:  # the figures are run.py's own sum over the transcripts, never the arm's report of them
+            if result.get('total_cost_usd') != summed['total_cost_usd']:
+                rec['warnings'].append('the arm reported a cost of %s; the sum over its sessions is %s'
+                                       % (result.get('total_cost_usd'), summed['total_cost_usd']))
+            result = dict(result, total_cost_usd=summed['total_cost_usd'], num_turns=summed['num_turns'],
+                          duration_ms=summed['duration_ms'], usage=summed['usage'], modelUsage=None)
+        measure(rec, result, read_text(os.path.join(cfg['out'], rec['transcript'])) or '')
+        rec['models'] = summed['models'] or rec['models']
+        missing = [s['file'] for s in summed['sessions'] if s['cost_usd'] is None]
+        if missing:
+            rec['cost_missing_reason'] = ('%d of %d claude session(s) have no result event with a cost (%s): the CLI '
+                                          'prices a session only there' % (len(missing), len(summed['sessions']),
+                                                                           ', '.join(missing)))
+    else:
+        measure(rec, result, out)
     final = result.get('result') if isinstance(result.get('result'), str) else ''
     rec['final'] = final
     rec['claim'], rec['claim_reason'] = parse_claim(final)
@@ -700,6 +650,45 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
                     rec['arm_notes'] = json.load(f)
             except ValueError as e:
                 rec['warnings'].append('post.sh notes unreadable: %s' % e)
+
+
+def outcome_of(status, result, transcript, err):
+    """(stopped_at, error) of one session. A cap or a context overflow is the arm's own outcome and is graded;
+    anything else without a clean result is the machine's failure and enters no rate, so a rate limit or a crash
+    never counts against an arm."""
+    if status is None:
+        return 'timeout', None
+    if result.get('subtype') in CAPS:
+        return CAPS[result['subtype']], None
+    if result and context_overflow(result, transcript):
+        return 'context', None
+    if not result:
+        return None, 'printed no result object: %s' % (err or transcript).strip()[-300:]
+    if result.get('is_error') or str(result.get('subtype') or 'success') != 'success':
+        return None, 'reported %s: %s' % ('an error' if result.get('subtype') in (None, 'success') else result['subtype'],
+                                         str(result.get('result') or result.get('errors') or '')[:300])
+    return None, None
+
+
+def run_arm_agent(cfg, rec, script, prompt, session, top, agent):
+    """An arm-supplied agent (SPEC.md): arms/<arm>/agent.sh, copied with arm_agent.py into <top>/arm (so nothing it
+    runs names the bench's path), run in the session directory with the prompt on stdin and the ARM_* variables;
+    every claude session it starts writes its transcript into <top>/transcripts. Bounded by ARM_SPAN times the
+    timeout, since its sessions run one after another; each session is bounded by the timeout itself."""
+    own, folder = os.path.join(top, 'arm'), os.path.join(top, 'transcripts')
+    os.makedirs(own)
+    os.makedirs(folder)
+    shutil.copy2(script, os.path.join(own, 'agent.sh'))
+    shutil.copy2(os.path.join(HERE, 'arm_agent.py'), os.path.join(own, 'arm_agent.py'))
+    flags = agent_command('', cfg['model'], cfg['max_turns'], cfg['max_budget_usd'], session)
+    assert flags[:2] == ['claude', '-p'] and flags[3] == '--model', flags
+    env = dict(agent, ARM_MODEL=cfg['model'], ARM_STRONG_MODEL=cfg['strong_model'], ARM_MAX_TURNS=str(cfg['max_turns']),
+               ARM_MAX_BUDGET_USD='' if cfg['max_budget_usd'] is None else str(cfg['max_budget_usd']),
+               ARM_TIMEOUT=str(cfg['timeout']), ARM_TRANSCRIPTS=folder, ARM_CLAUDE_FLAGS=json.dumps(flags[5:]),
+               ARM_AGENT_ENV=json.dumps(sorted(agent)), ARM_HELPER=os.path.join(own, 'arm_agent.py'),
+               ARM_ODD_PY=cfg['odd_py'])
+    rec.update(sessions=[], strong_model=cfg['strong_model'], arm_timeout_seconds=cfg['timeout'] * ARM_SPAN)
+    return run(['bash', os.path.join(own, 'agent.sh')], session, env, cfg['timeout'] * ARM_SPAN, stdin=prompt)
 
 
 def measure(rec, result, transcript):
@@ -837,6 +826,8 @@ def main(argv=None):
                     help='off by default: the CLI writes it into the agent\'s system prompt, and agents then cut steps; '
                          'a measured run is bounded by --max-turns and --timeout, which the agent does not see')
     ap.add_argument('--timeout', type=int, default=2400, help='seconds one session may take')
+    ap.add_argument('--strong-model', default='sonnet',
+                    help='the second model an arm-supplied agent may use (ARM_STRONG_MODEL; default: sonnet)')
     ap.add_argument('--jobs', type=int, default=2, help='sessions at a time')
     ap.add_argument('--out', help='results directory (default: results/<UTC timestamp> beside this file)')
     ap.add_argument('--keep', action='store_true', help='keep the session directories')
@@ -904,7 +895,7 @@ def main(argv=None):
            'trees': {t['id']: tree_hash(t['dir']) for t in tasks},
            'versions': {arm: first_line(os.path.join(root, 'arms', arm, 'VERSION')) for arm in arms},
            'model': 'none (fake agent)' if fake else a.model, 'max_turns': a.max_turns, 'max_budget_usd': a.max_budget_usd,
-           'timeout': a.timeout, 'setup_locks': {arm: threading.Lock() for arm in arms}}
+           'timeout': a.timeout, 'strong_model': a.strong_model, 'setup_locks': {arm: threading.Lock() for arm in arms}}
 
     todo = [(task, arm, n) for n in range(1, a.repeats + 1) for task in tasks for arm in arms]
     print('%d run(s): %d task(s) x %d arm(s) x %d repeat(s), %d at a time -> %s'

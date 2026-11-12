@@ -1,7 +1,8 @@
 # The comparison: specification
 
-Purpose: measure, on the same tasks, what each way of working delivers and what it costs. Five arms: plain Claude
-Code, ODD, Spec Kit, BMAD, Superpowers. Results are published whatever they show.
+Purpose: measure, on the same tasks, what each way of working delivers and what it costs. Arms: plain Claude Code,
+ODD, Spec Kit, BMAD, Superpowers, and ODD's 0.4.0 modes (`odd-040`, `odd-race`, `odd-cascade`, `odd-spec`). Results are
+published whatever they show.
 
 ## What is measured, per run (one task, one arm, one repeat)
 
@@ -72,6 +73,23 @@ before `grade` runs. A hidden test that needs the claim reads `claim.json` and n
    working-tree file; `odd_commit` records which. A real run from
    a bench repository with uncommitted changes is refused unless `--allow-dirty` is given; `bench_dirty` records it.
 
+## An arm-supplied agent (`arms/<arm>/agent.sh`)
+
+When an arm ships `agent.sh`, `run.py` runs it (copied with `arm_agent.py` into `<top>/arm`, outside the repository
+and the bench) in the session directory instead of the one `claude -p`, with the same prompt on stdin, the plain
+agent's environment plus: `ARM_MODEL` (`--model`), `ARM_STRONG_MODEL` (`--strong-model`, default `sonnet`),
+`ARM_MAX_TURNS`, `ARM_MAX_BUDGET_USD` (empty when unset), `ARM_TIMEOUT` (seconds per claude session),
+`ARM_TRANSCRIPTS` (each claude session writes its stream-json there), `ARM_CLAUDE_FLAGS` (JSON: the flags after
+`--model` that `run.py` gives plain), `ARM_AGENT_ENV` (JSON: the plain agent's variable names), `ARM_HELPER` and
+`ARM_ODD_PY` (the pinned odd). `python3 "$ARM_HELPER" session --model M` starts one claude session exactly as plain's
+(command line, environment, timeout) and records its transcript; every claude call an arm makes goes through it.
+`agent.sh` ends by printing one result object (`python3 "$ARM_HELPER" summary`: the final message with its RESULT line,
+cost, usage, turns and duration summed). The run's transcript is every session's transcript, then the arm's own
+output; the contamination audit reads all of it. Cost, tokens, turns and models are `run.py`'s own sum over the
+sessions' result events (null cost when any session has none), `sessions` lists each one, and a session that ended
+without a result (not a cap, not a context overflow) makes the run an infrastructure error, not graded. The whole
+agent is bounded by 4 x `--timeout`. With `BENCH_FAKE_AGENT` or `--dry-run` the fake replaces `agent.sh` too.
+
 ## The result record (one JSON file per run)
 
 ```
@@ -90,6 +108,8 @@ models             the model ids that did work
 transcript         file name of the saved stream-json transcript, beside the record
 provenance         {bench_commit, bench_dirty, odd_sha256, odd_commit, task_tree, arm_version}
 env_passed         names of the environment variables the agent received
+sessions           arm-supplied agents only: one entry per claude session (file, model, exit, cost_usd, stopped_at);
+                   with strong_model and arm_timeout_seconds
 ```
 
 ## Layout
@@ -106,6 +126,8 @@ bench/arms/TAIL.md              the ending every arm's prompt gets
 bench/arms/<arm>/setup.sh       run inside the fresh repo copy; installs the framework at project scope; idempotent
 bench/arms/<arm>/prompt.md      the prompt template, without the ending
 bench/arms/<arm>/post.sh        optional: the arm's own check, run in P; its exit status is `arm_check`
+bench/arms/<arm>/agent.sh       optional: an arm-supplied agent, run instead of the one claude session (above)
+bench/arm_agent.py              the helper agent.sh calls: one claude session as plain's, the summed result, odd flows
 bench/arms/<arm>/VERSION        one line: the release or commit setup.sh installs (or "this repository", "none")
 bench/arms/<arm>/NOTES.md       sources for how the framework is installed and started headlessly; its section
                                 "## To state with the results" is printed by report.py

@@ -202,6 +202,7 @@ class OddCommitTest(unittest.TestCase):
         self.repo = os.path.join(self.work, 'repo')
         os.makedirs(os.path.join(self.repo, 'bench'))
         shutil.copy(RUN, os.path.join(self.repo, 'bench', 'run.py'))
+        shutil.copy(os.path.join(os.path.dirname(RUN), 'arm_agent.py'), os.path.join(self.repo, 'bench', 'arm_agent.py'))
         g = ['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com']
         self.shas = []
         for text in ('print("first")\n', 'print("second")\n'):

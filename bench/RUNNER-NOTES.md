@@ -194,3 +194,22 @@ then reported that it "did not run the BMAD workflow's review and spec steps, to
 therefore penalises the arms whose process has more steps. `run.py` passes `--max-budget-usd` only when it is given
 explicitly (default off) and every measured run is bounded by `--max-turns` and `--timeout` alone. Every session sees
 the same token count (`<total_tokens>`), which the CLI shows regardless.
+
+## Arm-supplied agents (`agent.sh`, 2026-11-12)
+
+The `odd-race`, `odd-cascade` and `odd-spec` arms run several claude sessions per run (contract: SPEC.md, "An
+arm-supplied agent"; each arm's flow: its NOTES.md). Fairness holds per claude session: `arm_agent.py session` builds
+the command line from `run.py`'s own `agent_command` (passed as `ARM_CLAUDE_FLAGS`, so `--max-turns`, the permission
+flags, `--no-session-persistence` and any `--plugin-dir` are identical), gives the CLI only the plain agent's
+variables (`ARM_AGENT_ENV`, plus odd's `ODD_ATTEMPT` mark inside a race), kills it at `--timeout`, and appends a
+`bench_session_end` line (model, exit status, stderr tail) to its transcript. `agent.sh` and the helper are copied into
+the session's top, so no command an arm runs, and no odd prompt that quotes an agent command (cascade does), names
+the bench repository. The pinned odd is passed as `ARM_ODD_PY` (in the shared cache, which the audit ignores).
+
+Proven by `bench/tests/test_arm_agent.py` with a fake `claude` on PATH, run.py as for a real model: every session of
+plain and odd-race had the same flags and variable names; costs, turns and tokens summed across sessions; every
+transcript merged; an attempt's peek at `tests_hidden` marked the run contaminated; attempts that crashed made the run
+an infrastructure error; the first session's NOT DONE became the arm's claim with no attempt run; cascade escalated
+to the strong model only after the cheap attempt was not verified; spec had the strong model write the proof. Not
+shown: any arm-supplied agent with the real CLI, real odd race timings under load, or a session killed by the outer
+4 x `--timeout` bound.
