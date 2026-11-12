@@ -77,7 +77,7 @@ DEFAULTS = {
     'checks': [],          # backlog 24: standing project rules, [{"name", "cmd", "in"}], run by every gate, output shown
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class')
 KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
 REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
 HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
@@ -93,7 +93,8 @@ BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
-RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint', 'target')  # what --json says of a verified outcome
+RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint', 'target',
+          'lookalikes')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -1576,6 +1577,49 @@ def _same(path, data):
         return f.read() == data
 
 
+def lookalikes(root, cfg, o, base, targets):
+    """Backlog item 31: every line of a product file (tracked or untracked, not a test or exempt path) that matches the
+    outcome's "class:" pattern and that this change did not touch, as 'path:line': the siblings of the bug it fixes."""
+    try:
+        re.compile(o.get('class'))
+    except re.error as e:
+        raise CouldNotRun('"class:" is not a valid regular expression (%s): %s' % (e, o.get('class')))
+    r = sh(['git', 'grep', '-n', '-I', '-E', '--untracked', '-e', o.get('class'), '--', '.', ':!.odd'], root)
+    if r.returncode not in (0, 1):
+        raise CouldNotRun('git grep could not search for "class: %s": %s' % (o.get('class'), r.stderr.strip()[:200]))
+    out, touched = [], {}
+    for line in r.stdout.splitlines():
+        path, n, _ = line.split(':', 2)
+        if matches(path, cfg['test_globs']) or matches(path, cfg['exempt']):
+            continue
+        if path not in touched:
+            touched[path] = changed_lines(root, base, path) if path in targets else set()
+        if touched[path] is not None and int(n) not in touched[path]:
+            out.append('%s:%s' % (path, n))
+    return out
+
+
+def textual_reads(root, tests, targets):
+    """Backlog item 30: ['<product file> as text (<test file>)'] for each changed test file that names a changed product file
+    inside the boundary as a quoted path, the way a test reads source as text; such a test kills every small break and
+    shows no behaviour. A test that imports the code names a module, not a path."""
+    out = []
+    for t in tests:
+        path = os.path.join(root, t)
+        if not os.path.isfile(path) or os.path.getsize(path) > 2 * 10 ** 6:
+            continue
+        text = read_text(path)
+        for p in targets:
+            if re.search(r'["\'](?:[^"\'\n]*/)?%s["\']' % re.escape(p), text):
+                out.append('%s as text (%s)' % (p, t))
+    return out
+
+
+def _textual(st):
+    return ('the proof reads %s: a test that reads source kills every small break and shows no behaviour, so '
+            'its strength score does not count; test what the code does instead' % ', '.join(st['textual'])) if st and st.get('textual') else ''
+
+
 def weak(cfg, o, res):
     """Under "strength": "enforce" a surviving mutant, or a changed line the proof never ran (ran), is a Fail, also
     for a verification recorded earlier."""
@@ -1594,6 +1638,8 @@ def weak(cfg, o, res):
     if cfg['strength'] != 'enforce':
         return
     st = res.get('strength')
+    if _textual(st):
+        raise Fail(_textual(st) + ' ("strength": "enforce").')
     if st is None:
         raise Fail('verified before the proof\'s strength was measured; run: %s done %s' % (ODD, o.slug))
     if st['unrun']:
@@ -1705,6 +1751,8 @@ def _verify(root, cfg, o, base, changed, say):
     res = {'files': len(targets), 'lines': lines, 'seconds': [s1], 'red_says': '', 'skip': o.skip}
     if aimed is not None:
         res['target'] = aimed
+    if o.get('class'):
+        res['lookalikes'] = lookalikes(root, cfg, o, base, targets)
     if o.get('same') and targets:
         res['same'] = same_behaviour(root, cfg, o, base, targets, say)
     if o.skip and o.bug:
@@ -1760,6 +1808,9 @@ def _verify(root, cfg, o, base, changed, say):
         res['inert'] = inert(root, cfg, o, base, targets, say)
     if cfg['strength'] != 'off':
         res['strength'] = strength(root, cfg, o, base, targets, say, [s1, s2, s3])
+        textual = textual_reads(root, classify(changed, cfg)[2], targets)
+        if textual:
+            res['strength']['textual'] = textual
         weak(cfg, o, res)
     return res
 
@@ -1869,6 +1920,9 @@ def _describe(o, res):
         text += '\n          ' + res['same']
     if res.get('target'):
         text += '\n          target: ' + res['target']
+    if res.get('lookalikes'):
+        text += '\n          class "%s": %d match(es) the change did not touch: %s%s' % (
+            o.get('class'), len(res['lookalikes']), ', '.join(res['lookalikes'][:12]), ', ...' if len(res['lookalikes']) > 12 else '')
     if res.get('checkpoint'):
         text += '\n          verified as its own change (%s, at its checkpoint), and its proof passes at the head' % res['checkpoint']
     ine = res.get('inert')
@@ -1884,6 +1938,7 @@ def _describe(o, res):
             ' (%d of %d sampled)' % (st['mutants'], st['of']) if st['of'] > st['mutants'] else '',
             '; %d could not run' % len(st['unrun']) if st['unrun'] else '', st['seconds'])
         text += '\n          ' + st['stopped'] if st.get('stopped') else ''
+        text += '\n          ' + _textual(st) if _textual(st) else ''
         text += ''.join('\n          survived: ' + w for w in st['survivors'])
         text += ''.join('\n          could not run: ' + w for w in st['unrun'])
         text += '\n          ' + lines_run(st) if lines_run(st) else ''
@@ -1944,6 +1999,8 @@ def _strong(cfg, o):
         why.append('%s: proof strength %d of %d, below "auto_min_strength" %s' % (slug, st['killed'], n, need))
     if st['unrun']:
         why.append('%s: %d small break(s) did not run to completion' % (slug, len(st['unrun'])))
+    if _textual(st):
+        why.append('%s: %s' % (slug, _textual(st)))
     if st.get('not_run'):
         why.append('%s: %s' % (slug, lines_run(st)))
     return why
@@ -1961,6 +2018,7 @@ def lane(root, s, facts, skips, allowed):
         if o['state'] == 'ok':
             why += _strong(cfg, o)
             why += ['%s: steps are owed on the real system (%s)' % (o['slug'], '; '.join(o['owed']))] if o.get('owed') else []
+            why += ['%s: %d look-alike(s) of the bug left untouched' % (o['slug'], len(o['lookalikes']))] if o.get('lookalikes') else []
         elif o['state'] in ('parked', 'asked'):
             why.append('%s is %s' % (o['slug'], 'parked' if o['state'] == 'parked' else 'waiting for an answer'))
     why += ['%s skipped the take-out check' % k.split(' - ', 1)[0] for k in skips]

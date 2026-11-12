@@ -787,6 +787,17 @@ All need a tool newer than 0.4.0 (backlog items 24 to 29, with the evidence, in 
 - **Masked pipes.** `odd new` and `done` refuse a proof that pipes into a stage that succeeds on any input (`tail`,
   `head`, `tee`, `cat`, `sort`, `sed`, `awk`, `wc`, `grep -q .` and the like) without `pipefail`, since the pipe's
   status is that stage's. This closes the `| grep -q .` case section 4 named as not detected.
+- **Text-reading proofs (item 30).** A changed test file that names a changed product file inside the boundary as a
+  quoted path (`open("calc.py")`, `source('src/x.tsx')`) reads source as text: it kills every small break and shows no
+  behaviour. The result says `the proof reads <file> as text (<test>)`, its strength score does not count, the auto
+  lane will not take it, and under `"strength": "enforce"` it fails. A test that imports the code names a module, not
+  a path. Limits: a path built at run time is not seen; a test that names a product file for another reason (a
+  fixture path) is flagged too.
+- **Look-alike bugs (`class:`, item 31).** An outcome may name the defect's pattern, `class: <regex>` (meant for
+  `kind: bug`). `done` lists every line of a product file (tracked or untracked; not tests, exempt paths or `.odd/`)
+  that matches and that the change did not touch: `class "<regex>": N match(es) the change did not touch: path:line,
+  ...`, so the siblings of the bug are in front of the reviewer; the auto lane will not take a change with any.
+  Limits: odd does not judge whether a match is the same defect; an invalid pattern is could not run.
 
 ### 5d. Verification cache and affected guards
 

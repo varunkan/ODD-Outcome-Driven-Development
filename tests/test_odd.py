@@ -4392,5 +4392,43 @@ class MaskedPipe(Repo):
         self.assertIn('hides the proof\'s own exit code', self.no('done', 'hand'))
 
 
+class TextualProof(Repo):
+    """Backlog item 30: a test that reads a changed product file as text kills every mutant and proves no behaviour,
+    so its strength score does not count."""
+    READS = ('import unittest\n\n\nclass T(unittest.TestCase):\n    def test_source(self):\n'
+             '        self.assertIn("a + b", open("calc.py").read())\n')
+
+    def test_a_proof_reading_the_changed_file_as_text_is_named_and_its_strength_does_not_count(self):
+        self.outcome()
+        self.write('tests/test_calc.py', self.READS)
+        self.write('calc.py', FIXED)
+        out = self.ok('done', 'add')
+        self.assertIn('reads calc.py as text (tests/test_calc.py)', out)
+        self.assertIn('does not count', out)
+        self.write('.odd/config.json', json.dumps({'strength': 'enforce'}))
+        self.assertIn('reads calc.py as text', self.no('done', 'add'))
+
+    def test_a_proof_that_imports_the_code_is_not_textual(self):
+        self.outcome()
+        self.solve()
+        self.assertNotIn('as text', self.ok('done', 'add'))
+
+
+class LookAlikes(Repo):
+    """Backlog item 31: a bug fix names the defect's pattern, and done lists every match the change left untouched."""
+
+    def test_untouched_matches_of_the_bug_class_are_listed_and_keep_the_auto_lane_closed(self):
+        self.write('more.py', 'def sub(a, b):\n    return 0\n\n\ndef mul(a, b):\n    return 0\n')
+        self.commit('siblings with the same defect')
+        self.outcome()
+        self.add_line('add', 'kind: bug')
+        self.add_line('add', 'class: return 0$')
+        self.solve()
+        out = self.ok('done', 'add')
+        self.assertIn('class "return 0$": 2 match(es) the change did not touch: more.py:2, more.py:6', out)
+        self.write('.odd/config.json', json.dumps({'auto_lane': True}))
+        self.assertIn('2 look-alike(s) of the bug left untouched', self.ok('gate'))
+
+
 if __name__ == '__main__':
     unittest.main()

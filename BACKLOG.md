@@ -647,12 +647,16 @@ cost to build.
 - **Evidence:** a test asserted a style string read from a component's source; it kills every mutant and proves no
   behaviour.
 - **Outcome:** proof strength marks a test that opens a file inside `in:` as text, and says the score does not count.
+- **Done** in the commit "B30-B31: text-reading proofs and look-alike bugs" (`textual_reads()`; tests `TextualProof`; [DESIGN 5f](DESIGN.md)).
+
 
 ### 31. Look-alike bugs
 - **Evidence:** repeated fix-of-fix entries in one project's fix log (a sibling code path a few lines away had the same
   defect).
 - **Outcome:** `class: <regex>` on a `kind: bug` outcome: `done` lists every match in the tree and which the proof's
   run executed (the execution check), so each is covered or named as excluded.
+- **Done** in the commit "B30-B31: text-reading proofs and look-alike bugs" (`class:`, `lookalikes()`; tests `LookAlikes`; [DESIGN 5f](DESIGN.md)).
+
 
 ### 32. Verification in the background
 - **Evidence:** the owner asking why work kept stopping while a suite of thousands of tests ran for about 20 minutes.
