@@ -178,18 +178,24 @@ first; what it does check, with the sealed test files in place, is the take-out:
 that it showed nothing, and refused (exit 1) when one is there. This applies under `counterfactual: skip` too, where
 the take-out check would not catch it. First, from the command itself: a proof whose every step only prints is
 refused ("it only prints"). A step only prints when it is `echo` or `printf`, or Python code (`python -c`, or a
-`.py` file the command names) that has no `assert`, no `raise`, no call named `exit`, `quit`, `abort`, `fail*`,
-`assert*`, `system`, `exec*` or the like, and imports nothing but the change's own modules and a few inert stdlib
-modules (`sys`, `os`, `json`, `math`, ...). That is the proof that prints a value and turns red only because the
-import of a new file fails. Any other step (a test runner, `-m`, `grep`, `test`, a helper module from the
-repository, any other import) may check something and is never refused; the rule reads one file, not what it
-imports. Then, from the last 20 lines of the proof's own output:
+`.py` file the command names) whose top-level statements are only imports of the change's own modules and a few
+inert stdlib modules (`sys`, `os`, `json`, `math`, ...), `print(...)` calls, calls on those inert modules and
+assignments to names, and in which no expression can fail on purpose: no subscript, no division or modulo, no call
+named `exit`, `quit`, `abort`, `fail*`, `assert*`, `system`, `exec*` or the like, and a call into the change only
+inside `print(...)` or an assignment. That is the proof that prints a value and turns red only because the import of
+a new file fails. Any other step (a test runner, `-m`, `grep`, `test`, a helper module from the repository, any
+other import, an `assert`, an `if`, `1 / (add(2, 3) == 5)`, `{5: 0}[add(2, 3)]`, a bare `calc.selfcheck()`) may
+check something and is never refused; the rule reads one file, not what it imports. A call inside `print(...)` can
+still fail inside the change; the line is drawn there on purpose. A pipe into `grep -q .`, which checks only that
+something printed, is not detected. Then, from the last 20 lines of the proof's own output:
 
-- unittest: `Ran 0 tests`, or `OK (skipped=N)` where N is every test it ran.
-- pytest: `no tests ran`, or a summary with skipped tests and none passed, xpassed or failed.
+- unittest: `Ran 0 tests`, or an `OK (...)` whose skipped plus expected failures is every test it ran
+  (`OK (expected failures=1)`): an expected failure shows nothing either. An unexpected success counts as passing.
+- pytest: `no tests ran`, or a summary with skipped or xfailed tests and none passed, xpassed or failed.
 - jest: `Tests: ... 0 total`, `Tests:` with skipped and none passed, or `No tests found, exiting with code 0`.
 - go test: every package line `[no test files]` or `[no tests to run]` (only when the output is under 20 lines,
-  so no earlier `ok` line can have been cut off).
+  so no earlier `ok` line can have been cut off). A go test that calls `t.Skip` in every test is not detected:
+  without `-v` or `-json`, go prints the same `ok` line for it as for a test that passed.
 - A summary that says the tests took more than a second longer than the whole proof ran: a run did not print it.
 - An early exit 0: a proof that is one command calling `python -m unittest`, `pytest` (or `python -m pytest`) or
   `go test`, and whose output lacks the summary that runner always prints when it finishes (`Ran N tests in`, the
@@ -235,6 +241,19 @@ easiest way to make a proof pass, and the main route models used to cheat on imp
 [docs/evidence/14-research.md](docs/evidence/14-research.md) 2.2). New test files need no reason. A change with no
 outcome (the small-change lane) that edits an existing test needs one now. The reason is text written by the party
 being checked: it makes the edit visible, it does not judge it.
+
+Turning a test off counts as editing it. A file that decides which tests run needs the same reason when it is added
+or changed: a `conftest.py` at any depth or a `pytest.ini` (both count as test files, so they never fall in the
+small-change lane), a changed line inside a pytest section of `pyproject.toml` (`[tool.pytest...`), `setup.cfg`
+(`[tool:pytest]`) or `tox.ini` (`[pytest]`), and a changed line naming `load_tests` in an `__init__.py`. The gate's
+test-files line lists them as "decide which tests run".
+
+A reason that names test files (`test-change: tests/test_keep.py - the old test pinned the bug`) covers only those
+files; another touched test file still fails. A reason that names no test file covers every test edit in the change,
+as before, so older outcome files keep passing; the gate then prints `[names no file, so it covers every test edit:
+<files>]` next to it, and for a named reason `[covers: <files>]`, so a reviewer sees which reason covers which file
+and from which outcome. The named form is the same `test-change:` field, so it needs the same tool version (newer
+than 0.4.0).
 
 **CI is the authority only when** (1) the gate is a required check on the target branch, (2) the tool, its settings
 and the CI configuration cannot change without a person's review, and (3) the agent cannot merge or push to the
@@ -386,5 +405,13 @@ line still loads, and is now counted as one escape against the outcome that carr
 - Windows, Git LFS and `autocrlf` are untested. A submodule change needs a skip.
 - Only Claude Code has been run with it. The other tools' paths rest on their documentation.
 - The empty-proof check reads output, so a proof that prints a convincing summary and exits 0 by itself gets past
-  it; it covers four runners, conservatively (section 4). `test-change:` takes any reason.
+  it; it covers four runners, conservatively (section 4). A go test that skips every test and a `| grep -q .` after a
+  print are accepted though they check nothing; a print-only proof whose printed call into the change asserts inside
+  the change is refused though it can check (section 4). `test-change:` takes any reason; one that names no
+  test file covers every test edit in the change, whichever outcome it sits in (the gate shows it).
+- Turning tests off is seen only through the files named in section 5. A deletion alone in a pytest section, a
+  `-k`/`--deselect` passed in the proof command itself (that is in the diff as proof text), a `PYTEST_ADDOPTS`
+  environment variable, a plugin installed outside the repository, a `load_tests` in a test module, or test
+  selection written in a product file are not detected. The ids collected at the base and at the head are not
+  compared.
 - Every effectiveness figure is unmeasured until the comparison runs.

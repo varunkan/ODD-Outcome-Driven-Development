@@ -103,8 +103,8 @@ one per changed line first and spread across files, one at a time, and names eac
 changed line the proof does not depend on. The score reads "proof strength k of n" (k breaks caught of n), never
 "verified". For a Python proof (`python -m unittest`, `pytest`, a `.py` file) it also runs the proof once under a
 stdlib trace hook and names each changed line the proof never executed ("not run by the proof: calc.py:6"); for other
-languages it says "not measured". A proof that only prints (`echo`, or a Python script with no assert, no raise and
-no exit code of its own) is refused. All of this is reported by default and can fail the gate (`"strength":
+languages it says "not measured". A proof that only prints (`echo`, or a Python script of imports, `print(...)`
+and plain assignments, with no assert, raise, exit, subscript or division) is refused. All of this is reported by default and can fail the gate (`"strength":
 "enforce"` in `.odd/config.json`, or `"off"`); no new setting or field, so the v0.4.0 Action reads the same files and
 measures the 0.4.0 way.
 
@@ -126,8 +126,11 @@ needs the proof red again, so take the product change out first. Unsealed outcom
 
 **Changed tests and empty proofs fail closed.** A change that edits or deletes a test file that existed at the base
 fails `odd done` and the gate unless an outcome in the change says why with `test-change: <reason>`; the gate and the
-review comment print the reason. New test files need none. A proof that exits 0 but ran no test, skipped every test
-it ran, or stopped before its runner printed its summary (`sys.exit(0)` at import, an empty suite, `go test` with no
+review comment print the reason; a reason that names test files (`test-change: tests/test_keep.py - ...`) covers
+only those, and the gate shows which reason covers which file. A new or changed `conftest.py` or `pytest.ini`, a
+changed pytest section in `pyproject.toml`/`setup.cfg`/`tox.ini` or a changed `load_tests` needs a reason too:
+turning a test off is editing it. Other new test files need none. A proof that exits 0 but ran no test, skipped every test
+it ran (or only had expected failures: xfail, `expectedFailure`), or stopped before its runner printed its summary (`sys.exit(0)` at import, an empty suite, `go test` with no
 test files) is refused, for unittest, pytest, jest and go test, read from the proof's own output and deliberately
 conservative ([DESIGN](DESIGN.md) section 4 lists what is not detected). On seeded fixtures of the systemic hacks,
 0.4.0 accepted 6 of 8 and this version refuses all 8; three honest fixes still pass.

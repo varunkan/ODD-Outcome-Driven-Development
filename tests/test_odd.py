@@ -578,6 +578,16 @@ class ProofStrength(Repo):
                                     'print(helper.check(total(2, 3)))\n')
         self.ok('done', 'price')  # it imports a helper from the repository: not cheap to tell, never refused
 
+    def test_print_only_refuses_only_code_that_cannot_fail(self):
+        po = lambda code: oddmod.prints_only(self.dir, '%s -c "%s"' % (sys.executable, code), ['calc.py'])  # noqa: E731
+        for code in ('from calc import add; print(add(2, 3))', 'import calc; x = calc.add(2, 3); print(x)',
+                     'import sys; sys.stdout.write(str(1))'):
+            self.assertTrue(po(code), code)
+        for code in ('from calc import add; 1 / (add(2, 3) == 5)', 'from calc import add; {5: 0}[add(2, 3)]',
+                     'from calc import add; print(1 / (add(2, 3) == 5))', 'import calc; calc.selfcheck()',
+                     'from calc import add; print({5: 0}[add(2, 3)])', 'import calc; x = calc.add(2, 3) % 2'):
+            self.assertFalse(po(code), code)
+
     def test_mutations_skip_strings_and_comments_in_a_fixed_order(self):
         text = ('x = a < b and c  # a > b\n'
                 's = "1 + 2"\n'
@@ -652,6 +662,42 @@ class FailClosed(Repo):
         self.add_line('add', 'counterfactual: skip - a refactor')
         self.assertIn('skipped every test it ran', self.no('done', 'add'))
 
+    def test_a_file_that_decides_which_tests_run_needs_a_reason(self):
+        self._old_test()
+        self.write('conftest.py', 'def pytest_collection_modifyitems(items):\n    items[:] = []\n')
+        for out in (self.no('done', 'add'), self.no('gate')):
+            self.assertIn('conftest.py', out)
+            self.assertIn('test-change: <reason>', out)
+        self.assertNotIn('small-change lane', self.no('gate'))
+        os.remove(self.path('conftest.py'))
+        self.write('pyproject.toml', '[project]\nname = "x"\n\n[tool.pytest.ini_options]\naddopts = "-k not keep"\n')
+        self.assertIn('pyproject.toml', self.no('done', 'add'))
+        self.write('pyproject.toml', '[project]\nname = "x"\n')  # no pytest section: an ordinary file
+        self.ok('done', 'add')
+        os.remove(self.path('pyproject.toml'))
+        self.write('tests/__init__.py', 'def load_tests(loader, tests, pattern):\n    return tests\n')
+        self.assertIn('tests/__init__.py', self.no('done', 'add'))
+        self.add_line('add', 'test-change: tests/__init__.py loads the tests in a fixed order')
+        self.ok('done', 'add')
+
+    def test_a_reason_that_names_files_covers_only_those_and_the_gate_says_which(self):
+        self._old_test()
+        self.write('tests/test_keep.py', KEEP.replace('assertTrue(True)', 'assertTrue(1)'))
+        self.ok('new', 'other', 'Someone else sees something.', '--proof', 'true', '--in', 'other.py')
+        self.add_line('other', 'test-change: tests/test_other.py renamed a constant')
+        self.assertIn('test-change: <reason>', self.no('done', 'add'))  # it names another file: no cover
+        self.write('.odd/outcomes/other.md', self.read('.odd/outcomes/other.md').replace('tests/test_other.py', 'other.py'))
+        self.ok('done', 'add')  # a reason that names no test file still covers every edit (older outcome files) ...
+        out = self.no('gate')  # fails only because "other" is not verified
+        self.assertIn('names no file, so it covers every test edit: tests/test_keep.py', out)  # ... and says so
+
+    def test_no_test_passed_is_not_a_proof_under_a_skip(self):
+        self.outcome()
+        self.write('calc.py', BROKEN + '# refactor\n')
+        self.write('tests/test_calc.py', TEST.replace('    def test_add', '    @unittest.expectedFailure\n    def test_add'))
+        self.add_line('add', 'counterfactual: skip - a refactor')
+        self.assertIn('no test it ran passed', self.no('done', 'add'))
+
     def test_hollow_reads_the_common_runners_conservatively(self):
         h = oddmod.hollow
         py, pt, gt, js = 'python3 -m unittest -q t', 'python3 -m pytest -q t.py', 'go test ./...', 'npx jest'
@@ -662,9 +708,14 @@ class FailClosed(Repo):
                    (gt, '?   \tx\t[no test files]\n?   \tx/y\t[no test files]', 0.3), (gt, '', 0.3),
                    (gt, 'ok  \tx\t0.002s [no tests to run]', 0.3),
                    (js, 'Tests:       0 total\nTime: 0.2 s', 1.0), (js, 'Tests:       2 skipped, 2 total', 1.0),
-                   (js, 'No tests found, exiting with code 0', 1.0)]
+                   (js, 'No tests found, exiting with code 0', 1.0),
+                   (py, 'Ran 1 test in 0.001s\n\nOK (expected failures=1)', 0.1),
+                   (py, 'Ran 2 tests in 0.001s\n\nOK (skipped=1, expected failures=1)', 0.1),
+                   (pt, '1 xfailed in 0.01s', 0.5), (pt, '1 skipped, 2 xfailed in 0.01s', 0.5)]
         legit = [(py, 'Ran 2 tests in 0.001s\n\nOK (skipped=1)', 0.1), (py, 'Ran 1 test in 0.4s\n\nOK', 0.4),
-                 (pt, '3 passed, 1 skipped in 0.10s', 0.5), ('python3 -m pytest -qq t.py', '.s  [100%]', 0.5),
+                 (pt, '3 passed, 1 skipped in 0.10s', 0.5), (pt, '1 xpassed, 1 xfailed in 0.01s', 0.5),
+                 (py, 'Ran 2 tests in 0.001s\n\nOK (expected failures=1)', 0.1),
+                 (py, 'Ran 1 test in 0.001s\n\nOK (unexpected successes=1)', 0.1), ('python3 -m pytest -qq t.py', '.s  [100%]', 0.5),
                  ('python3 -m pytest t.py', '..  [100%]', 0.5),
                  (gt, '?   \tx\t[no test files]\nok  \tx/y\t0.002s', 0.3), (gt, 'ok  \tx\t(cached)', 0.1),
                  (js, 'Tests:       1 skipped, 2 passed, 3 total', 1.0), ('npx jest --json', '{}', 1.0),

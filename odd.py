@@ -284,11 +284,17 @@ def sizes(root, base, paths, budget=None):
     return out
 
 
+COLLECT = re.compile(r'(^|/)(conftest\.py|pytest\.ini)$')  # pytest reads these to decide which tests run
+SECTIONS = {'pyproject.toml': r'\[tool\.pytest', 'setup.cfg': r'\[(tool:)?pytest\]', 'tox.ini': r'\[pytest\]'}
+
+
 def classify(changed, cfg):
-    """(control, exempt, tests, product) — each changed path falls in exactly one."""
+    """(control, exempt, tests, product) — each changed path falls in exactly one. A conftest.py or pytest.ini
+    counts as a test file: it decides which tests run."""
     control = [p for p in changed if p in CONTROL]
     exempt = [p for p in changed if p not in CONTROL and matches(p, cfg['exempt'])]
-    tests = [p for p in changed if p not in control and p not in exempt and matches(p, cfg['test_globs'])]
+    tests = [p for p in changed if p not in control and p not in exempt and
+             (matches(p, cfg['test_globs']) or COLLECT.search(p))]
     rest = set(control) | set(exempt) | set(tests)
     return control, exempt, tests, [p for p in changed if p not in rest]
 
@@ -466,22 +472,55 @@ def standing(root, cfg, o, changed):
     return e if e and e.get('ok') and e.get('hash') == content_hash(root, cfg, o, changed, e.get('tests'))[0] else None
 
 
-def test_change(root, base, tests, outcomes):
+def collects(root, base, path):
+    """True when a changed line of `path` can decide which tests run: a line in a pytest section of pyproject.toml,
+    setup.cfg or tox.ini, or a `load_tests` in an __init__.py (unittest calls it to build the suite). Only lines in
+    the working tree are read, so a deletion alone is not seen (DESIGN.md, section 10)."""
+    name = os.path.basename(path)
+    if name not in SECTIONS and name != '__init__.py' or not os.path.isfile(os.path.join(root, path)):
+        return False
+    text = read_text(os.path.join(root, path)).splitlines()
+    lines = changed_lines(root, base, path)
+    if name == '__init__.py':
+        return any('load_tests' in t for n, t in enumerate(text, 1) if lines is None or n in lines)
+    section = ''
+    for n, t in enumerate(text, 1):
+        section = t.strip() if re.match(r'\s*\[', t) else section
+        if (lines is None or n in lines) and re.match(SECTIONS[name], section):
+            return True
+    return False
+
+
+def test_change(root, base, tests, outcomes, product=(), globs=()):
     """(touched, problem or '', what the reviewer reads or ''): test files that existed at the base and this change modified
-    or deleted, allowed only by a `test-change: <reason>` line in one of the given (in-play, not parked) outcomes.
-    A new test file needs no reason."""
+    or deleted, and files that decide which tests run (a conftest.py or pytest.ini, new or not; a changed pytest
+    section or load_tests, collects), allowed only by a `test-change: <reason>` line in one of the given (in-play, not
+    parked) outcomes. A reason that names test files (`globs`, or a file above) covers only those; one that names none covers every
+    edit, as in earlier versions, and the reviewer's line says so. Any other new test file needs no reason."""
     old = set(zlist(root, 'ls-tree', '-r', '--name-only', '-z', base)) if base else set()
-    touched = [p for p in tests if p in old]
+    picks = [p for p in list(tests) + list(product) if COLLECT.search(p) or collects(root, base, p)]
+    touched = [p for p in tests if p in old and p not in picks] + picks
     if not touched:
         return touched, '', ''
-    named = ', '.join(touched[:8]) + (', ...' if len(touched) > 8 else '')
-    why = ['test-change (%s): %s' % (o.slug, o.get('test-change')) for o in outcomes if o.get('test-change')]
-    if why:
+    why, left = [], list(touched)
+    for o in outcomes:
+        if not o.get('test-change'):
+            continue
+        words = {w.strip('.,;:()\'"`') for w in o.get('test-change').split()}
+        named = [p for p in touched if p in words] if any(
+            w in touched or COLLECT.search(w) or matches(w, globs) for w in words) else None
+        covers = touched if named is None else named
+        left = [p for p in left if p not in covers]
+        why.append('test-change (%s): %s [%s]' % (o.slug, o.get('test-change'), (
+            'names no file, so it covers every test edit: ' if named is None else 'covers: ') + (', '.join(covers) or 'none')))
+    if not left:
         return touched, '', '; '.join(why)
-    return touched, ('%s existed at the base and %s modified or deleted. A change that edits or deletes an existing test fails '
-            'closed: rewriting the test is the easiest way to make a proof pass. If the edit is right, say why in the '
-            'outcome with the line "test-change: <reason>"; the gate and the review comment show it.'
-            % (named, 'was' if len(touched) == 1 else 'were')), ''
+    named = ', '.join(left[:8]) + (', ...' if len(left) > 8 else '')
+    return touched, ('%s: %s. A change that edits or deletes an existing test, or changes which tests run, fails closed: '
+            'rewriting the test is the easiest way to make a proof pass. If the edit is right, say why in the outcome with '
+            'the line "test-change: <reason>" (name the files to cover only those); the gate and the review comment show it.'
+            % (named, 'an existing test file or one that decides which tests run, and no reason covers %s'
+               % ('it' if len(left) == 1 else 'them'))), ''
 
 
 # ---------------------------------------------------------------- proofs, and taking the change out
@@ -553,10 +592,30 @@ INERT = {'sys', 'os', 'json', 'math', 'decimal', 'fractions', 'datetime', 'time'
          'collections', 'itertools', 'functools', 'pprint', 'random'}  # imports that cannot check anything themselves
 
 
+def _cannot_fail(node, calls):
+    """True when evaluating this expression cannot end the run on purpose: no subscript, no division or modulo, no
+    call that exits or checks (CHECKS), and, unless `calls`, no call but print and calls on inert modules."""
+    for n in ast.walk(node):
+        if isinstance(n, (ast.Subscript, ast.Lambda, ast.Await, ast.Yield, ast.YieldFrom)) or (
+                isinstance(n, ast.BinOp) and isinstance(n.op, (ast.Div, ast.FloorDiv, ast.Mod, ast.MatMult))):
+            return False
+        if isinstance(n, ast.Call):
+            f, root = n.func, n.func
+            while isinstance(root, ast.Attribute):
+                root = root.value
+            if CHECKS.match(getattr(f, 'id', None) or getattr(f, 'attr', '')) or not calls and not (
+                    getattr(f, 'id', None) in ('print', 'str', 'repr') or isinstance(f, ast.Attribute) and getattr(root, 'id', '') in INERT):
+                return False
+    return True
+
+
 def prints_only(root, proof, targets):
-    """True when every step of the proof only prints: an echo or printf, or Python code (-c, or a .py file) with no
-    assert, raise, exit call, assert* or fail* call, and no import but the change itself and a few inert stdlib
-    modules. Anything else (a test runner, grep, a helper module from the repository, -m) may check: never refused."""
+    """True when every step of the proof only prints: an echo or printf, or Python code (-c, or a .py file) whose
+    statements are only imports of the change itself and a few inert stdlib modules, print() calls, calls on those
+    inert modules, and assignments to names; where no expression can fail on purpose (_cannot_fail: no subscript,
+    division or modulo; a call into the change only inside print() or an assignment). Anything else (a test runner,
+    grep, a helper module from the repository, -m, an if, an assert, a bare call into the change) may check: never
+    refused. A pipe into `grep -q .` checks nothing and is not detected (DESIGN.md, section 10)."""
     try:
         lex = shlex.shlex(proof, posix=True, punctuation_chars=True)
         lex.whitespace_split = True
@@ -591,10 +650,15 @@ def prints_only(root, proof, targets):
             tree = ast.parse(code)
         except (SyntaxError, ValueError):
             return False
-        for n in ast.walk(tree):
-            if isinstance(n, (ast.Assert, ast.Raise)):
+        for n in tree.body:
+            call = isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
+            printed = call and getattr(n.value.func, 'id', None) == 'print'
+            if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) or isinstance(n, ast.Pass):
+                continue
+            if call and not _cannot_fail(n.value, printed) or isinstance(n, ast.Assign) and not (
+                    all(isinstance(t, ast.Name) for t in n.targets) and _cannot_fail(n.value, True)):
                 return False
-            if isinstance(n, ast.Call) and CHECKS.match(getattr(n.func, 'id', None) or getattr(n.func, 'attr', '')):
+            if not (call or isinstance(n, (ast.Assign, ast.Import, ast.ImportFrom))):
                 return False
             names = [a.name for a in n.names] if isinstance(n, ast.Import) else (
                 [n.module or ''] if isinstance(n, ast.ImportFrom) and not n.level else
@@ -612,15 +676,18 @@ def hollow(proof, tail, seconds, root=None, targets=()):
     if root and prints_only(root, proof, targets):
         return 'it only prints (no test runner, no assert, no exit with a code of its own)'
     tail = tail or ''
-    m = re.findall(r'(?m)^Ran (\d+) tests? in ([\d.]+)s\s*\n\s*OK(?: \(.*?skipped=(\d+))?', tail)
+    m = re.findall(r'(?m)^Ran (\d+) tests? in ([\d.]+)s\s*\n\s*OK(?: \((.*?)\))?', tail)
     if m and m[-1][0] == '0' or re.search(r'(?m)NO TESTS RAN|^no tests ran\b|=+ no tests ran|No tests found, exiting with code 0', tail):
         return 'it ran no test'
-    if m and m[-1][2] and m[-1][2] == m[-1][0]:
-        return 'it skipped every test it ran (%s)' % m[-1][2]
-    pt = re.findall(r'(?m)^=*\s*((?:\d+ \w+(?:, )?)+) in ([\d.]+)s', tail)
     count = lambda text, w: sum(int(n) for n in re.findall(r'(\d+) (?:%s)\b' % w, text))  # noqa: E731
-    if pt and count(pt[-1][0], 'skipped') and not count(pt[-1][0], 'passed|xpassed|failed'):
-        return 'it skipped every test it ran (%d)' % count(pt[-1][0], 'skipped')
+    shown = sum(int(n) for n in re.findall(r'(?:skipped|expected failures)=(\d+)', m[-1][2])) if m and m[-1][2] else -1
+    if m and shown == int(m[-1][0]):  # an expected failure shows nothing either
+        return ('it skipped every test it ran (%s)' % m[-1][0] if 'expected' not in m[-1][2] else
+                'no test it ran passed (OK (%s))' % m[-1][2])
+    pt = re.findall(r'(?m)^=*\s*((?:\d+ \w+(?:, )?)+) in ([\d.]+)s', tail)
+    if pt and count(pt[-1][0], 'skipped|xfailed') and not count(pt[-1][0], 'passed|xpassed|failed'):
+        return ('it skipped every test it ran (%d)' % count(pt[-1][0], 'skipped') if 'xfailed' not in pt[-1][0] else
+                'no test it ran passed (%s)' % pt[-1][0])
     js = re.findall(r'(?m)^Tests:\s+(.*\btotal)', tail)
     if js and (re.search(r'\b0 total', js[-1]) or count(js[-1], 'skipped') and not count(js[-1], 'passed|failed')):
         return 'it ran no test (jest: Tests: %s)' % js[-1].strip()
@@ -1337,11 +1404,13 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     if s['exempt']:
         exempted.append('exempt paths: %d file(s), %s line(s)' % (
             len(s['exempt']), sum(min(v, 10 ** 5) for v in sizes(root, base, s['exempt']).values())))
-    if s['tests']:
-        touched, bad, why = test_change(root, base, s['tests'], active)
-        exempted.append('test files: %d changed%s%s' % (len(s['tests']), ('; existed before and were modified or deleted: '
-                                                                         + ', '.join(touched[:8])) if touched else '',
-                                                        '; allowed by ' + why if why else ''))
+    if s['tests'] or s['product']:
+        touched, bad, why = test_change(root, base, s['tests'], active, s['product'], cfg['test_globs'])
+        picks = [p for p in touched if COLLECT.search(p) or collects(root, base, p)]
+        old = [p for p in touched if p not in picks]
+        exempted += [] if not (s['tests'] or touched) else ['test files: %d changed%s%s%s' % (
+            len(s['tests']), '; existed before and were modified or deleted: ' + ', '.join(old[:8]) if old else '',
+            '; decide which tests run: ' + ', '.join(picks[:8]) if picks else '', '; allowed by ' + why if why else '')]
         problems += [bad] if bad else []
     lines += ['  ' + e for e in exempted]
     exempted += ['skip: ' + k for k in skips]
@@ -1444,7 +1513,8 @@ def cmd_done(a, root):
     o, s = Outcome.load(root, a.slug), survey(root, a.base)
     cfg, base = s['cfg'], s['base']
     try:
-        _, bad, _ = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug])
+        _, bad, _ = test_change(root, base, s['tests'], [o] + [x for x in s['active'] if x.slug != o.slug], s['product'],
+                                  cfg['test_globs'])
         if bad:
             raise Fail(bad)
         res = verify(root, cfg, o, base, changed_files(root, base), print)

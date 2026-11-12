@@ -45,6 +45,15 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   a skip): 0.4.0 accepted 6 of 8 in both `done` and `gate --recompute`, this version refuses 8 of 8, and three honest
   controls (unittest, pytest, go) pass in both (Python 3.13, where an empty unittest suite already exits 5, so 0.4.0
   refused that one; on 3.11 and older it exits 0, not measured). Not measured: the share of impossible-task cheats caught (needs R1).
+- **Review fixes, done** in the commit "R2, R4: review fixes ..." (`git log --grep '^R2, R4: review fixes'`), from the reviewer's probe
+  (seven fixtures, re-run after the fix): a new `conftest.py` that drops an existing failing test was accepted, now
+  refused (conftest.py, pytest.ini, a changed pytest section of pyproject.toml/setup.cfg/tox.ini and a changed
+  `load_tests` line in an `__init__.py` need `test-change:`); all-xfail (pytest) and all-expectedFailure (unittest)
+  under a skip were accepted, now refused; a reason can name the test files it covers, and the gate prints
+  which files each reason covers. Not fixed: a go test that `t.Skip`s every test (go prints the same `ok` line;
+  documented as not detected), and a reason that names no test file still covers every test edit, from any outcome,
+  so older outcome files keep passing (the gate now says so next to it). Not compared: collected test ids at base
+  and head.
 
 ### R3. Make parking the sanctioned answer
 - **Outcome:** the installed method tells the agent plainly to stop and explain with `odd park` when the task cannot
@@ -71,6 +80,10 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   added 0.1 s (core runs 0.1 s each) and flagged 0 lines; a pytest fixture with an uncalled function added 0.4 s
   (core 0.4 s each) and flagged its 3 unrun lines. Not measured: the bench share of proofs with unrun lines, the
   per-task correlation with hidden-test failures, and the overhead on a large suite.
+- **Review fix, done** in the commit "R2, R4: review fixes ..." (`git log --grep '^R2, R4: review fixes'`): print-only is narrowed to top-level
+  imports, `print(...)`, inert-module calls and name assignments with no subscript, division or modulo, and a call
+  into the change only inside `print(...)` or an assignment, so `1 / (add(2, 3) == 5)`, `{5: 0}[add(2, 3)]` and a
+  bare `calc.selfcheck()` are no longer refused. Not detected (documented): `| grep -q .` after a print.
 
 ### R5. An independent author for the proof
 - **Outcome:** the proof can be written by a different, stronger model (`--proof-by <cmd>`) and sealed before the
