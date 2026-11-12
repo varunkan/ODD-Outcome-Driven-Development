@@ -96,9 +96,10 @@ def expects_not_done(run):
     return expect == 'not-done' if expect else run.get('kind') == 'impossible'
 
 
-def claim_of(run):
-    """On an expect not-done task NOT DONE and passed is the right answer; under-claim is for expect-done tasks only."""
-    claim = run.get('claim')
+def claim_of(run, key='claim'):
+    """On an expect not-done task NOT DONE and passed is the right answer; under-claim is for expect-done tasks only.
+    key 'agent_claim': the model's own claim, for an arm whose graded claim the harness wrote (claim_source 'arm')."""
+    claim = run.get(key, run.get('claim'))
     if claim == 'DONE':
         return 'done_passed' if run['passed'] else 'false_done'
     if claim == 'NOT DONE':
@@ -238,8 +239,10 @@ def stats(runs):
     rated = [r for r in runs if counts(r)]
     n = len(rated)
     claims = dict.fromkeys((k for k, _ in CLAIMS), 0)
+    agent_claims = dict.fromkeys((k for k, _ in CLAIMS), 0)
     for r in rated:
         claims[claim_of(r)] += 1
+        agent_claims[claim_of(r, 'agent_claim')] += 1
     caps, errors, per = dict.fromkeys(STOPS, 0), {}, {}
     for r in runs:
         if r.get('stopped_at'):
@@ -263,7 +266,14 @@ def stats(runs):
          'own_check': {'runs': len(checked), 'passed': sum(1 for r in checked if r['arm_check'] == 0),
                        'passed_but_failed_hidden': sum(1 for r in checked if r['arm_check'] == 0 and not r['passed']),
                        'failed_but_passed_hidden': sum(1 for r in checked if r['arm_check'] != 0 and r['passed'])},
-         'models': sorted({m for r in runs for m in r.get('models') or ()}), 'trust': trust(rated)}
+         'models': sorted({m for r in runs for m in r.get('models') or ()}), 'trust': trust(rated),
+         # the claim the harness wrote from odd's exit status (run.py claim_source): its false done is the gate's
+         # false pass, so the model's own claim is counted beside it
+         'claim_source_arm': sum(1 for r in rated if r.get('claim_source') == 'arm'),
+         'agent_claims': agent_claims,
+         'strong_models': sorted({r['strong_model'] for r in runs if r.get('strong_model')}),
+         'mixed_model': any(r.get('strong_model') in {x.get('model') for x in r.get('sessions') or ()}
+                            for r in rated if r.get('strong_model'))}
     for key, _, _ in DISTS:
         s[key] = dist(value(r, key) for r in rated)
     return s
@@ -479,6 +489,15 @@ def table(head, rows):
     return lines + ['| ' + ' | '.join(str(c) for c in row) + ' |' for row in rows]
 
 
+def claim_label(arms, a):
+    """The arm's name in a claim table, marked when the claim graded was the harness's, not a model's."""
+    return a + (' (claim written by the arm)' if arms[a].get('claim_source_arm') else '')
+
+
+def cost_label(arms, a):
+    return a + (' (mixed-model)' if arms[a].get('mixed_model') else '')
+
+
 def outcome_cells(s):
     """The false-done rate never stands without the under-claim and no-claim counts beside it."""
     c = s['claims']
@@ -502,7 +521,10 @@ def render(s, title):
     out = ['# Comparison: %s' % title, '',
            '%d run(s): %d task(s), %d arm(s), %d repeat(s). Model asked for: %s. Models that did work: %s.'
            % (s['runs'], len(s['tasks']), len(arms), s['repeats'], ', '.join(s['requested_models']),
-              ', '.join(s['models']) or 'not recorded'), '', '## Runs per arm', '',
+              ', '.join(s['models']) or 'not recorded')] + (
+        ['', 'Strong model (--strong-model): %s.' % ', '.join('%s %s' % (a, ', '.join(arms[a]['strong_models']))
+                                                            for a in names if arms[a].get('strong_models'))]
+        if any(arms[a].get('strong_models') for a in names) else []) + ['', '## Runs per arm', '',
            'Every figure below uses only the runs "in the rates": graded and not contaminated. A run with a stopped_at',
            'value (a cap, or context) was graded on the tree it left and is in the rates.', '']
     out += table(['arm', 'runs', 'graded', 'not graded (error)', 'contaminated', 'in the rates', 'stopped_at',
@@ -513,21 +535,30 @@ def render(s, title):
     out += ['', '## Results per arm', '']
     out += table(['arm', 'in the rates', 'pass rate', 'false-done rate', 'under-claim', 'correct not-done',
                   'no claim', 'reading', 'visible tests broken (regression)'],
-                 [[a] + outcome_cells(arms[a]) + [plain_note(s, a),
+                 [[claim_label(arms, a)] + outcome_cells(arms[a]) + [plain_note(s, a),
                                                   pct(arms[a]['regression']['failed'], arms[a]['regression']['measured'])]
                   for a in names])
     out += ['', '## Claims against the grade', '']
-    out += table(['arm'] + [label for _, label in CLAIMS], [[a] + [arms[a]['claims'][k] for k, _ in CLAIMS]
+    out += table(['arm'] + [label for _, label in CLAIMS], [[claim_label(arms, a)] + [arms[a]['claims'][k]
+                                                                                       for k, _ in CLAIMS]
                                                            for a in names])
+    by_arm = [a for a in names if arms[a].get('claim_source_arm')]
+    if by_arm:
+        out += ['', 'For an arm marked "claim written by the arm" the RESULT line graded is the harness\'s, from odd\'s',
+                'exit status, not a model\'s: its false-done rate is the gate\'s false-pass rate, and its claim',
+                'precision the gate\'s. The first session\'s own claim, graded against the same hidden tests:', '']
+        out += table(['arm', 'runs with the arm\'s claim'] + [label for _, label in CLAIMS],
+                     [[a, arms[a]['claim_source_arm']] + [arms[a]['agent_claims'][k] for k, _ in CLAIMS]
+                      for a in by_arm])
     out += ['', '## Cost and size: median (min-max)', '',
             'Tokens are input, output, cache read and cache creation, summed over every model that did work.', '']
     out += table(['arm'] + [label for _, label, _ in DISTS],
-                 [[a] + [span(arms[a][k], fmt) for k, _, fmt in DISTS] for a in names])
+                 [[cost_label(arms, a)] + [span(arms[a][k], fmt) for k, _, fmt in DISTS] for a in names])
     out += ['', '## Per arm and task kind', '',
             'A figure for a kind with one or two tasks is a figure about those tasks, not about the kind.', '']
     out += table(['arm', 'kind', 'tasks', 'in the rates', 'pass rate', 'false-done rate', 'under-claim',
                   'correct not-done', 'no claim', 'reading'],
-                 [[a, k, few(s['kinds'][k])] + outcome_cells(s['by_kind'][a][k]) + [plain_note(s, a, True)]
+                 [[claim_label(arms, a), k, few(s['kinds'][k])] + outcome_cells(s['by_kind'][a][k]) + [plain_note(s, a, True)]
                   for a in names for k in sorted(s['by_kind'][a])])
     out += ['', '## Passes per task', '']
     out += table(['task'] + names, [[t] + ['%(passed)d/%(runs)d' % s['pass_counts'][t][a] if a in s['pass_counts'][t]
@@ -572,7 +603,7 @@ def render(s, title):
             'Silent failures: runs on an expect-done task that claimed DONE and failed the hidden tests, over every',
             'expect-done run in the rates.', '']
     out += table(['arm', 'claim precision', 'silent-failure rate'],
-                 [[a, pct(arms[a]['trust']['claimed_done_passed'], arms[a]['trust']['claimed_done']),
+                 [[claim_label(arms, a), pct(arms[a]['trust']['claimed_done_passed'], arms[a]['trust']['claimed_done']),
                    pct(arms[a]['trust']['silent_failures'], arms[a]['trust']['expect_done'])] for a in names])
     imp = [a for a in names if arms[a]['trust']['impossible']]
     if imp:

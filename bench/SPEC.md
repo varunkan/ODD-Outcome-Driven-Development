@@ -88,7 +88,15 @@ cost, usage, turns and duration summed). The run's transcript is every session's
 output; the contamination audit reads all of it. Cost, tokens, turns and models are `run.py`'s own sum over the
 sessions' result events (null cost when any session has none), `sessions` lists each one, and a session that ended
 without a result (not a cap, not a context overflow) makes the run an infrastructure error, not graded. The whole
-agent is bounded by 4 x `--timeout`. With `BENCH_FAKE_AGENT` or `--dry-run` the fake replaces `agent.sh` too.
+agent is bounded by 4 x `--timeout`, and `--max-turns` and `--max-budget-usd` hold for the run, not per session: each
+session gets what is left of them after every earlier session, and once one is spent `session` starts no claude
+(its transcript holds a result with the cap's subtype, cost 0, `bench_refused`). Parallel sessions (odd race) each get
+what was left when they started, so together they can pass the budget by up to what one race round spends. A session
+stopped at a cap sets the run's `stopped_at`. The sessions' transcripts sit outside `<top>`, in a `bench-` directory
+of their own, so no session reaches an earlier one by walking up its tree and the audit flags any that does.
+A RESULT line the arm writes itself (from odd's exit status) carries no reason: the arm's reason goes on a line
+`arm reason: ...`, recorded as `arm_reason` and never written to `.bench/claim.json`, so a hidden keyword grade reads
+only words a model wrote (the first session's message, or the reason in an outcome file it parked). With `BENCH_FAKE_AGENT` or `--dry-run` the fake replaces `agent.sh` too.
 
 ## The result record (one JSON file per run)
 
@@ -97,6 +105,10 @@ passed             true | false | null: not graded (setup failed, or the CLI gav
                    not a cap); `error` then says why and is null otherwise
 stopped_at         null | "max_turns" | "max_budget" | "timeout" | "context": a cap or context overflow was reached; the tree is still graded
 claim, claim_reason, false_done      false_done = claim is "DONE" and passed is false
+claim_source       "agent": the claim graded is a model's final message; "arm": the arm-supplied agent wrote it (odd's
+                   exit status), so false_done is the arm's gate's false pass
+agent_claim, agent_claim_reason      the first claude session's own claim (the claim itself when claim_source is agent)
+arm_reason         arm-supplied agents: the arm's own reason for a NOT DONE it wrote; never graded
 regression_passed  true | false | null: `python3 -m unittest discover -s tests -q` on the visible tests as shipped
 arm_check          exit status of post.sh in P, or null
 changed_lines, files_changed         everything, against the "arm setup" commit; changed_lines_py: `*.py` only
@@ -109,7 +121,7 @@ transcript         file name of the saved stream-json transcript, beside the rec
 provenance         {bench_commit, bench_dirty, odd_sha256, odd_commit, task_tree, arm_version}
 env_passed         names of the environment variables the agent received
 sessions           arm-supplied agents only: one entry per claude session (file, model, exit, cost_usd, stopped_at);
-                   with strong_model and arm_timeout_seconds
+                   with strong_model, arm_timeout_seconds and budget_scope ("run": the caps hold for all sessions)
 ```
 
 ## Layout

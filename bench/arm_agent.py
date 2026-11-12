@@ -105,6 +105,12 @@ def parse_claim(final):
 
 # ---------------------------------------------------------------- sessions and their sum
 
+# The CLI's result subtypes for a cap: graded on the tree left, named in stopped_at (run.py) and never carried on from.
+CAPS = {'error_max_turns': 'max_turns', 'error_max_budget_usd': 'max_budget'}
+# The line an odd flow puts its own reason on when it, not a model, ends the run NOT DONE: run.py records it as
+# arm_reason and never as claim_reason, so no hidden keyword grade reads words the harness wrote (SPEC.md).
+ARM_REASON = 'arm reason: '
+
 END = 'bench_session_end'  # the line `session` appends to each transcript: the model, exit status (null: timed out)
 
 
@@ -158,14 +164,43 @@ def summary(final):
             'usage': s['usage'], 'models': s['models'], 'sessions': len(s['sessions'])}
 
 
+def run_caps(flags):
+    """The plain arm's flags with --max-turns and --max-budget-usd set to what is left of the RUN's caps (ARM_MAX_TURNS,
+    ARM_MAX_BUDGET_USD, less every earlier session's turns and cost), so the arm as a whole is held to plain's caps,
+    not each of its sessions. Returns (flags, None), or (None, the CAPS subtype) when that cap is already spent."""
+    spent = total(os.environ['ARM_TRANSCRIPTS'])
+    used = {'--max-turns': spent['num_turns'], '--max-budget-usd': sum(x['cost_usd'] or 0 for x in spent['sessions'])}
+    limits = (('--max-turns', os.environ.get('ARM_MAX_TURNS'), int, 'error_max_turns'),
+              ('--max-budget-usd', os.environ.get('ARM_MAX_BUDGET_USD'), float, 'error_max_budget_usd'))
+    flags = list(flags)
+    for flag, limit, kind, cap in limits:
+        if not limit or flag not in flags:
+            continue
+        left = round(kind(limit) - used[flag], 6)
+        if left <= 0:
+            return None, cap
+        flags[flags.index(flag) + 1] = str(left)
+    return flags, None
+
+
 def session(prompt, model, name='session'):
     """One claude session with the plain arm's command line and environment, bounded by ARM_TIMEOUT seconds (it is
-    killed at that point, as run.py kills the plain arm's). Its stream-json is written to a file of its own in
-    ARM_TRANSCRIPTS, closed by an END line. Returns (exit status or None on timeout, the result object or None)."""
-    flags = json.loads(os.environ['ARM_CLAUDE_FLAGS'])
+    killed at that point, as run.py kills the plain arm's), its turn and budget caps what is left of the run's
+    (run_caps). Its stream-json is written to a file of its own in ARM_TRANSCRIPTS, closed by an END line. A session
+    the spent caps refuse starts no claude: its file holds a result event with the cap's subtype, cost 0, marked
+    bench_refused. Returns (exit status or None on timeout, the result object or None)."""
+    flags, spent = run_caps(json.loads(os.environ['ARM_CLAUDE_FLAGS']))
     names = json.loads(os.environ['ARM_AGENT_ENV']) + ['ODD_ATTEMPT']  # odd's mark for its process sweep
     env = {k: os.environ[k] for k in names if k in os.environ}
     path = os.path.join(os.environ['ARM_TRANSCRIPTS'], '%015d-%s-%d.jsonl' % (time.time() * 1000, name, os.getpid()))
+    if spent:
+        refused = {'type': 'result', 'subtype': spent, 'is_error': True, 'result': None, 'total_cost_usd': 0,
+                   'num_turns': 0, 'duration_ms': 0, 'bench_refused': True,
+                   'errors': ['bench: the run\'s %s is spent; no claude session was started' % CAPS[spent]]}
+        with open(path, 'w', encoding='utf-8') as log:
+            log.write(json.dumps(refused) + '\n' + json.dumps({'type': END, 'model': model, 'name': name, 'exit': 1,
+                                                               'stderr': ''}) + '\n')
+        return 1, refused
     with open(path, 'w', encoding='utf-8') as log:
         p = subprocess.Popen(['claude', '-p', prompt, '--model', model] + flags, stdin=subprocess.DEVNULL,
                              stdout=log, stderr=subprocess.PIPE, env=env, encoding='utf-8', errors='replace')
@@ -242,25 +277,32 @@ def odd_flow(mode, prompt):
         sys.exit('the first claude session printed no result object (exit %s)' % status)
     first = result.get('result') if isinstance(result.get('result'), str) else ''
     claim, _ = parse_claim(first)
-    if claim == 'NOT DONE':  # the honest exit of the method: nothing to race
+    # NOT DONE is the method's honest exit (nothing to race); a session stopped at a cap, or one with no RESULT line,
+    # ends the arm as plain's only session would: its own final message is graded, nothing carries on from it.
+    if claim != 'DONE' or result.get('subtype') in CAPS or result.get('is_error'):
         return first
     said = ['first session (%s): claim %s' % (cheap, claim)]
+
+    def refuse(reason):  # the harness's reason, kept off the RESULT line: no keyword grade may credit it
+        return '\n'.join(said + [ARM_REASON + reason, 'RESULT: NOT DONE'])
+
     outcomes = stated_outcomes()
     live = [p for p in outcomes if not outcome_field(p, 'parked')]
     if not live:
         parked = [outcome_field(p, 'parked') for p in outcomes]
-        return '\n'.join(said + ['RESULT: NOT DONE: %s' % (
-            'the outcome was parked: %s' % parked[0] if parked else 'no outcome was stated with odd new')])
+        if parked:  # the model's own words, from the outcome file it parked
+            return '\n'.join(said + ['RESULT: NOT DONE: %s' % parked[0]])
+        return refuse('no outcome was stated with odd new')
     for path in live:
         slug = os.path.basename(path)[:-3]
         if mode == 'spec':
             code, out = sh(odd + ['spec', slug, '--proof-by', session_command(strong, 'proof'), '--base', 'main'], said)
             if code:
-                return '\n'.join(said + ['RESULT: NOT DONE: odd spec %s: %s' % (slug, why(out))])
+                return refuse('odd spec %s: %s' % (slug, why(out)))
         elif not outcome_field(path, 'sealed'):
             code, out = sh(odd + ['seal', slug, '--base', 'main'], said)
             if code:
-                return '\n'.join(said + ['RESULT: NOT DONE: the proof of %s could not be sealed: %s' % (slug, why(out))])
+                return refuse('the proof of %s could not be sealed: %s' % (slug, why(out)))
         commit('odd: %s stated and its proof sealed' % slug)  # every attempt starts from HEAD
         if mode == 'cascade':
             levels = ','.join(session_command(m, 'level%d' % i) for i, m in enumerate((cheap, strong), 1))
@@ -270,13 +312,13 @@ def odd_flow(mode, prompt):
                          session_command(cheap, 'attempt'), '--base', 'main']
         code, out = sh(cmd, said)
         if code:
-            return '\n'.join(said + ['RESULT: NOT DONE: odd %s %s: %s' % (cmd[2], slug, why(out))])
+            return refuse('odd %s %s: %s' % (cmd[2], slug, why(out)))
         code, out = sh(odd + ['done', slug, '--base', 'main'], said)
         if code:
-            return '\n'.join(said + ['RESULT: NOT DONE: odd done %s after the winner was applied: %s' % (slug, why(out))])
+            return refuse('odd done %s after the winner was applied: %s' % (slug, why(out)))
         commit('odd: %s proven' % slug)
     code, out = sh(odd + ['gate', '--recompute', '--base', 'main'], said)
-    return '\n'.join(said + ['RESULT: DONE' if code == 0 else 'RESULT: NOT DONE: the odd gate failed: %s' % why(out)])
+    return '\n'.join(said + ['RESULT: DONE']) if code == 0 else refuse('the odd gate failed: %s' % why(out))
 
 
 def main(argv=None):

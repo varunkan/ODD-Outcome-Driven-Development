@@ -31,17 +31,32 @@ flags = flags[:flags.index('--model')] + flags[flags.index('--model') + 2:]
 role = ('attempt' if 'You are one attempt' in prompt else 'proof' if 'You write the PROOF' in prompt else
         'plain' if 'odd new' not in prompt else 'outcome')
 mode = os.environ.get('FAKE_CLAUDE', 'good')
+peeked = []  # peeklog: what an attempt finds by walking up its tree (earlier sessions' transcripts)
+if mode == 'peeklog' and role == 'attempt':
+    here = os.getcwd()
+    while os.path.dirname(here) != here:
+        folder = os.path.join(here, 'transcripts')
+        if os.path.isdir(folder):
+            peeked += [os.path.join(folder, n) for n in os.listdir(folder) if n.endswith('.jsonl')]
+        here = os.path.dirname(here)
 with open(os.path.join(os.environ['FAKE_LOG_DIR'], 'claude-%d-%d.json' % (time.time() * 1e6, os.getpid())), 'w') as f:
-    json.dump({'flags': flags, 'role': role, 'model': model, 'env': sorted(os.environ)}, f)
+    json.dump({'flags': flags, 'role': role, 'model': model, 'env': sorted(os.environ), 'peeked': peeked}, f)
 odd = 'python3 .odd/odd.py'
 def sh(cmd):
     subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL)
 PROOF = ('import unittest\nfrom calc import add\n\n\nclass T(unittest.TestCase):\n'
          '    def test_sum(self):\n        self.assertEqual(add(2, 3), 5)\n        self.assertEqual(add(4, 1), 5)\n')
 tool = {'type': 'tool_use', 'id': 't1', 'name': 'Bash', 'input': {'command': 'ls'}}
-text = 'Done.'
+text, subtype = 'Done.', 'success'
 if role == 'outcome':
-    if mode == 'park':
+    if mode == 'capfirst':  # stopped at the turn cap, as the CLI reports it: no result text
+        sh(odd + " new add-sum 'add(2, 3) returns 5, the sum' --proof 'python3 -m unittest tests.test_sum' --in calc.py")
+        text, subtype = None, 'error_max_turns'
+    elif mode == 't17done':  # claims DONE, never names the conflict; odd seal then refuses (no test file changed)
+        sh(odd + " new parse-2h-duration 'parse_duration reads typed durations' "
+                 "--proof 'python3 -m unittest tests.test_duration' --in timesheet/duration.py")
+        text = 'Outcome stated.\nRESULT: DONE'
+    elif mode == 'park':
         text = 'The ticket contradicts itself.\nRESULT: NOT DONE: the list cannot be empty and non-empty'
     else:
         sh(odd + " new add-sum 'add(2, 3) returns 5, the sum' --proof 'python3 -m unittest tests.test_sum' --in calc.py")
@@ -65,7 +80,8 @@ cost = {'haiku': 0.01, 'sonnet': 0.1}[model] * {'outcome': 1, 'proof': 2, 'attem
 for event in ({'type': 'system', 'subtype': 'init', 'model': name},
               {'type': 'assistant', 'message': {'id': 'm-%d' % os.getpid(), 'model': name, 'content': [tool],
                                                 'usage': {'input_tokens': 5, 'output_tokens': 7}}},
-              {'type': 'result', 'subtype': 'success', 'is_error': False, 'result': text, 'total_cost_usd': cost,
+              {'type': 'result', 'subtype': subtype, 'is_error': subtype != 'success', 'result': text,
+               'total_cost_usd': cost,
                'num_turns': 2, 'duration_ms': 100, 'usage': {'input_tokens': 5, 'output_tokens': 7},
                'modelUsage': {name: {'inputTokens': 5, 'outputTokens': 7, 'cacheReadInputTokens': 1,
                                      'cacheCreationInputTokens': 2}}}):
@@ -89,8 +105,8 @@ class ArmAgentTest(unittest.TestCase):
         os.chmod(os.path.join(self.bin, 'claude'), 0o755)
         self.out = os.path.join(self.work, 'out')
 
-    def run_arms(self, arms, mode='good', task='tiny-add', jobs=1):
-        done = run_py(self.work, ['--root', self.root, '--tasks', task, '--arms'] + list(arms) +
+    def run_arms(self, arms, mode='good', task='tiny-add', jobs=1, extra=()):
+        done = run_py(self.work, ['--root', self.root, '--tasks', task, '--arms'] + list(arms) + list(extra) +
                       ['--model', 'haiku', '--allow-dirty', '--jobs', str(jobs), '--out', self.out,
                        '--pass-env', 'FAKE_LOG_DIR', 'FAKE_CLAUDE'],
                       FAKE_CLAUDE=mode, PATH=self.bin + os.pathsep + os.environ['PATH'])
@@ -110,7 +126,10 @@ class ArmAgentTest(unittest.TestCase):
         plain, race = recs['plain'], recs['odd-race']
         calls = self.calls()
         self.assertEqual(sorted(c['role'] for c in calls), ['attempt'] * 3 + ['outcome', 'plain'])
-        flags = {json.dumps(c['flags']) for c in calls}
+        def uncapped(flags):  # the caps' values are what is left of the run's (test_..._caps_hold_for_the_whole_run)
+            return [f if n == 0 or flags[n - 1] not in ('--max-turns', '--max-budget-usd') else 'N'
+                    for n, f in enumerate(flags)]
+        flags = {json.dumps(uncapped(c['flags'])) for c in calls}
         self.assertEqual(len(flags), 1, 'every claude session, plain or the arm\'s, gets the same flags')
         self.assertIn('--max-turns', calls[0]['flags'])
         self.assertEqual({c['model'] for c in calls}, {'haiku'})
@@ -169,6 +188,58 @@ class ArmAgentTest(unittest.TestCase):
         self.assertEqual((r['claim'], r['claim_reason']), ('NOT DONE', 'the list cannot be empty and non-empty'))
         self.assertEqual([c['role'] for c in self.calls()], ['outcome'])
         self.assertAlmostEqual(r['cost_usd'], 0.01)
+
+    def test_a_done_claim_and_odds_refusal_do_not_pass_an_impossible_task_on_the_arms_own_words(self):
+        # review blocker: the arm wrote the NOT DONE reason from odd's text ("no test file", the slug "2h"), and the
+        # t17 keyword grade credited a conflict no session ever named
+        t17 = 't17-conflicting-visible-test'
+        shutil.copytree(os.path.join(BENCH, 'tasks', t17), os.path.join(self.root, 'tasks', t17))
+        done, recs = self.run_arms(['odd-race'], mode='t17done', task=t17)
+        r = recs['odd-race']
+        self.assertEqual(r['claim'], 'NOT DONE', r['final'])
+        self.assertEqual(r['claim_reason'], '', 'a reason the arm built is never graded as the agent\'s')
+        self.assertIn('could not be sealed', r['arm_reason'])
+        self.assertIs(r['passed'], False, r['final'])
+        self.assertEqual((r['agent_claim'], r['claim_source']), ('DONE', 'arm'))
+
+    def test_the_claim_source_says_whose_claim_was_graded(self):
+        done, recs = self.run_arms(['plain', 'odd-race'])
+        self.assertEqual((recs['plain']['claim_source'], recs['plain']['agent_claim']), ('agent', 'DONE'))
+        self.assertEqual((recs['odd-race']['claim_source'], recs['odd-race']['agent_claim']), ('arm', 'DONE'))
+        self.assertEqual(recs['odd-race']['budget_scope'], 'run')
+
+    def test_a_parked_first_session_is_the_agents_own_claim(self):
+        done, recs = self.run_arms(['odd-race'], mode='park')
+        self.assertEqual((recs['odd-race']['claim_source'], recs['odd-race']['agent_claim']), ('agent', 'NOT DONE'))
+
+    def test_a_capped_first_session_ends_the_arm_and_the_run_is_stopped_at_the_cap(self):
+        done, recs = self.run_arms(['plain', 'odd-race'], mode='capfirst')
+        r = recs['odd-race']
+        self.assertEqual([c['role'] for c in self.calls() if c['role'] != 'plain'], ['outcome'],
+                         'no attempt runs after a first session stopped at a cap')
+        self.assertEqual((r['claim'], r['stopped_at'], r['error']), ('none', 'max_turns', None), r['final'])
+
+    def test_the_turn_and_budget_caps_hold_for_the_whole_run_not_each_session(self):
+        done, recs = self.run_arms(['odd-cascade'], mode='weak', extra=['--max-turns', '20', '--max-budget-usd', '0.05'])
+        attempts = [c for c in self.calls() if c['role'] == 'attempt']
+        caps = [(c['model'], c['flags'][c['flags'].index('--max-turns') + 1],
+                 float(c['flags'][c['flags'].index('--max-budget-usd') + 1])) for c in attempts]
+        self.assertEqual([c[:2] for c in caps], [('haiku', '18'), ('sonnet', '16')], 'what is left of the run\'s turns')
+        self.assertAlmostEqual(caps[0][2], 0.04)
+        self.assertAlmostEqual(caps[1][2], 0.01)
+
+    def test_a_session_is_refused_once_the_runs_turns_are_spent(self):
+        done, recs = self.run_arms(['plain', 'odd-race'], extra=['--max-turns', '2', '--max-budget-usd', '0.02'])
+        r = recs['odd-race']
+        self.assertEqual(sorted(c['role'] for c in self.calls()), ['outcome', 'plain'], 'no attempt was started')
+        self.assertAlmostEqual(r['cost_usd'], 0.01)
+        self.assertEqual(r['num_turns'], 2)
+        self.assertEqual((r['stopped_at'], r['error']), ('max_turns', None), r['final'])
+
+    def test_no_session_can_reach_an_earlier_sessions_transcript_by_walking_up_its_tree(self):
+        done, recs = self.run_arms(['odd-race'], mode='peeklog')
+        self.assertEqual([c['peeked'] for c in self.calls() if c['role'] == 'attempt'], [[], [], []])
+        self.assertFalse(recs['odd-race']['contaminated'], recs['odd-race']['contaminated_by'])
 
     def test_odd_040_is_the_odd_arm_one_session_under_its_own_name(self):
         done, recs = self.run_arms(['odd-040'])

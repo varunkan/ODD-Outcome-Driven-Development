@@ -214,6 +214,28 @@ class ReportTest(unittest.TestCase):
         self.assertIn('| plain | 2 | 2 | 0 | 0 | 2 | 2 (max_turns 0, max_budget 0, timeout 1, context 1) |', text)
         self.assertIn('| other | 1 | 1 | 0 | 1 | 0 | 0 | 0 |', text)
 
+    def test_an_arm_written_claim_is_labelled_and_the_agents_own_claim_shown_beside_it(self):
+        self.put('plain', 1, 't1', True, claim_source='agent', agent_claim='DONE')
+        self.put('odd-race', 1, 't1', False, claim='DONE', claim_source='arm', agent_claim='NOT DONE')
+        text, s, _ = self.report()
+        a = s['arms']['odd-race']
+        self.assertEqual(a['claim_source_arm'], 1)
+        self.assertEqual(a['agent_claims']['honest_not_done'], 1)
+        self.assertEqual(s['arms']['plain']['claim_source_arm'], 0)
+        self.assertIn('| odd-race (claim written by the arm) | 1 | 0% (0/1) | 100% (1/1) |', text)
+        self.assertIn("the gate's false-pass rate", text)
+        self.assertIn('| plain | 1 | 100% (1/1) |', text)
+
+    def test_the_strong_model_is_named_and_its_cost_rows_marked_mixed(self):
+        self.put('plain', 1, 't1', True)
+        self.put('odd-cascade', 1, 't1', True, strong_model='sonnet', sessions=[{'model': 'haiku'}, {'model': 'sonnet'}])
+        self.put('odd-race', 1, 't1', True, strong_model='sonnet', sessions=[{'model': 'haiku'}])
+        text, s, _ = self.report()
+        self.assertIn('Strong model (--strong-model): odd-cascade sonnet, odd-race sonnet.', text)
+        self.assertIn('| odd-cascade (mixed-model) |', text)
+        self.assertNotIn('odd-race (mixed-model)', text)
+        self.assertTrue(s['arms']['odd-cascade']['mixed_model'])
+
     def test_the_baseline_can_be_named(self):
         self.flips(2, ['t03', 't07'])
         _, _, rows = self.report('--baseline', 'other')

@@ -54,8 +54,8 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 # The transcript readers and the claim parser are shared with the helper an arm-supplied agent runs (arm_agent.py).
-from arm_agent import (EMPHASIS, LEADING_MARKS, VERDICT, USAGE_KEYS, events, parse_claim, parse_result,  # noqa: E402,F401
-                       stream_usage, tokens, total, transcripts)
+from arm_agent import (ARM_REASON, CAPS, EMPHASIS, LEADING_MARKS, VERDICT, USAGE_KEYS, events,  # noqa: E402,F401
+                       parse_claim, parse_result, stream_usage, tokens, total, transcripts)
 BENCH_REPO = os.path.dirname(HERE)
 GIT = ['git', '-c', 'user.name=bench', '-c', 'user.email=bench@example.com']
 # What lets a headless session edit files and run commands in its directory. Evidence: RUNNER-NOTES.md.
@@ -68,7 +68,6 @@ SETUP_TIMEOUT, POST_TIMEOUT, GRADE_TIMEOUT = 900, 300, 180
 ARM_SPAN = 4  # an arm-supplied agent may run this many --timeout spans in all (its sessions run one after another)
 # The result subtypes CLI 2.1.322 printed (exit 1, is_error true, result null) when --max-turns 1 and
 # --max-budget-usd 0.00001 were reached live on 2026-11-11 (RUNNER-NOTES.md). Such a run is graded as it stands.
-CAPS = {'error_max_turns': 'max_turns', 'error_max_budget_usd': 'max_budget'}
 # A context overflow is the arm's outcome too (a heavy framework fills the window): graded, stopped_at "context".
 OVERFLOW = 'Prompt is too long'
 # Appended to every hidden *.py copied into G; any canary in any transcript is contamination, whichever run it is from.
@@ -516,7 +515,7 @@ def one_run(cfg, task, arm, repeat):
         TOPS.add(top)
     session = os.path.join(top, 's', 'project')
     pending = {'task': task, 'rec': rec, 'errors': [], 'top': top, 'copies': [], 'grade_copy': None,
-               'grading_dir': None, 'graded': False, 'manifest': False}
+               'grading_dir': None, 'graded': False, 'manifest': False, 'logs': None}
     try:
         session_and_copies(cfg, task, arm, repeat, pending, session)
     except Exception as e:  # one broken run must not stop the others
@@ -525,8 +524,12 @@ def one_run(cfg, task, arm, repeat):
         TOPS.discard(top)
     if cfg['keep']:
         rec['session_dir'] = session
+        if pending['logs']:
+            rec['transcripts_dir'] = pending['logs']
     else:
         shutil.rmtree(top, ignore_errors=True)
+        if pending['logs']:
+            shutil.rmtree(pending['logs'], ignore_errors=True)
     if not STOPPING.is_set():  # a session an interrupt stopped is not an ended session: --resume runs it again
         try:
             save_manifest(cfg, pending)
@@ -577,7 +580,10 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
         fake_env = dict(agent, BENCH_TASK=task['id'], BENCH_ARM=arm, BENCH_REPEAT=str(repeat), BENCH_TASK_DIR=task_dir)
         status, out, err = run(cfg['fake'], session, fake_env, cfg['timeout'], stdin=prompt)
     elif os.path.isfile(arm_agent):
-        status, out, err = run_arm_agent(cfg, rec, arm_agent, prompt, session, top, agent)
+        # the sessions' transcripts sit outside <top>, so no session finds an earlier one by walking up its tree; a
+        # 'bench-' directory that is not its own, so the audit flags any session that reaches it
+        pending['logs'] = tempfile.mkdtemp(prefix='bench-')
+        status, out, err = run_arm_agent(cfg, rec, arm_agent, prompt, session, top, agent, pending['logs'])
     else:
         cmd = agent_command(prompt, cfg['model'], cfg['max_turns'], cfg['max_budget_usd'], session)
         status, out, err = run(cmd, session, agent, cfg['timeout'])
@@ -590,8 +596,8 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
         rec['warnings'].append('leftover processes not checked: /proc is not available here')
     rec['exit_status'] = status
     rec['transcript'] = '%s.%s.%d.transcript.jsonl' % (task['id'], arm, repeat)
-    summed = total(os.path.join(top, 'transcripts')) if 'sessions' in rec else None
-    texts = dict(transcripts(os.path.join(top, 'transcripts'))) if summed is not None else {}
+    summed = total(pending['logs']) if 'sessions' in rec else None
+    texts = dict(transcripts(pending['logs'])) if summed is not None else {}
     with open(os.path.join(cfg['out'], rec['transcript']), 'w', encoding='utf-8') as f:
         if summed is not None:  # every claude session the arm started, then the arm's own output
             for name, text in sorted(texts.items()):
@@ -602,13 +608,19 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
     rec['stopped_at'], error = outcome_of(status, result, out, err)
     if error:
         errors.append('the agent ' + error)
+    first = ''  # the first claude session's own final message: the agent's claim, beside the one graded
     if summed is not None:
+        if summed['sessions'] and isinstance((summed['sessions'][0]['result'] or {}).get('result'), str):
+            first = summed['sessions'][0]['result']['result']
         for s in summed['sessions']:
             stopped, error = outcome_of(s['exit'], s['result'] or {}, texts[s['file']], '')
             if error:
                 errors.append('claude session %s: %s' % (s['file'], error))
             s.update(stopped_at=stopped, result=None)
         rec['sessions'] = summed['sessions']
+        # a session stopped at a cap is the run's cap too (the caps are the run's: arm_agent.run_caps)
+        rec['stopped_at'] = rec['stopped_at'] or next((s['stopped_at'] for s in summed['sessions']
+                                                       if s['stopped_at']), None)
         if result:  # the figures are run.py's own sum over the transcripts, never the arm's report of them
             if result.get('total_cost_usd') != summed['total_cost_usd']:
                 rec['warnings'].append('the arm reported a cost of %s; the sum over its sessions is %s'
@@ -627,6 +639,13 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
     final = result.get('result') if isinstance(result.get('result'), str) else ''
     rec['final'] = final
     rec['claim'], rec['claim_reason'] = parse_claim(final)
+    # claim_source "arm": the RESULT line graded is the arm's (odd's exit status), not a model's; agent_claim is the
+    # model's own. The arm's own reason (ARM_REASON) is recorded apart and never reaches .bench/claim.json.
+    rec['agent_claim'], rec['agent_claim_reason'] = parse_claim(first) if summed is not None else \
+        (rec['claim'], rec['claim_reason'])
+    rec['claim_source'] = 'arm' if summed is not None and final.strip() != first.strip() else 'agent'
+    rec['arm_reason'] = next((x[len(ARM_REASON):].strip() for x in reversed(final.splitlines())
+                              if x.startswith(ARM_REASON)), None) if summed is not None else None
 
     # The session is over and is never written again: what the arm runs afterwards and the grade each get a copy of
     # it, made now, outside it, so neither can change the other and --keep keeps the tree exactly as the session left
@@ -670,14 +689,14 @@ def outcome_of(status, result, transcript, err):
     return None, None
 
 
-def run_arm_agent(cfg, rec, script, prompt, session, top, agent):
+def run_arm_agent(cfg, rec, script, prompt, session, top, agent, folder):
     """An arm-supplied agent (SPEC.md): arms/<arm>/agent.sh, copied with arm_agent.py into <top>/arm (so nothing it
     runs names the bench's path), run in the session directory with the prompt on stdin and the ARM_* variables;
-    every claude session it starts writes its transcript into <top>/transcripts. Bounded by ARM_SPAN times the
-    timeout, since its sessions run one after another; each session is bounded by the timeout itself."""
-    own, folder = os.path.join(top, 'arm'), os.path.join(top, 'transcripts')
+    every claude session it starts writes its transcript into `folder` (outside <top>). Bounded by ARM_SPAN times the
+    timeout, since its sessions run one after another; each session by the timeout itself, and all of them together
+    by the run's --max-turns and --max-budget-usd (arm_agent.run_caps)."""
+    own = os.path.join(top, 'arm')
     os.makedirs(own)
-    os.makedirs(folder)
     shutil.copy2(script, os.path.join(own, 'agent.sh'))
     shutil.copy2(os.path.join(HERE, 'arm_agent.py'), os.path.join(own, 'arm_agent.py'))
     flags = agent_command('', cfg['model'], cfg['max_turns'], cfg['max_budget_usd'], session)
@@ -687,7 +706,8 @@ def run_arm_agent(cfg, rec, script, prompt, session, top, agent):
                ARM_TIMEOUT=str(cfg['timeout']), ARM_TRANSCRIPTS=folder, ARM_CLAUDE_FLAGS=json.dumps(flags[5:]),
                ARM_AGENT_ENV=json.dumps(sorted(agent)), ARM_HELPER=os.path.join(own, 'arm_agent.py'),
                ARM_ODD_PY=cfg['odd_py'])
-    rec.update(sessions=[], strong_model=cfg['strong_model'], arm_timeout_seconds=cfg['timeout'] * ARM_SPAN)
+    rec.update(sessions=[], strong_model=cfg['strong_model'], arm_timeout_seconds=cfg['timeout'] * ARM_SPAN,
+               budget_scope='run')
     return run(['bash', os.path.join(own, 'agent.sh')], session, env, cfg['timeout'] * ARM_SPAN, stdin=prompt)
 
 
