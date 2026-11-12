@@ -90,6 +90,7 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 | `odd done <slug> [--base REF]` | verify it: passes, fails with the change taken out, passes again |
 | `odd race <slug> [--n N] [--agent CMD]` | run N agent attempts in parallel, each in its own git worktree; the verified one with the strongest proof and fewest changed lines is applied to your tree (a tool newer than 0.4.0) |
 | `odd cascade <slug> [--agents C1,C2] [--race N]` | try the agents in order, cheapest first, each attempt in its own worktree; stop at the first verified one and apply it, else escalate with the failure in the next prompt, and park after the last (a tool newer than 0.4.0) |
+| `odd spec <slug> --proof-by CMD [--tries N]` | another agent (in practice a stronger model) writes only the proof in its own worktree; it is brought back and sealed red before any code, retried up to 3 times, then parked (a tool newer than 0.4.0) |
 | `odd gate [--recompute]` | is every changed file inside a verified outcome? (`--recompute` for CI) |
 | `odd park <slug> "<reason>"` | the honest exit: blocked, or cannot be done as specified |
 | `odd escaped <slug> "<what, where found>"` | a defect got past a verified outcome: record it on that outcome |
@@ -97,12 +98,15 @@ From here your coding agent follows the method in `AGENTS.md` by itself.
 
 **Racing agents.** With `"agents": ["<agent command>", ...]` in `.odd/config.json` (any CLI agent; `{prompt_file}`
 in the command becomes the prompt's path, else the prompt goes to stdin), `odd race <slug>` starts one attempt per
-command in its own git worktree under `.git/`, checks each one as `odd done` would, prints a table of attempts and
+command in its own working tree under `.git/` (a `git clone --shared`, so its git config, hooks and refs stay its
+own), checks each one as `odd done` would, prints a table of attempts and
 applies the winner: verified, then the most small breaks caught, then the fewest changed lines, then the earliest
 finish. If your tree already has changes inside the boundary it writes the winner as a patch instead. On fake agents
 (one correct, one with a weaker proof, one broken, one that edits the test) the correct one won 10 races of 10, and
-setting up and removing a worktree cost 0.03 s per attempt on a three-file repository. Not measured yet: real agents,
-and whether a race of cheap models beats one strong one (BACKLOG item 1). Details: [DESIGN.md](DESIGN.md) section 3b.
+setting up and removing an attempt's tree costs 0.06-0.08 s per attempt on a three-file repository. An attempt is
+refused if it left a process running (found by its `ODD_ATTEMPT` mark on Linux, and killed), and ignored files it made
+that your tree lacks are removed before the check, since the applied patch would not carry them. Not measured yet:
+real agents, and whether a race of cheap models beats one strong one (BACKLOG item 1). Details: [DESIGN.md](DESIGN.md) section 3b.
 
 **Cheapest agent first.** `odd cascade <slug>` reads the same `"agents"` list as levels, cheapest first (or
 `--agents "C1,C2"`): the first agent attempts the outcome in a fresh worktree; if the attempt is verified it is applied
@@ -113,6 +117,17 @@ agent prints a final line `odd-cost: <usd>`, else "not reported". On fake agents
 verified, 0.74-0.87 s when it escalates to level 2, 0.42-0.49 s to park after two (5 runs each, three-file repository).
 Not measured: real agents and whether Haiku-then-Sonnet is cheaper than Sonnet alone (BACKLOG item 2). Details:
 [DESIGN.md](DESIGN.md) section 3c.
+
+**A stronger model writes the proof, a cheaper one the code.** `odd spec <slug> --proof-by "<command>"` gives the
+outcome to one agent command to write only the proof, in its own worktree. odd accepts it only if it changes test
+files alone and the proof fails before the code; it brings the tests back, seals them (`odd seal`) and writes
+`proof-by: <name>` in the outcome file (credentials on the command line are left out). A proof that passes before the
+code is refused and the reason goes to the next try; after 3 tries (`"proof_tries"`) the outcome is parked. Then
+`odd race` or `odd cascade` with cheaper agents works against that sealed proof, and an attempt that edits it is
+refused. Why: in one study, tests from a stronger model raised a fixed repair agent's resolution from 61.2% to 65.3%,
+while tests from the weak model itself lowered it to 57.3% (arXiv 2609.09133, see
+[docs/evidence/14-research.md](docs/evidence/14-research.md)). Whether that holds on odd's harness is not measured yet
+(BACKLOG item 3). Details: [DESIGN.md](DESIGN.md) section 3d.
 
 ## What it checks, and what it does not
 

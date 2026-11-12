@@ -45,6 +45,11 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
                 'no attempt is verified; park the outcome with every reason after the last.',
      [SLUG, ('agents', S, 'agent commands, cheapest first, comma-separated (default: "agents" in .odd/config.json)'),
       ('race', S, 'attempts per level in parallel, as a number (default 1)'), BASE], ('slug',)),
+    ('spec', 'Have another agent (in practice a stronger model) write only the proof, in its own git worktree; the '
+             'test files come back and are sealed red before any code; retried, then parked, if the proof does not '
+             'fail first.',
+     [SLUG, ('proof-by', S, 'the agent command that writes the proof; {prompt_file} becomes the prompt path, else stdin'),
+      ('tries', S, 'tries for a proof that fails before the code, as a number (default 3)'), BASE], ('slug', 'proof-by')),
     ('park', 'The honest exit: the outcome is blocked or cannot be done as specified.',
      [SLUG, ('reason', S, 'why')], ('slug', 'reason')),
     ('escaped', 'Record a defect that got past a merged outcome.',

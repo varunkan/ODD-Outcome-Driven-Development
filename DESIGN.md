@@ -36,7 +36,9 @@ Free notes: questions asked and answered, decisions and why.
 - Optional lines: `counterfactual: skip - <reason>`, `parked: <reason>`, `escaped: ...` (written by `odd escaped`,
   section 9), `sealed: ...` (written by `odd seal`, section 4), `test-change: <reason>` (why this change edits or
   deletes a test that existed at the base, section 5; needs a tool newer than 0.4.0, the next release:
-  a pinned Action at 0.4.0 or older refuses the unknown field).
+  a pinned Action at 0.4.0 or older refuses the unknown field), `proof-by: <name>` (written by `odd spec`: which
+  agent command wrote the sealed proof, section 3d; the same tool version, and the same refusal by an older one:
+  delete the line for an older tool).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -51,6 +53,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
 | `odd cascade <slug> [--agents C1,C2,...] [--race N] [--base REF]` | the agents in order, cheapest first, each level's attempts run and checked as in `race`; the next level only when none is verified, with the failure in its prompt; park after the last (section 3c); needs a tool newer than 0.4.0 | 0 verified attempt applied, 1 parked or the winner left as a patch, 2 could not run |
+| `odd spec <slug> --proof-by CMD [--tries N] [--base REF]` | another agent command (in practice a stronger model) writes only the proof in its own worktree; the test files come back and are sealed red (section 3d); retried, then parked; needs a tool newer than 0.4.0 | 0 proof brought back and sealed, 1 parked or refused (the proof passes in your tree, or did not apply), 2 could not run |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd escaped <slug> "<what, where found>"` | records a defect that got past this outcome (section 9) | 0, 1 vague report or no such outcome |
@@ -93,14 +96,29 @@ files to leave alone, and the method `odd init` installs.
 The settings `agents`, `race_timeout` and `race_seal` need a tool newer than 0.4.0: v0.4.0 (and its Action)
 refuses an unknown setting, so a project that adds them vendors the newer `odd.py` first.
 
-1. **Worktrees.** Each attempt gets `git worktree add --detach` of HEAD under the git directory
-   (`.git/odd/race/run-<pid>/<n>`), never the user's tree. The outcome file, the changed test files and
-   `.odd/config.json` are copied in as they are in the user's tree and committed there as the attempt's start.
-   Uncommitted product changes in the user's tree are not copied.
+1. **Working trees.** Each attempt gets its own working tree of HEAD under the git directory
+   (`.git/odd/race/run-<pid>/<n>`), never the user's tree. Since the B3 commit it is a clone that reads the
+   user's objects (`git clone --shared --no-checkout`, then a detached checkout of HEAD; the remote is removed and the
+   user's `info/exclude` copied in), not a `git worktree add`: a linked worktree shares the user's `.git/config`,
+   hooks, `info/` and refs, so an attempt's plain `git config core.fsmonitor ...` or a hook it wrote ran on every
+   later git call in the user's repository, even after the attempt was discarded (review finding, test
+   `Isolation`). The outcome file, the changed test files and `.odd/config.json` are copied in as they are in the
+   user's tree and committed there as the attempt's start. Uncommitted product changes in the user's tree are not
+   copied. Settings in the user's repository-local config (not the global one) do not apply inside an attempt, and an
+   agent that commits needs a global `user.name`/`user.email`.
 2. **Agents run in parallel**, each in its own process group with stdin closed or the prompt, its output in
    `.git/odd/race/<slug>/agent-<n>.log`. At `race_timeout` seconds (default 1800) an agent is killed with its process
-   group; when an agent ends, whatever it left running in its group is killed before its attempt is checked.
-3. **Each attempt is checked when it ends**, one at a time, inside its worktree: it must not have edited the copied
+   group; when an agent ends, whatever it left running in its group is killed before its attempt is checked. Each
+   agent starts with `ODD_ATTEMPT=<its working tree>/` in its environment; on Linux odd then reads `/proc` for any
+   process still carrying that mark (one it detached with `setsid`, a daemon), kills it and refuses the attempt with
+   `left process <pid> running (killed)`; the same sweep runs when a run is removed, including a run left by a
+   killed odd. Not covered: a process that clears its environment, and systems without `/proc` (macOS), where only
+   the process group is killed.
+3. **Each attempt is checked when it ends**, one at a time, inside its worktree (`_settle()` first: its git config,
+   `info/` and hooks put back as odd made them and its index reset to the start, so a `core.fsmonitor`, an exclude
+   rule or `git update-index --assume-unchanged` cannot hide an edited file from the check or run during it; and
+   the ignored files the agent created that the user's tree does not have are removed, because the applied patch
+   carries no ignored file, so a winner cannot lean on one): it must not have edited the copied
    files or a control file, and must not have changed product files outside `in:`; then the checks of `odd done`
    (`prove()`: the R2 test-change rule, then `verify()`: green, red without the change, green, the empty-proof
    checks and, unless `"strength": "off"`, the strength check; `"enforce"` applies as in `done`). A timed-out attempt is
@@ -113,13 +131,19 @@ refuses an unknown setting, so a project that adds them vendors the newer `odd.p
    only if no path inside `in:` differs from HEAD in the user's tree; otherwise, or if `git apply` refuses, the tree
    is left alone and the patch path is printed (exit 1). The race records no evidence in the user's tree: run
    `odd done <slug>` there, which re-verifies on the tree as it is.
-6. **Cleanup**: the worktrees are removed when the race ends, also on SIGTERM/SIGINT (agents killed first). After a
-   kill -9 the next race removes runs whose process is gone; agents still running then are not found.
+6. **Cleanup**: the working trees are removed when the race ends, also on SIGTERM/SIGINT (agents killed first). After
+   a kill -9 the next race, cascade or spec removes runs whose process is gone, and on Linux kills their agents still
+   carrying the mark.
 
 Limits: verification is sequential, so N attempts cost N verifications after the agents; the attempts share the
 machine, so a timing-sensitive proof may behave differently under load; installed dependencies and caches outside
-the worktree are shared; nothing stops an agent from writing outside its worktree (it runs as the user). Measured
-(fake agents, this machine): see BACKLOG item 1.
+the worktree are shared; nothing stops an agent from writing outside its worktree on purpose (it runs as the user:
+absolute paths, `git -C <your repo>`, the path in the clone's `objects/info/alternates`). An ignored file the agent
+created that your tree also has is kept for the check whatever its content (a dependency directory such as
+`node_modules` stays usable); one your tree lacks is removed, so an agent that installs dependencies into an ignored
+directory your tree does not have yet gets "could not verify". Measured (fake agents, this machine): see BACKLOG
+item 1; the clone costs 0.06-0.08 s of setup and clean-up per attempt against 0.03-0.04 s for the linked worktree
+(5 runs each, 4 attempts, three-file repository).
 
 ### 3c. `odd cascade`: the cheapest agent first, pay more only when the proof says so
 
@@ -157,6 +181,45 @@ the dear one; the ordering is the user's (odd does not know which agent is cheap
 with surviving breaks under `"strength": "report"` stops the cascade (use `"enforce"` to escalate on a survivor);
 the same limits as race on shared caches and agents writing outside their worktree. Measured (fake agents, this
 machine): see BACKLOG item 2.
+
+### 3d. `odd spec --proof-by`: one agent writes the proof, another writes the code
+
+`odd spec <slug> --proof-by CMD` runs CMD, an agent command like the ones in `"agents"`, to write only the proof of an
+outcome that `odd new` created. The author works in a fresh detached worktree of HEAD under the git directory with
+the outcome file (and `.odd/config.json`) copied in (`_worktree()`, shared with race), in its own process group with
+`race_timeout` (`_launch()`). Its prompt states the outcome, the proof command, the boundary it must not change and
+the test globs, and that the proof must fail before the code. When it exits, odd checks the worktree
+(`_proof_check()`, after the same `_settle()` as race, so a process the author detached refuses the try): only test files changed (a product file, a control file or the outcome file refuses the try), at
+least one test file, and the proof command, run there, exits non-zero and is not unrunnable (the same `unrunnable()`
+rule as `odd seal`). A refused try's reason goes into the next try's prompt. After at most `--tries`, or the
+`"proof_tries"` setting (default 3, 1 to 32), the outcome gets a `parked:` line naming the author and each reason, the
+journal records it, nothing is brought back, and the exit is 1.
+
+An accepted proof is brought back as a patch of the test files only (`git apply`, all or nothing; a file that differs
+in your tree makes it fail and the patch stays in `.git/odd/spec/<slug>/proof.patch`). Then `odd seal` runs in your
+tree as it would by hand (`cmd_seal()`): the proof must fail there too. If it does not (for example the code is
+already in your tree, uncommitted), the patch is reversed, so your tree is as it was, and the exit is 1. On success
+the outcome gets `proof-by: <name>`: the command with environment assignments (`TOKEN=...`), the values of options
+whose name looks like a credential (`--api-key X`, `--token=X`) and `{prompt_file}` removed, shortened. It names the
+author for a reviewer; it is not proof of who ran.
+
+Then `odd race` and `odd cascade` run with the sealed proof unchanged: the brought-back test files are changed test
+files, so `_race_start()` puts them in the files an attempt must leave alone, and an attempt that edits them is
+refused (and `check_seal()` refuses any later edit in your tree). Setting: `proof_tries`; field: `proof-by`; both need
+a tool newer than 0.4.0.
+
+**Why, and what to measure.** ExecCritic (arXiv 2609.09133; docs/evidence/14-research.md section 2.5): with the
+repairing agent fixed, tests written by the weak base model lowered resolution from 61.2% to 57.3%, and tests from a
+stronger model raised it to 65.3%. So the same weak agent writing its own proof can hurt, and a stronger author is the
+likeliest place for a correctness gain on a cheap implementer. That is a paper's number, not ours: the measurement
+still to run is a cheap implementer with a cheap-model sealed proof against the same implementer with a strong-model
+sealed proof, scored on hidden tests, plus the cost of the extra call (BACKLOG item 3).
+
+Limits: odd checks that the proof is red, touches only test files and stays sealed; it cannot check that the proof
+tests the outcome rather than something easier to fail (a stronger author, the strength check after the code, and a
+reviewer reading the proof are the defences). A kill during the author's run leaves your tree untouched (the
+worktree is removed on the next race, cascade or spec); a kill between bringing the proof back and sealing it can
+leave the unsealed test files in your tree. The author can write outside its worktree, as in race.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 

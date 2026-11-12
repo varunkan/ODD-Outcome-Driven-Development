@@ -1657,7 +1657,7 @@ class Adoption(Repo):
                      tool='.odd/odd_mcp.py')
         self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
         self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
-        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['cascade', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal'])
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['cascade', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec'])
         self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
         done = r[4]['result']
         self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)
@@ -2079,6 +2079,76 @@ class Race(Agents):
         self.assertIn('"agents" has the wrong kind of value', self.no('race', 'add', code=2))
 
 
+class Isolation(Agents):
+    """What an attempt does is gone with it: its git config, hooks and refs, ignored files the applied patch would not
+    carry, processes it detached, and index tricks that would hide a change from the judging. Fake agents only."""
+
+    def test_an_attempts_git_config_hooks_and_refs_do_not_reach_the_users_repository(self):
+        mark = os.path.join(self.bin, 'ran')
+        hook = '"$(git rev-parse --git-path hooks)/post-index-change"'
+        self.config([self.agent('cfg', "git branch planted\n"
+                                       "printf '#!/bin/sh\\ntouch %s\\n' > %s\nchmod +x %s\n"
+                                       "git config core.fsmonitor 'touch %s; false'\n" % (mark, hook, hook, mark)
+                                       + self.writes(FIXED))])
+        config = self.read('.git/config')
+        out = self.ok('race', 'add', '--n', '1')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertFalse(os.path.exists(mark), 'a command the attempt planted in git ran while it was checked')
+        self.assertEqual(self.read('.git/config'), config)
+        self.assertNotIn('planted', self.git('branch', '--list'))
+        self.assertFalse(os.path.exists(self.path('.git/hooks/post-index-change')))
+        self.git('status')
+        self.git('checkout', '-q', '-b', 'other')
+        self.assertFalse(os.path.exists(mark), 'a command the attempt planted ran in the user\'s repository')
+        self.no_worktrees_left()
+
+    def test_an_exclude_rule_an_attempt_adds_does_not_hide_its_files_from_the_check(self):
+        self.config([self.agent('ex', "echo '*.py' >> \"$(git rev-parse --git-path info/exclude)\"\n"
+                                      "printf 'x = 1\\n' > extra.py\n" + self.writes(FIXED))])
+        out = self.no('race', 'add', '--n', '1')
+        self.assertIn('outside "in: calc.py": extra.py', out)
+        self.assertNotIn('*.py', self.read('.git/info/exclude') if os.path.exists(self.path('.git/info/exclude')) else '')
+        self.assertFalse(os.path.exists(self.path('extra.py')))
+
+    def test_an_index_trick_does_not_hide_an_edited_proof_from_the_judging(self):
+        self.commit('the proof')
+        cheat = ('import unittest\nfrom calc import add\n\n\nclass T(unittest.TestCase):\n'
+                 '    def test_add(self):\n        self.assertEqual(add(2, 3), 7)\n')
+        self.config([self.agent('hide', 'git update-index --assume-unchanged tests/test_calc.py\n'
+                                        'printf %%s %s > tests/test_calc.py\n' % shlex.quote(cheat)
+                                        + self.writes('def add(a, b):\n    return 7\n'))])
+        out = self.no('race', 'add', '--n', '1')
+        self.assertIn('tests/test_calc.py', out)
+        self.assertEqual(self.read('calc.py'), BROKEN)
+
+    def test_a_winner_cannot_lean_on_an_ignored_file_the_patch_leaves_out(self):
+        self.config([self.agent('hide', "mkdir -p __pycache__\n"
+                                        "printf 'def add(a, b):\\n    return a + b\\n' > __pycache__/h.py\n"
+                                        "printf 'from __pycache__.h import add\\n' > calc.py")])
+        out = self.no('race', 'add', '--n', '1')
+        self.assertIn('not verified', out)
+        self.assertEqual(self.read('calc.py'), BROKEN)
+
+    def test_ignored_files_the_users_tree_has_too_stay_for_the_check(self):
+        self.write('__pycache__/h.py', 'def add(a, b):\n    return a + b\n')
+        self.config([self.agent('dep', "mkdir -p __pycache__\n"
+                                       "printf 'def add(a, b):\\n    return a + b\\n' > __pycache__/h.py\n"
+                                       "printf 'from __pycache__.h import add\\n' > calc.py")])
+        out = self.ok('race', 'add', '--n', '1')
+        self.assertIn('winner', out)
+
+    @unittest.skipUnless(os.path.isdir('/proc'), 'needs /proc (Linux)')
+    def test_a_process_an_attempt_detaches_is_killed_and_the_attempt_refused(self):
+        pid = os.path.join(self.bin, 'pid')
+        self.config([self.agent('daemon', "setsid sh -c 'echo $$ > %s; exec sleep 30' </dev/null >/dev/null 2>&1 &\n"
+                                          "while [ ! -s %s ]; do sleep 0.05; done\n" % (pid, pid) + self.writes(FIXED))])
+        out = self.no('race', 'add', '--n', '1')
+        self.assertRegex(out, r'left process \d+ running \(killed\)')
+        self.assertEqual(self.read('calc.py'), BROKEN)
+        self.gone(pid)
+        self.no_worktrees_left()
+
+
 class Cascade(Agents):
     """odd cascade: agent commands tried in order, each level's attempts verified as race verifies them; escalate only
     when no attempt at a level is verified, passing the failure on; park after the last. Fake agents only."""
@@ -2153,6 +2223,125 @@ class Cascade(Agents):
     def test_it_cannot_run_without_agents(self):
         self.assertIn('no agent', self.no('cascade', 'add', code=2))
         self.assertIn('--race', self.no('cascade', 'add', '--agents', 'true', '--race', '0', code=2))
+
+
+class Spec(Agents):
+    """odd spec --proof-by: a separate (in practice stronger) agent writes only the proof, in its own worktree; odd
+    brings the test files back and seals them red before any code. Fake agents only."""
+    PASSING = 'import unittest\n\n\nclass T(unittest.TestCase):\n    def test_nothing(self):\n        pass\n'
+
+    def setUp(self):
+        Agents.setUp(self)
+        os.remove(self.path('tests/test_calc.py'))
+
+    def author(self, name, *tries):
+        """A fake proof author: on its n-th run it writes tries[n-1] (the last one repeats) as tests/test_calc.py,
+        counts its runs and keeps each prompt outside the worktree."""
+        body = ['n=$(( $(cat %s/%s.n 2>/dev/null || echo 0) + 1 )); echo $n > %s/%s.n' % (self.bin, name, self.bin, name),
+                'cp "$1" %s/%s.prompt.$n' % (self.bin, name), 'mkdir -p tests']
+        for i, text in enumerate(tries, 1):
+            body.append('if [ $n -ge %d ]; then printf %%s %s > tests/test_calc.py; fi' % (i, shlex.quote(text)))
+        return self.agent(name, '\n'.join(body))
+
+    def runs(self, name):
+        with open(os.path.join(self.bin, name + '.n')) as f:
+            return int(f.read())
+
+    def prompt(self, name, n):
+        with open(os.path.join(self.bin, '%s.prompt.%d' % (name, n))) as f:
+            return f.read()
+
+    def test_the_proof_is_written_in_a_worktree_brought_back_and_sealed_red(self):
+        cmd = 'TOKEN=s3cret ' + self.author('strong', TEST) + ' --api-key s3cret2'
+        out = self.ok('spec', 'add', '--proof-by', cmd)
+        self.assertEqual(self.read('tests/test_calc.py'), TEST, out)
+        self.assertEqual(self.read('calc.py'), BROKEN, 'the proof author must not write the code')
+        md = self.read('.odd/outcomes/add.md')
+        self.assertRegex(md, r'(?m)^sealed: proof@\w+, tests/test_calc\.py@\w+$', out)
+        self.assertRegex(md, r'(?m)^proof-by: .*strong\.sh', md)
+        self.assertNotIn('s3cret', md, 'a secret on the command line was written to the outcome file')
+        prompt = self.prompt('strong', 1)
+        for want in (SENTENCE, PROOF, 'calc.py', 'ONLY the proof'):
+            self.assertIn(want, prompt)
+        self.assertEqual(self.runs('strong'), 1)
+        self.no_worktrees_left()
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+
+    def test_a_proof_that_passes_before_the_code_is_retried_then_parked(self):
+        out = self.no('spec', 'add', '--proof-by', self.author('lazy', self.PASSING))
+        self.assertEqual(self.runs('lazy'), 3, 'the default is three tries')
+        md = self.read('.odd/outcomes/add.md')
+        self.assertRegex(md, r'(?m)^parked: odd spec: .*3 tries.*passes before the code', md)
+        self.assertNotIn('sealed:', md)
+        self.assertFalse(os.path.exists(self.path('tests/test_calc.py')), 'a refused proof was brought back')
+        self.assertIn('parked', out)
+        self.assertIn('passes before the code', self.prompt('lazy', 2), 'the reason goes to the next try')
+        self.no_worktrees_left()
+
+    def test_the_tries_are_configurable_and_a_red_retry_is_sealed(self):
+        self.write('.odd/config.json', json.dumps({'proof_tries': 2, 'race_timeout': 60}))
+        self.no('spec', 'add', '--proof-by', self.author('slow', self.PASSING, self.PASSING, TEST))
+        self.assertEqual(self.runs('slow'), 2, 'the "proof_tries" setting was not used')
+        self.assertRegex(self.read('.odd/outcomes/add.md'), r'(?m)^parked: odd spec: .*2 tries')
+        self.write('.odd/outcomes/add.md', re.sub(r'(?m)^parked:.*\n', '', self.read('.odd/outcomes/add.md')))
+        out = self.ok('spec', 'add', '--proof-by', self.author('second', self.PASSING, TEST), '--tries', '3')
+        self.assertEqual(self.runs('second'), 2)
+        self.assertEqual(self.read('tests/test_calc.py'), TEST, out)
+        self.assertIn('sealed:', self.read('.odd/outcomes/add.md'))
+        self.no('spec', 'add', '--proof-by', self.author('never', self.PASSING), code=2)  # sealed already
+        self.assertFalse(os.path.exists(os.path.join(self.bin, 'never.n')))
+        self.no('spec', 'add', '--proof-by', 'true', '--tries', '0', code=2)
+
+    def test_an_author_that_writes_product_code_is_refused(self):
+        cmd = self.agent('eager', 'mkdir -p tests\nprintf %%s %s > tests/test_calc.py\nprintf %%s %s > calc.py'
+                         % (shlex.quote(TEST), shlex.quote(FIXED)))
+        out = self.no('spec', 'add', '--proof-by', cmd, '--tries', '1')
+        self.assertEqual(self.read('calc.py'), BROKEN, out)
+        self.assertFalse(os.path.exists(self.path('tests/test_calc.py')), out)
+        self.assertRegex(self.read('.odd/outcomes/add.md'), r'(?m)^parked: odd spec: .*calc\.py')
+        self.no_worktrees_left()
+
+    @unittest.skipUnless(os.path.isdir('/proc'), 'needs /proc (Linux)')
+    def test_an_author_that_leaves_a_detached_process_is_refused(self):
+        pid = os.path.join(self.bin, 'pid')
+        cmd = self.agent('daemon', "setsid sh -c 'echo $$ > %s; exec sleep 30' </dev/null >/dev/null 2>&1 &\n"
+                                   "while [ ! -s %s ]; do sleep 0.05; done\nmkdir -p tests\n"
+                                   "printf %%s %s > tests/test_calc.py" % (pid, pid, shlex.quote(TEST)))
+        out = self.no('spec', 'add', '--proof-by', cmd, '--tries', '1')
+        self.assertRegex(out, r'left process \d+ running \(killed\)')
+        self.assertFalse(os.path.exists(self.path('tests/test_calc.py')))
+        self.gone(pid)
+
+    def test_a_tree_that_already_has_the_code_gets_the_proof_taken_back_out(self):
+        self.write('calc.py', FIXED)  # the code is already here, uncommitted: the proof cannot be red first here
+        out = self.no('spec', 'add', '--proof-by', self.author('strong', TEST))
+        self.assertIn('already passes', out)
+        self.assertFalse(os.path.exists(self.path('tests/test_calc.py')), 'the proof was left in the tree unsealed')
+        self.assertNotIn('proof-by:', self.read('.odd/outcomes/add.md'))
+        self.no_worktrees_left()
+
+    def test_race_after_spec_keeps_the_proof_byte_identical(self):
+        self.ok('spec', 'add', '--proof-by', self.author('strong', TEST))
+        sealed = self.read('tests/test_calc.py')
+        self.config([self.agent('cheat', self.writes(FIXED) + "\nprintf 'import unittest\\n' > tests/test_calc.py"),
+                     self.agent('correct', self.writes(FIXED, wait=0.3))])
+        out = self.ok('race', 'add')
+        self.assertRegex(out, r'(?m)^\s*1\b.*edited.*tests/test_calc\.py', out)
+        self.assertEqual(self.read('tests/test_calc.py'), sealed)
+        self.assertEqual(self.read('calc.py'), FIXED)
+        self.ok('done', 'add')
+
+    def test_the_mcp_tool_runs_the_same_command(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('odd_mcp_for_spec', MCP)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        cmd = self.author('strong', TEST)
+        argv = mod.argv_for('spec', {'slug': 'add', 'proof-by': cmd, 'tries': '2'})
+        self.assertEqual(argv, ['spec', '--proof-by', cmd, '--tries', '2', '--', 'add'])
+        self.ok(*argv)
+        self.assertIn('sealed:', self.read('.odd/outcomes/add.md'))
 
 
 if __name__ == '__main__':

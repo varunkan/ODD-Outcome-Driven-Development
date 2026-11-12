@@ -197,6 +197,15 @@ the first to finish; it is applied to your tree only if you have no changes insi
 written as a patch. Seal the proof first (`odd seal`; `"race_seal": true` makes the race refuse an unsealed one).
 odd calls no model itself. On fake agents the correct attempt won 10 races of 10; real agents are not measured yet.
 
+**Can an attempt leave something behind on my machine?**
+Less than in B1 and B2. Each attempt's tree is a `git clone --shared` under `.git/`, so a `git config`, a
+hook, an exclude rule or a branch it makes stays in its own clone and is deleted with it (earlier builds used linked
+worktrees, which share your `.git/config` and hooks). Before the check odd puts the clone's config, hooks and index
+back, so these cannot hide a change from the check either. On Linux, a process the agent detached (`setsid`, a daemon)
+is found by its `ODD_ATTEMPT` mark, killed, and the attempt refused. Not covered: an agent that writes outside its
+tree on purpose (absolute paths, `git -C` on your repository; it runs as you), a process that clears its environment,
+and macOS, which has no `/proc` (only the agent's process group is killed there).
+
 **Can it try a cheap model first and pay for a stronger one only when needed?**
 `odd cascade <slug>` (a tool newer than 0.4.0) runs the agent commands in `"agents"` in order, cheapest first, one
 level at a time, each attempt in its own git worktree and checked as `odd done` would. The first verified attempt is
@@ -205,6 +214,17 @@ its line, the line the proof never ran) goes into the next agent's prompt; after
 with every reason. You put the agents in order; odd does not know prices. Costs appear only when your agent command
 prints a line `odd-cost: <usd>` at the end. Under `"strength": "report"` an attempt with a surviving break still counts
 as verified and stops the cascade; use `"enforce"` to escalate on it. Real agents are not measured yet.
+
+**Can a stronger model write the proof and a cheaper one the code?**
+Yes: `odd spec <slug> --proof-by "<command>"` (a tool newer than 0.4.0). The command writes only the proof, in its own
+git worktree; odd refuses it if it changed anything but test files or if the proof does not fail before the code, and
+passes the reason to the next try (3 tries by default, `"proof_tries"`), then parks the outcome. An accepted proof is
+brought back, sealed red and labelled `proof-by: <name>` in the outcome file. `odd race` and `odd cascade` then refuse
+any attempt that edits it. The reason to bother: in ExecCritic (arXiv 2609.09133) tests from a weak model lowered a
+fixed repairer's resolution from 61.2% to 57.3%, and tests from a stronger model raised it to 65.3%. That is a
+published result, not one we have reproduced; the comparison to run is the same cheap implementer with a cheap-written
+against a strong-written sealed proof. odd cannot tell whether the proof tests the right thing, only that it is red
+first and stays unchanged; read it.
 
 **What is a sensible way to adopt it?**
 1. Today: run the demo (60 seconds).

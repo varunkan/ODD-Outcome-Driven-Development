@@ -90,6 +90,7 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   implementer starts, with about three attempts before parking.
 - **Evidence:** stronger-model tests raised resolution from 61.2% to 65.3%; weak-model tests lowered it to 57.3%
   (arXiv 2609.09133). The likeliest place for a correctness gain on a weaker implementer. Merges with item 3 below.
+- **Done** as item 3 (`odd spec --proof-by`, commit "B3: ..."); the comparison itself is not measured yet.
 
 ### R6. `odd challenge` (advisory)
 - **Outcome:** a second model tries to write a plausible but wrong variant that still passes the proof; if it
@@ -131,6 +132,23 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   (on proof strength), 1.3 to 1.5 s wall per race of four; setup and removal 0.03 s per attempt on a three-file
   repository. Not measured: real agents, the bench arm (Haiku x 3 against Sonnet x 1 and Haiku x 1), large
   repositories (worktree checkout grows with the tree), and agents that write outside their worktree (not prevented).
+- **Review fix** (in the B3 commit, `git log --grep 'review fix: attempts'`): three
+  reproduced findings closed. (1) An attempt's plain `git config core.fsmonitor ...` (or a hook, an exclude rule, a
+  branch) reached the user's repository through the linked worktree and ran on later git calls there, also for a
+  discarded attempt: attempts are now `git clone --shared` working trees with their own config, hooks, refs and
+  index. (2) A winner could import an ignored file the patch leaves out, and the applied change broke the user's
+  tree: `_settle()` removes ignored files the agent made that the user's tree lacks before the check. Found while
+  fixing: `git update-index --assume-unchanged` on the sealed test let an attempt edit the proof unseen and win;
+  `_settle()` now resets the index, config, `info/` and hooks before the check. (3) A `setsid` child outlived the
+  race: agents carry `ODD_ATTEMPT=<tree>/`, and on Linux `/proc` is swept, the process killed and the attempt
+  refused. `tests/test_odd.py` class `Isolation` (6 tests) and `Spec.test_an_author_that_leaves_a_detached_process_is_refused`:
+  the four first written were seen RED on the old code (config kept, rc 0 for the ignored helper, rc 0 for the index
+  trick, rc 0 for the detached process); 13 hand-made mutants of the new code, 12 turned a test red; the survivor is
+  `skip_group` (the agent's own group excluded from the report), a guard against reporting processes killpg already
+  killed that no test could make fire. Setup and clean-up rose from 0.03-0.04 s to 0.06-0.08 s per attempt (5 races
+  of 4 attempts each way, three-file repository). Not covered: processes that clear their environment, systems
+  without `/proc` (macOS), agents writing outside their tree on purpose, a repository-local config setting the check
+  depended on (it no longer applies inside an attempt).
 
 ### 2. `odd cascade`: cheap model first, pay more only when the proof says so
 - **Outcome:** an outcome is attempted by the cheapest configured model first and escalated to a stronger one only when
@@ -155,6 +173,18 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   done by a cheaper model or a race of them.
 - **How:** separate agent commands for `new`/proof and for implementation; sealing from the build's step 3.
 - **Measure:** accuracy and cost against the strong model doing both.
+- **Done** (with R5) in the commit "B3: odd spec --proof-by ..." (`git log --grep '^B3:'`): `odd spec <slug>
+  --proof-by CMD [--tries N] [--base REF]`, the setting `proof_tries` (default 3), the outcome field `proof-by`, the MCP
+  tool `spec`; DESIGN.md section 3d. The author runs in a worktree under the git directory (`_worktree()`,
+  `_launch()`, `_next()`, factored out of race's `_attempts()`); a try is refused unless it changed test files only and
+  the proof fails there and is runnable; the reason goes into the next prompt; after the last try the outcome is parked.
+  An accepted proof comes back by `git apply` and is sealed by `cmd_seal()` in the user's tree (reversed if the seal
+  refuses). Race and cascade keep it byte-identical (test). Measured with fake agents (`tests/test_odd.py` class
+  `Spec`, 7 tests: 6 seen RED on the missing command, the seventh (the seal refused in the user's tree) written after; all green; 16 hand-made mutants of the new code, each turned its
+  test red): 5 runs each on a three-file repository, 0.31-0.42 s wall to bring back and seal on the first try,
+  0.41-0.52 s to park after 3 refused tries. Not measured: real agents, the comparison above (cheap implementer with a
+  cheap-written against a strong-written sealed proof, on hidden tests), and whether the proof tests the outcome
+  rather than something easier (odd cannot check that).
 
 ### 4. Requirement coverage check
 - **Outcome:** before code, every requirement in the ticket is mapped to an outcome, and a requirement no outcome

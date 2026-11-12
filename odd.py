@@ -12,6 +12,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd done <slug> [--base REF]                            exit 0 verified, 1 not shown, 2 could not run
   odd race <slug> [--n N] [--agent CMD] [--base REF]      N agent attempts in worktrees; the proof picks the winner
   odd cascade <slug> [--agents C1,C2] [--race N]          agents in order, cheapest first; escalate until one is proven
+  odd spec <slug> --proof-by CMD [--tries N]              another agent writes only the proof; sealed red first
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
   odd escaped <slug> "<what went wrong, where found>"     a defect got past this outcome; record it
@@ -58,9 +59,10 @@ DEFAULTS = {
     'agents': [],          # odd race: agent commands, one per attempt in turn; {prompt_file} is the prompt's path, else stdin
     'race_timeout': 1800,  # odd race: seconds an attempt's agent may run before it is killed with its process group
     'race_seal': False,    # odd race: refuse an outcome that is not sealed
+    'proof_tries': 3,      # odd spec: tries for the proof author to write a proof that fails before the code
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
@@ -174,7 +176,8 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'strength': lambda v: v in ('off', 'report', 'enforce'), 'mutants': lambda v: type(v) is int and v >= 0,
             'agents': lambda v: isinstance(v, list) and all(isinstance(c, str) and c.strip() for c in v),
             'race_timeout': lambda v: type(v) in (int, float) and 0 < v < float('inf'),
-            'race_seal': lambda v: type(v) is bool}
+            'race_seal': lambda v: type(v) is bool,
+            'proof_tries': lambda v: type(v) is int and 1 <= v <= 32}
 
 
 def load_config(root, at=None):
@@ -1606,10 +1609,43 @@ def _alive(pid):
     return True
 
 
+def _sweep(prefix, skip_group=None):
+    """Kill every process whose environment carries ODD_ATTEMPT=<prefix...>, the mark each agent is started with, so a
+    process an agent detached from its group (setsid, a daemon) is found too. Returns the pids found outside the
+    process group `skip_group` (the agent's own group, killed already). Reads /proc: where there is none (macOS) nothing
+    is found, and a process that clears its environment is not found."""
+    mark, left = b'ODD_ATTEMPT=' + os.fsencode(prefix), []
+    for _ in range(20):
+        found = []
+        for d in os.listdir('/proc') if os.path.isdir('/proc') else ():
+            if not d.isdigit() or int(d) == os.getpid():
+                continue
+            try:
+                with open('/proc/%s/environ' % d, 'rb') as f:
+                    if not any(e.startswith(mark) for e in f.read().split(b'\0')):
+                        continue
+                with open('/proc/%s/stat' % d, 'rb') as f:
+                    group = int(f.read().rsplit(b')', 1)[1].split()[2])
+            except (OSError, ValueError, IndexError):
+                continue
+            found.append(int(d))
+            try:
+                os.kill(int(d), signal.SIGKILL)
+            except OSError:
+                pass
+            if group != skip_group and int(d) not in left:
+                left.append(int(d))
+        if not found:
+            break
+        time.sleep(0.05)  # killed; it leaves /proc's marked set once it has exited
+    return left
+
+
 def _drop_run(root, run):
-    """Remove one race run's worktrees and their directory. The user's working tree is never touched."""
-    for name in sorted(os.listdir(run)) if os.path.isdir(run) else []:
-        sh(['git', 'worktree', 'remove', '--force', '--force', os.path.join(run, name)], root)
+    """Remove one run's attempts: first any process still carrying an attempt's mark, then the directory (also a run
+    an older odd made of linked worktrees, which `worktree prune` then forgets). The user's working tree is never
+    touched."""
+    _sweep(run + os.sep)
     shutil.rmtree(run, ignore_errors=True)
     sh(['git', 'worktree', 'prune'], root)
 
@@ -1621,15 +1657,55 @@ def _wait_agent(at, p, timeout, done):
         rc = None
     _killpg(p)  # whatever the agent left running in its process group goes with it
     p.wait()
-    at.update(rc=rc, agent_s=round(time.time() - at['t0'], 1))
+    at.update(rc=rc, agent_s=round(time.time() - at['t0'], 1), left=_sweep(at['wt'] + os.sep, skip_group=p.pid))
     done.put(at)
 
 
-def _judge(cfg, o, base, at, fixed):
+def _clear(path):
+    """Remove a file, a symlink (never what it points to) or a directory tree."""
+    if os.path.isdir(path) and not os.path.islink(path):
+        shutil.rmtree(path, ignore_errors=True)
+    elif os.path.lexists(path):
+        os.remove(path)
+
+
+def _exclude(root, wt):
+    """The user's info/exclude in the attempt's git directory, so files the user keeps out of git stay out there."""
+    src = os.path.join(root, git(root, 'rev-parse', '--git-path', 'info/exclude').strip())
+    os.makedirs(os.path.join(wt, '.git', 'info'), exist_ok=True)
+    if os.path.isfile(src):
+        shutil.copyfile(src, os.path.join(wt, '.git', 'info', 'exclude'))
+
+
+def _settle(root, at):
+    """Before a finished attempt is checked: why it is refused (a process it left running, its .git replaced), or ''
+    with its git directory put back as odd made it (config, info/exclude, no hooks, the index of its start), so
+    nothing the agent set up in git hides a change from the check or runs during it, and with the ignored files the
+    agent made that the user's tree does not have removed, since the applied patch would not carry them."""
+    wt, g = at['wt'], os.path.join(at['wt'], '.git')
+    if at.get('left'):
+        return 'left process %s running (killed)' % ', '.join(str(x) for x in at['left'][:6])
+    if os.path.islink(g) or not os.path.isdir(g) or os.path.lexists(os.path.join(g, 'commondir')):
+        return 'replaced its .git directory, which odd checks it with'
+    for name in ('config', 'hooks', 'info'):
+        _clear(os.path.join(g, name))
+    shutil.copyfile(wt + '.config', os.path.join(g, 'config'))
+    _exclude(root, wt)
+    git(wt, 'read-tree', at['start'])
+    for p in zlist(wt, 'ls-files', '--others', '--ignored', '--exclude-standard', '-z'):
+        if not os.path.lexists(os.path.join(root, p)):
+            _clear(os.path.join(wt, p))
+    return ''
+
+
+def _judge(root, cfg, o, base, at, fixed):
     """Check one finished attempt inside its worktree: what it may not touch, then the checks of `odd done`."""
     wt, start = at['wt'], at['start']
     if at['rc'] is None:
         return 'timed out after %ss (killed with its process group)' % cfg['race_timeout']
+    why = _settle(root, at)
+    if why:
+        return why
     delta = changed_files(wt, start)
     control, exempt, tests, product = classify(delta, cfg)
     at['delta'] = delta
@@ -1710,6 +1786,50 @@ def _prompt(o, cfg, fixed):
                               slug=o.slug) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
 
 
+def _worktree(root, run, name, head, fixed):
+    """A working tree of `head` at run/name, under the git directory, with `fixed` (the outcome and its proof as
+    they are in the user's tree) copied in and committed as its start. Returns its path. It is a clone that reads
+    the user's objects (--shared) but has its own config, hooks, refs and index, not a linked worktree, which would
+    share the user's config and hooks: a `git config` or a hook an attempt writes goes with it. No remote is kept.
+    Its config as made here is saved beside it (run/name.config) for _settle()."""
+    wt = os.path.join(run, name)
+    os.makedirs(run, exist_ok=True)
+    git(root, 'clone', '--quiet', '--shared', '--no-checkout', '--no-tags', root, wt)
+    git(wt, 'remote', 'remove', 'origin')
+    _exclude(root, wt)
+    git(wt, 'checkout', '--quiet', '--detach', head)
+    for p in fixed:
+        os.makedirs(os.path.dirname(os.path.join(wt, p)), exist_ok=True)
+        shutil.copy2(os.path.join(root, p), os.path.join(wt, p))
+    git(wt, 'add', '-f', '--', *fixed)
+    git(wt, '-c', 'user.name=odd', '-c', 'user.email=odd@localhost', '-c', 'commit.gpgsign=false', 'commit',
+        '--quiet', '--no-verify', '--allow-empty', '-m', 'odd: the outcome and its proof')
+    shutil.copyfile(os.path.join(wt, '.git', 'config'), wt + '.config')
+    return wt
+
+
+def _launch(at, timeout, done):
+    """Start the agent command `at['cmd']` in `at['wt']` in its own process group, the prompt as {prompt_file} or on
+    stdin, output to `at['log']`; `at` goes on the queue `done` when it ends or is killed at the timeout."""
+    named = '{prompt_file}' in at['cmd']
+    with open(at['log'], 'wb') as log, open(at['prompt'], 'rb') as prompt:
+        p = subprocess.Popen(at['cmd'].replace('{prompt_file}', shlex.quote(at['prompt'])), shell=True,
+                             cwd=at['wt'], stdin=subprocess.DEVNULL if named else prompt, stdout=log,
+                             stderr=subprocess.STDOUT, start_new_session=True,
+                             env=dict(os.environ, ODD_ATTEMPT=at['wt'] + os.sep))  # the mark _sweep() finds it by
+    at['t0'] = time.time()
+    threading.Thread(target=_wait_agent, args=(at, p, timeout, done), daemon=True).start()
+    return p
+
+
+def _next(done):
+    while True:
+        try:
+            return done.get(timeout=0.5)  # a timeout, so a signal is handled while waiting
+        except queue.Empty:
+            pass
+
+
 def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
     """One attempt per command in `cmds`, the agents in parallel, each in a detached worktree of `head` under the git
     directory with `fixed` copied in as the start; each checked by _judge when its agent ends. Returns (attempts,
@@ -1719,14 +1839,7 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
     run, attempts, procs, done = state_dir(root, 'race', 'run-%d' % os.getpid()), [], [], queue.Queue()
     try:
         for i, (cmd, name) in enumerate(zip(cmds, names), 1):
-            wt = os.path.join(run, str(i))
-            git(root, 'worktree', 'add', '--detach', '--quiet', wt, head)
-            for p in fixed:  # the outcome and its proof, as they are in the user's tree, committed as the start
-                os.makedirs(os.path.dirname(os.path.join(wt, p)), exist_ok=True)
-                shutil.copy2(os.path.join(root, p), os.path.join(wt, p))
-            git(wt, 'add', '-f', '--', *fixed)
-            git(wt, '-c', 'user.name=odd', '-c', 'user.email=odd@localhost', '-c', 'commit.gpgsign=false', 'commit',
-                '--quiet', '--no-verify', '--allow-empty', '-m', 'odd race: the outcome and its proof')
+            wt = _worktree(root, run, str(i), head, fixed)
             at = dict(n=i, name=name, wt=wt, start=rev(wt, 'HEAD'), cmd=cmd, lines=0, res=None,
                       prompt=os.path.join(keep, 'prompt-%s.md' % name), log=os.path.join(keep, 'agent-%s.log' % name))
             with open(at['prompt'], 'w', encoding='utf-8') as f:
@@ -1734,25 +1847,13 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
             attempts.append(at)
         setup = time.time() - t0
         for at in attempts:
-            named = '{prompt_file}' in at['cmd']
-            with open(at['log'], 'wb') as log, open(at['prompt'], 'rb') as prompt:
-                p = subprocess.Popen(at['cmd'].replace('{prompt_file}', shlex.quote(at['prompt'])), shell=True,
-                                     cwd=at['wt'], stdin=subprocess.DEVNULL if named else prompt, stdout=log,
-                                     stderr=subprocess.STDOUT, start_new_session=True)
-            at['t0'] = time.time()
-            procs.append(p)
-            threading.Thread(target=_wait_agent, args=(at, p, cfg['race_timeout'], done), daemon=True).start()
+            procs.append(_launch(at, cfg['race_timeout'], done))
         for _ in attempts:
-            while True:
-                try:
-                    at = done.get(timeout=0.5)  # a timeout, so a signal is handled while waiting
-                    break
-                except queue.Empty:
-                    pass
+            at = _next(done)
             print('  attempt %s: the agent ended after %ss (%s); verifying' % (
                 at['name'], at['agent_s'], 'killed at the timeout' if at['rc'] is None else 'exit %d' % at['rc']))
             v0 = time.time()
-            at['why'] = _judge(cfg, o, base, at, fixed)
+            at['why'] = _judge(root, cfg, o, base, at, fixed)
             at['verify_s'] = round(time.time() - v0, 1)
         ranked = sorted([x for x in attempts if not x['why']], key=_rank)
         patch = ''
@@ -1785,21 +1886,26 @@ def _table(attempts, ranked, more=()):
         print('  ' + '  '.join(r[c].ljust(wide[c]) for c in range(cols)) + '  ' + r[cols])
 
 
+def _patch(root, patch, path, apply=True, reverse=False):
+    """Write `patch` to `path`; with `apply`, git-apply it (all or nothing) to the user's tree. Returns git's error."""
+    with open(path, 'w', encoding='utf-8', errors='surrogateescape') as f:
+        f.write(patch)
+    r = sh(['git', 'apply', '--binary'] + (['-R'] if reverse else []) + [path], root) if apply and patch else None
+    return (r.stderr or r.stdout).strip()[:300] if r is not None and r.returncode != 0 else ''
+
+
 def _apply(root, o, head, w, patch, keep):
     """Apply the verified winner's patch to the user's working tree, only when nothing inside the boundary changed
     there; otherwise leave it as a patch (Fail)."""
     path = os.path.join(keep, 'winner.patch')
-    with open(path, 'w', encoding='utf-8', errors='surrogateescape') as f:
-        f.write(patch)
     mine = [p for p in changed_files(root, head) if o.covers(p)]
+    err = _patch(root, patch, path, apply=not mine)
     if mine:
         raise Fail('not applied: your working tree has changes inside "in: %s" (%s), so the winner was written as a '
                    'patch: %s\n  apply it when ready: git apply %s; then %s done %s'
                    % (o.get('in'), ', '.join(mine[:6]), path, shlex.quote(path), ODD, o.slug))
-    r = sh(['git', 'apply', '--binary', path], root) if patch else None
-    if r is not None and r.returncode != 0:
-        raise Fail('not applied (git apply: %s), so the winner was written as a patch: %s'
-                   % ((r.stderr or r.stdout).strip()[:300], path))
+    if err:
+        raise Fail('not applied (git apply: %s), so the winner was written as a patch: %s' % (err, path))
     print('applied to your working tree: %s\nnext: %s done %s, then %s gate (the attempt was verified in its worktree; '
           'done records it here)' % (', '.join(w['delta'][:8]) or 'nothing', ODD, o.slug, ODD))
 
@@ -1902,6 +2008,144 @@ def cmd_cascade(a, root):
                    % (o.slug, o.rel, record_path))
     print('verified at level %s: %s' % (ranked[0]['name'].split('.')[0], _why_won(ranked)))
     _apply(root, o, head, ranked[0], patch, keep)
+
+
+# ---------------------------------------------------------------- spec: another agent writes the proof, sealed red
+
+SPEC_PROMPT = """You write the PROOF for one outcome, and ONLY the proof: a test that another agent's code must later
+make pass. You work in your own copy of the repository (the current directory); odd brings back only your test files.
+
+Outcome: %(outcome)s
+Proof command (it must exit 0 only when the outcome holds): %(proof)s
+The code will change files inside: %(ins)s. Do NOT change them, and do not write the implementation.
+Write the test files the proof command runs, under a test path (%(tests)s).
+
+The proof must FAIL now, before the code exists, and fail because the outcome does not hold yet (not because of a typo
+or a missing import of the test framework). Test what the outcome sentence says a person observes, not one way of
+building it. odd runs the proof command here when you exit: if it passes, or does not run, your proof is refused.
+Do not commit, push or run odd here.
+"""
+SPEC_BEFORE = """
+Earlier proofs for this outcome were refused. Do not repeat this:
+%s
+"""
+SECRET = re.compile(r'(?i)key|token|secret|passw|auth|cred')
+
+
+def _who(cmd):
+    """The proof author's name for the outcome file: the command, without environment assignments, the values of
+    options that look like credentials, or {prompt_file}; shortened."""
+    try:
+        words = shlex.split(cmd)
+    except ValueError:
+        words = cmd.split()
+    out, skip = [], False
+    for w in words:
+        if skip or re.match(r'^[A-Za-z_]\w*=', w) or w == '{prompt_file}':
+            skip = False
+            continue
+        if w.startswith('-') and SECRET.search(w.split('=')[0]):
+            skip = '=' not in w
+            continue
+        out.append(w)
+    return _short(' '.join(out)) or 'an agent'
+
+
+def _proof_check(root, cfg, o, at, fixed):
+    """Why the proof an author wrote in its worktree is refused, or '' with at['tests'] set: test files only, nothing
+    it must leave alone, and the proof runs and fails there (red first)."""
+    wt, start = at['wt'], at['start']
+    if at['rc'] is None:
+        return 'timed out after %ss (killed with its process group)' % cfg['race_timeout']
+    why = _settle(root, at)
+    if why:
+        return why
+    control, _, tests, product = classify(changed_files(wt, start), cfg)
+    moved = sorted(set(zlist(wt, *DIFF, '--name-only', start, '--', *fixed)) | set(control))
+    if moved or product:
+        return 'changed %s; the proof author writes test files only' % ', '.join((moved + product)[:6])
+    if not tests:
+        return 'wrote no test file under a test path (%s)' % ', '.join(cfg['test_globs'][:4])
+    rc, tail, _ = run_proof(wt, o.get('proof'), cfg['proof_timeout'])
+    if unrunnable(rc):
+        return 'the proof did not run to completion (%s), so it is not red:\n%s' % (
+            'timeout' if rc is None else 'exit %d' % rc, _indent(tail))
+    if rc == 0:
+        return 'the proof passes before the code, so it cannot show the code is needed: %s' % o.get('proof')
+    at['tests'], at['red'] = tests, says(tail)
+    return ''
+
+
+def cmd_spec(a, root):
+    cfg = load_config(root)
+    tries = a.tries if a.tries is not None else cfg['proof_tries']
+    if not 1 <= tries <= 32:
+        raise CouldNotRun('--tries must be between 1 and 32')
+    if not a.proof_by.strip():
+        raise CouldNotRun('--proof-by needs the proof author\'s command ({prompt_file} in it becomes the prompt\'s '
+                          'path, else the prompt is on stdin)')
+    try:
+        o = Outcome.load(root, a.slug)
+    except Fail as e:
+        raise CouldNotRun(str(e))
+    if o.get('sealed'):
+        raise CouldNotRun('%s is sealed already; to have the proof written again, delete its "sealed:" line and its '
+                          'test files first' % o.rel)
+    head = rev(root, 'HEAD')
+    if not head:
+        raise CouldNotRun('the proof author works from a commit and there is none yet: commit first')
+    fixed = [o.rel] + (['.odd/config.json'] if os.path.isfile(odd_dir(root, 'config.json')) else [])
+    keep = _keep(root, 'spec', o.slug)
+    who = _who(a.proof_by)
+    text = SPEC_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), slug=o.slug,
+                              tests=', '.join(cfg['test_globs']))
+    print('%s spec %s: %s writes the proof in its own worktree (at most %d tries); it must fail before the code'
+          % (ODD, o.slug, who, tries))
+    run, reasons, patch, done, p = state_dir(root, 'race', 'run-%d' % os.getpid()), [], '', queue.Queue(), None
+    try:
+        for i in range(1, tries + 1):
+            at = dict(cmd=a.proof_by, wt=_worktree(root, run, str(i), head, fixed), prompt=os.path.join(
+                keep, 'prompt-%d.md' % i), log=os.path.join(keep, 'agent-%d.log' % i))
+            at['start'] = rev(at['wt'], 'HEAD')
+            with open(at['prompt'], 'w', encoding='utf-8') as f:
+                f.write(text + (SPEC_BEFORE % '\n'.join(reasons) if reasons else ''))
+            p = _launch(at, cfg['race_timeout'], done)
+            _next(done)
+            why = _proof_check(root, cfg, o, at, fixed)
+            print('  try %d: the author ended after %ss; %s' % (i, at['agent_s'], ('refused: ' + why.split('\n')[0])
+                                                                  if why else 'red: ' + at['red']))
+            if not why:
+                git(at['wt'], 'add', '-A', '--', *at['tests'])
+                patch = git(at['wt'], 'diff', '--cached', '--binary', '--no-renames', at['start'], '--', *at['tests'])
+                break
+            reasons.append('- try %d: %s' % (i, why[:1500]))
+    finally:
+        if p is not None:
+            _killpg(p)
+        _drop_run(root, run)
+    if not patch:
+        o.f['parked'] = ' '.join(('odd spec: no proof that fails before the code after %d tries by %s (%s): %s' % (
+            tries, who, now()[:10], '; '.join(r[2:].split('\n')[0] for r in reasons))).split())
+        o.save()
+        record(root, o.slug, ok=False, why=o.f['parked'][:300])
+        raise Fail('parked %s: %s wrote no proof that fails before the code in %d tries; the reasons are in the '
+                   '"parked:" line of %s; prompts and logs: %s. Nothing was brought back.' % (o.slug, who, tries, o.rel, keep))
+    path = os.path.join(keep, 'proof.patch')
+    err = _patch(root, patch, path)
+    if err:
+        raise Fail('the proof was not brought back (git apply: %s); it is in %s' % (err, path))
+    print('brought back: %s' % ', '.join(at['tests']))
+    try:
+        cmd_seal(argparse.Namespace(slug=o.slug, base=a.base), root)
+    except (Fail, CouldNotRun):
+        _patch(root, patch, path, reverse=True)  # the proof goes back out; the user's tree is as it was
+        raise
+    o = Outcome.load(root, o.slug)
+    o.f['proof-by'] = who
+    o.save()
+    record(root, o.slug, proof_by=who, tries=len(reasons) + 1)
+    print('proof-by: %s (recorded in %s). Next: %s race %s or %s cascade %s; an attempt that edits the sealed proof is '
+          'refused.' % (who, o.rel, ODD, o.slug, ODD, o.slug))
 
 
 def cmd_gate(a, root):
@@ -2291,6 +2535,12 @@ def main(argv=None):
     s.add_argument('slug')
     s.add_argument('--agents', help='agent commands, cheapest first, comma-separated (default: "agents" in .odd/config.json)')
     s.add_argument('--race', type=int, help='attempts per level, in parallel (default 1)')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('spec')
+    s.add_argument('slug')
+    s.add_argument('--proof-by', required=True, metavar='CMD', help='the agent command that writes only the proof '
+                   '(in practice a stronger model); {prompt_file} becomes the prompt\'s path, else stdin')
+    s.add_argument('--tries', type=int, help='tries for a proof that fails before the code (default: "proof_tries", 3)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('gate')
     s.add_argument('--base')
