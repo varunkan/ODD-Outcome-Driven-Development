@@ -670,3 +670,4 @@ cost to build.
 - **Evidence:** release checks done by hand each time (tree equal to the gated tree, signer, app id, checksum).
 - **Outcome:** `odd ship <artifact>` records the artifact's hash with the commit and that commit's gate verdict, and
   lists every check not run.
+- **Done** in the commit "B34: odd ship" (`cmd_ship`; tests `Ship`; [DESIGN 5f](DESIGN.md)).

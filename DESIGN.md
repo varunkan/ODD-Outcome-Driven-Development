@@ -60,6 +60,8 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd chain <ticket> [--race N] [--cascade] [--agents C1,C2,...] [--base REF]` | the outcomes in `.odd/chains/<ticket>.md` in order: each one without a checkpoint is raced (or cascaded), verified in your tree and committed as `odd: <slug> proven`; the first unproven one is parked and stops the chain, the tree back at the last checkpoint (section 3e); needs a tool newer than 0.4.0 | 0 every outcome proven, 1 an outcome parked, 2 could not run (a dirty tree, an unknown slug, a git failure: rolled back, not parked) |
 | `odd spec <slug> --proof-by CMD [--tries N] [--base REF]` | another agent command (in practice a stronger model) writes only the proof in its own worktree; the test files come back and are sealed red (section 3d); retried, then parked; needs a tool newer than 0.4.0 | 0 proof brought back and sealed, 1 parked or refused (the proof passes in your tree, or did not apply), 2 could not run |
 | `odd challenge <slug> [--agent CMD] [--base REF]` | advisory: one agent starts from the verified change and tries to make it wrong while the proof still passes; nothing is applied (section 3i); needs a tool newer than 0.4.0 | 0 the proof withstood it, 1 a variant passed (read the claim), 2 could not run (not verified, a skip, no agent) |
+| `odd ship <artifact> [--base REF] [--note FILE]` | the artifact's sha256 bound to the commit it was built from and that commit's recomputed gate; prints (and with `--note` writes) what was not run and what is owed (section 5f); needs a tool newer than 0.4.0 | 0 shippable, 1 the gate fails, 2 could not run (uncommitted work, no artifact) |
+| `odd owed <slug> "<step>" --evidence FILE` | closes one owed step against an evidence file (section 5f); needs a tool newer than 0.4.0 | 0, 1 no such step or no such file |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd ask <slug> "<question>"` | records one open question as `asked:`; the gate reports the outcome as waiting for an answer (section 4b); needs a tool newer than 0.4.0 | 0, 1 not a question or no such outcome |
@@ -793,6 +795,13 @@ All need a tool newer than 0.4.0 (backlog items 24 to 29, with the evidence, in 
   lane will not take it, and under `"strength": "enforce"` it fails. A test that imports the code names a module, not
   a path. Limits: a path built at run time is not seen; a test that names a product file for another reason (a
   fixture path) is flagged too.
+- **`odd ship` (item 34).** Release checks done by hand become one command: the artifact (usually ignored build
+  output) is hashed, the gate is recomputed on the commit (so work that is not committed is refused, exit 2), the
+  artifact is hashed again (it must not change meanwhile), and a ship record (artifact, sha256, commit, owed steps,
+  checks not run) goes to the local evidence only when the gate passes. The note lists what was not run: held-out
+  proofs when none are configured, skipped take-out checks, guards skipped as unaffected, and every owed step. It
+  does not build the artifact, so it shows the artifact was present at a gated commit, not that it was built from it;
+  a reproducible build makes the two the same.
 - **Look-alike bugs (`class:`, item 31).** An outcome may name the defect's pattern, `class: <regex>` (meant for
   `kind: bug`). `done` lists every line of a product file (tracked or untracked; not tests, exempt paths or `.odd/`)
   that matches and that the change did not touch: `class "<regex>": N match(es) the change did not touch: path:line,

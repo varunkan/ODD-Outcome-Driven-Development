@@ -4430,5 +4430,38 @@ class LookAlikes(Repo):
         self.assertIn('2 look-alike(s) of the bug left untouched', self.ok('gate'))
 
 
+class Ship(Repo):
+    """Backlog item 34: what is delivered is what was gated: the artifact's hash, the commit and its recomputed gate."""
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.write('.gitignore', '__pycache__/\ndist/\n')
+        self.outcome()
+        self.solve()
+        self.add_line('add', 'owed: install on the tablet')
+        self.ok('done', 'add')
+        self.commit('the fix')
+        self.write('dist/app.bin', 'built from the fix\n')
+
+    def test_a_shippable_artifact_is_recorded_with_its_commit_gate_and_what_was_not_run(self):
+        out = self.ok('ship', 'dist/app.bin', '--base', 'main', '--note', self.path('dist/ship.md'))
+        head = self.git('rev-parse', 'HEAD').strip()
+        import hashlib
+        digest = hashlib.sha256(b'built from the fix\n').hexdigest()
+        self.assertIn('shippable: dist/app.bin sha256 %s, built from %s, gate --recompute PASS' % (digest, head[:12]), out)
+        note = self.read('dist/ship.md')
+        self.assertIn(digest, note)
+        self.assertIn('not run: held-out proofs (none configured)', note)
+        self.assertIn('owed: add: install on the tablet', note)
+        self.ok('stats')  # the ship record sits beside outcome evidence and must not confuse the counts
+
+    def test_a_failing_gate_or_uncommitted_work_is_not_shippable(self):
+        self.write('calc.py', BROKEN)
+        self.assertIn('differ from HEAD', self.no('ship', 'dist/app.bin', '--base', 'main', code=2))
+        self.commit('broken again')
+        self.assertIn('NOT shippable', self.no('ship', 'dist/app.bin', '--base', 'main'))
+        self.assertIn('no such artifact', self.no('ship', 'dist/none.bin', '--base', 'main', code=2))
+
+
 if __name__ == '__main__':
     unittest.main()

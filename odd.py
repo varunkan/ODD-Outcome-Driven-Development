@@ -3452,6 +3452,43 @@ def cmd_gate(a, root):
     return code
 
 
+def cmd_ship(a, root):
+    """Backlog item 34: the artifact's sha256 bound to the commit it was built from and to that commit's recomputed
+    gate, and a note of every check that was not run. Exit 0 shippable, 1 the gate failed, 2 could not run."""
+    path = os.path.join(root, a.artifact)
+    if not os.path.isfile(path):
+        raise CouldNotRun('no such artifact: %s (build it from the committed tree first)' % a.artifact)
+    with open(path, 'rb') as f:
+        digest = hashlib.sha256(f.read()).hexdigest()
+    head, facts = rev(root, 'HEAD'), {}
+    code, lines = gate(root, a.base, True, lambda s: None, facts)  # --recompute refuses work that is not committed
+    with open(path, 'rb') as f:
+        if hashlib.sha256(f.read()).hexdigest() != digest:
+            raise CouldNotRun('the artifact changed while the gate ran; build it again and rerun %s ship' % ODD)
+    cfg = load_config(root)
+    outs = facts.get('outcomes', [])
+    missing = ['held-out proofs (none configured)'] if not cfg['held_out'] else []
+    missing += ['the take-out check for %s (%s)' % (o['slug'], o['skip'].split('-', 1)[-1].strip()) for o in outs if o.get('skip')]
+    missing += ['%d earlier proof(s) skipped as unaffected' % facts['guards_skipped']] if facts.get('guards_skipped') else []
+    owed = ['%s: %s' % (o['slug'], '; '.join(o['owed'])) for o in outs if o.get('owed')]
+    verdict = 'PASS' if code == 0 else 'FAIL'
+    note = ['# ship note', '', '- artifact: %s' % a.artifact, '- sha256: %s' % digest, '- size: %d bytes' % os.path.getsize(path),
+            '- built from: %s' % head, '- gate --recompute: %s (base %s)' % (verdict, (facts.get('base') or 'none')[:12]),
+            '- outcomes: %s' % (', '.join('%s %s' % (o['slug'], o['state']) for o in outs) or 'none')]
+    note += ['- not run: %s' % m for m in missing] + ['- owed: %s' % x for x in owed] + ['', '```text'] + lines + ['```']
+    if a.note:
+        with open(a.note, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(note) + '\n')
+    print('\n'.join(lines))
+    if code:
+        print('NOT shippable: the gate on %s fails; nothing was recorded' % head[:12])
+        return 1
+    record(root, '_ship', artifact=a.artifact, sha256=digest, commit=head, owed=owed, not_run=missing)
+    print('shippable: %s sha256 %s, built from %s, gate --recompute PASS%s%s' % (
+        a.artifact, digest, head[:12], ''.join('\n  not run: ' + m for m in missing), ''.join('\n  owed: ' + x for x in owed)))
+    return 0
+
+
 def report(a, facts):
     for path, text in ((a.json, lambda: json.dumps(facts, indent=1, sort_keys=True) + '\n'), (a.summary, lambda: markdown(facts))):
         if path:
@@ -4005,6 +4042,10 @@ def main(argv=None):
     s = sub.add_parser('ask')
     s.add_argument('slug')
     s.add_argument('question', help='one precise question; delete the "asked:" line once it is answered')
+    s = sub.add_parser('ship')
+    s.add_argument('artifact')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s.add_argument('--note', help='also write the ship note (Markdown) to this file')
     s = sub.add_parser('owed')
     s.add_argument('slug')
     s.add_argument('step')
