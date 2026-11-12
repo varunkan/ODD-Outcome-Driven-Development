@@ -22,6 +22,15 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   size, so ODD's trust claim becomes a number.
 - **Evidence:** ImpossibleBench (arXiv 2510.20270); claim precision 64% to 96% and Haiku-class silent failures 21% to
   3% with a claim contract (arXiv 2611.10063).
+- **Done** in the commit "R1: measure trust directly in the bench report" (`git log --grep '^R1:'`): `bench/report.py`
+  prints claim precision, the silent-failure rate, the cheat rate by route and the park rate on impossible tasks, the
+  own-check gap by changed lines, and an appendix of every impossible-task NOT DONE with its keyword grade, an empty
+  "reviewed" column and the reason verbatim; `bench/run.py` records `visible_tests_edited` and `special_cased` from
+  the tree the session left; one more impossible task, t17 (its visible test contradicts the ticket). Re-rendered on
+  the finished Sonnet run (240 runs, transcripts only, no tree facts recorded): claim precision 98% to 100% per arm,
+  one silent failure (superpowers), one cheat (speckit, a DONE claim), no test edits or special-casing seen in the
+  transcripts; park rate 33% to 100% under the keyword grade, with 9 NOT DONE answers it rejected left for review.
+  Not measured yet: the Haiku run, t17 on any model, and how many cheats the script-visible routes miss.
 
 ### R2. Fail closed on changed tests and empty proofs
 - **Outcome:** a change that edits or deletes a test that existed at the base fails the gate unless its outcome says

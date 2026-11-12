@@ -207,7 +207,10 @@ given over three months, each measured and ruled on. Most were dropped.
 ## Limits
 
 - Evidence so far is one project, measured by itself. The comparison harness is in [`bench/`](bench/SPEC.md); its
-  results will be published with their spread, whatever they show.
+  results will be published with their spread, whatever they show. Its report states trust as numbers per arm: claim
+  precision, silent failures, the cheat and park rates on impossible tasks, and the own check against the hidden tests
+  by change size. A cheat is counted only by the routes a script can see (a DONE claim, an edited visible test, a test
+  input quoted into the code).
 - The check costs three runs of the proof, plus one per small break (at most eight by default; under `report` it
   stops once the breaks took about as long as the core runs), so the proof should be the narrowest command that
   shows the outcome. With a 0.8 s jest proof that is about 2.4 s for the core and about as much again for strength.

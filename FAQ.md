@@ -115,7 +115,8 @@ help the agent plan; ODD checks whether the work is actually done. Use them toge
 Not yet, and nothing here claims it. A same-task comparison is running: 16 tasks with hidden acceptance tests (bug
 fixes, features, traps, vague requests, impossible ones), each done by plain Claude Code, ODD, Spec Kit, BMAD and
 Superpowers, three times each, on two models. It measures whether the work is really right, whether the agent claims
-"done" falsely, and cost and time. The results will be published whatever they show. The harness is open in
+"done" falsely (claim precision and silent failures), whether it cheats or stops on tasks that cannot be done (cheat
+and park rates, counted by the routes a script can see), and cost and time. The results will be published whatever they show. The harness is open in
 [`bench/`](bench/SPEC.md).
 
 **What has been measured so far?**
