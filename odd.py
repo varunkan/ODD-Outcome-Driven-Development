@@ -2400,16 +2400,30 @@ def _race_start(root, cfg, slug, base_arg):
     return o, head, base, fixed
 
 
+def _runs(root):
+    """Where a repository's attempt clones live: under the system temporary directory, outside the working tree and
+    the git directory. Claude Code refuses writes under .git without a person to approve them, so an attempt there
+    could not work headless; and nothing an attempt writes can then land in the user's tree or git directory."""
+    common = git(root, 'rev-parse', '--git-common-dir').strip()
+    common = os.path.realpath(common if os.path.isabs(common) else os.path.join(root, common))
+    return os.path.join(tempfile.gettempdir(), 'odd-runs-' + hashlib.sha256(common.encode()).hexdigest()[:16])
+
+
+def _run_dir(root):
+    return os.path.join(_runs(root), 'run-%d' % os.getpid())
+
+
 def _keep(root, cmd, slug):
     """The directory for one command's prompts, agent logs and patch, replaced by the next run; also removes the
     worktrees of a run that was killed outright."""
     keep = state_dir(root, cmd, slug)
     shutil.rmtree(keep, ignore_errors=True)
     os.makedirs(keep)
-    os.makedirs(state_dir(root, 'race'), exist_ok=True)
-    for name in os.listdir(state_dir(root, 'race')):
-        if name.startswith('run-') and name[4:].isdigit() and not _alive(int(name[4:])):
-            _drop_run(root, state_dir(root, 'race', name))
+    for parent in (state_dir(root, 'race'), _runs(root)):  # runs an older odd kept under the git directory, too
+        os.makedirs(parent, exist_ok=True)
+        for name in os.listdir(parent):
+            if name.startswith('run-') and name[4:].isdigit() and not _alive(int(name[4:])):
+                _drop_run(root, os.path.join(parent, name))
     return keep
 
 
@@ -2419,7 +2433,7 @@ def _prompt(root, o, cfg, base, fixed):
 
 
 def _worktree(root, run, name, head, fixed):
-    """A working tree of `head` at run/name, under the git directory, with `fixed` (the outcome and its proof as
+    """A working tree of `head` at run/name, outside the repository (see _runs), with `fixed` (the outcome and its proof as
     they are in the user's tree) copied in and committed as its start. Returns its path. It is a clone that reads
     the user's objects (--shared) but has its own config, hooks, refs and index, not a linked worktree, which would
     share the user's config and hooks: a `git config` or a hook an attempt writes goes with it. No remote is kept.
@@ -2463,12 +2477,12 @@ def _next(done):
 
 
 def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
-    """One attempt per command in `cmds`, the agents in parallel, each in a detached worktree of `head` under the git
-    directory with `fixed` copied in as the start; each checked by _judge when its agent ends. Returns (attempts,
+    """One attempt per command in `cmds`, the agents in parallel, each in a detached clone of `head` outside the
+    repository (_runs) with `fixed` copied in as the start; each checked by _judge when its agent ends. Returns (attempts,
     ranked verified attempts, the best one's patch, seconds of setup and clean-up). The worktrees are removed before
     it returns, also on an exception or a signal; the user's working tree is not touched."""
     t0 = time.time()
-    run, attempts, procs, done = state_dir(root, 'race', 'run-%d' % os.getpid()), [], [], queue.Queue()
+    run, attempts, procs, done = _run_dir(root), [], [], queue.Queue()
     try:
         for i, (cmd, name) in enumerate(zip(cmds, names), 1):
             wt = _worktree(root, run, str(i), head, fixed)
@@ -2910,7 +2924,7 @@ def cmd_spec(a, root):
                               tests=', '.join(cfg['test_globs']))
     print('%s spec %s: %s writes the proof in its own worktree (at most %d tries); it must fail before the code'
           % (ODD, o.slug, who, tries))
-    run, reasons, patch, done, p = state_dir(root, 'race', 'run-%d' % os.getpid()), [], '', queue.Queue(), None
+    run, reasons, patch, done, p = _run_dir(root), [], '', queue.Queue(), None
     try:
         for i in range(1, tries + 1):
             at = dict(cmd=a.proof_by, wt=_worktree(root, run, str(i), head, fixed), prompt=os.path.join(

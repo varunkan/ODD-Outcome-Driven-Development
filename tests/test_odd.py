@@ -2112,7 +2112,21 @@ class Agents(Repo):
 
 
 class Race(Agents):
-    """odd race: N agent attempts, each in its own git worktree under the git directory; the proof picks the winner."""
+    """odd race: N agent attempts, each in its own clone outside the repository; the proof picks the winner."""
+
+    def test_attempts_run_outside_the_repository_and_its_git_directory(self):
+        # Claude Code refuses writes under .git without a person to approve them: an attempt there could not work
+        where = os.path.join(self.bin, 'where.txt')
+        self.config([self.agent('correct', 'pwd >> %s\n' % where + self.writes(FIXED))])
+        out = self.ok('race', 'add')
+        with open(where) as f:
+            cwds = [os.path.realpath(l) for l in f.read().split()]
+        repo = os.path.realpath(self.dir)
+        self.assertTrue(cwds, out)
+        for cwd in cwds:
+            self.assertFalse(cwd == repo or cwd.startswith(repo + os.sep), (cwd, out))
+            self.assertFalse(os.path.exists(cwd), 'the attempt is removed afterwards')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
 
     def test_the_verified_strongest_attempt_wins_and_is_applied(self):
         keep = os.path.join(self.bin, 'prompt.txt')

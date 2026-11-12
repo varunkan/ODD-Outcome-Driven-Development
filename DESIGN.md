@@ -100,8 +100,10 @@ files to leave alone, and the method `odd init` installs.
 The settings `agents`, `race_timeout` and `race_seal` need a tool newer than 0.4.0: v0.4.0 (and its Action)
 refuses an unknown setting, so a project that adds them vendors the newer `odd.py` first.
 
-1. **Working trees.** Each attempt gets its own working tree of HEAD under the git directory
-   (`.git/odd/race/run-<pid>/<n>`), never the user's tree. Since the B3 commit it is a clone that reads the
+1. **Working trees.** Each attempt gets its own working tree of HEAD outside the repository, under the system
+   temporary directory (`<tmp>/odd-runs-<hash of the git directory>/run-<pid>/<n>`), never the user's tree and never
+   the git directory: Claude Code refuses writes under `.git` without a person to approve them, so an attempt kept
+   there could not work headless (found by the comparison's smoke run, where every proof author was refused). Since the B3 commit it is a clone that reads the
    user's objects (`git clone --shared --no-checkout`, then a detached checkout of HEAD; the remote is removed and the
    user's `info/exclude` copied in), not a `git worktree add`: a linked worktree shares the user's `.git/config`,
    hooks, `info/` and refs, so an attempt's plain `git config core.fsmonitor ...` or a hook it wrote ran on every
@@ -190,7 +192,7 @@ machine): see BACKLOG item 2.
 ### 3d. `odd spec --proof-by`: one agent writes the proof, another writes the code
 
 `odd spec <slug> --proof-by CMD` runs CMD, an agent command like the ones in `"agents"`, to write only the proof of an
-outcome that `odd new` created. The author works in a fresh detached worktree of HEAD under the git directory with
+outcome that `odd new` created. The author works in a fresh detached worktree of HEAD outside the repository (section 3b) with
 the outcome file (and `.odd/config.json`) copied in (`_worktree()`, shared with race), in its own process group with
 `race_timeout` (`_launch()`). Its prompt states the outcome, the proof command, the boundary it must not change and
 the test globs, and that the proof must fail before the code. When it exits, odd checks the worktree
@@ -237,7 +239,7 @@ must name an outcome file, else exit 2 before any agent runs). It takes the outc
 2. **Otherwise attempted** by race's machinery (`_race_run()`, the core `odd race` now calls: N attempts, the agents
    in turn, default as race) or with `--cascade` by cascade's (`_cascade_run()`: the agents as levels, `--race` per
    level, default 1). Nothing new judges an attempt: `_attempts()`, `_judge()` and `prove()` in each attempt's own
-   working tree under the git directory, as section 3b describes.
+   working tree outside the repository, as section 3b describes.
 3. **Applied, verified here, checkpointed**: the winner is applied with `_apply()`, verified again in the user's tree
    with `prove()` (as `odd done` would, recording local evidence through `_verified()`, shared with done), and
    committed as `odd: <slug> proven` with only these paths: the winner's files, the outcome file, the chain file and
