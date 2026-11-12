@@ -368,6 +368,24 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **How:** a file-to-proof map learned from past runs; the content hash already used by the local gate, shared as a CI
   cache.
 - **Measure:** seconds per `done` and per CI gate, and that no false pass appears.
+- **Done** in the commit "B12: verification cache and affected guards" (`git log --grep '^B12:'`), a tool newer than
+  0.4.0: `verify()` keys each verification (`verify_key()`: the tool's version and own bytes, every setting in force,
+  the base commit, and `_state()` of every path that differs from the base, the helper the local gate's content hash
+  uses) and returns an earlier pass as `cached (verified at <time>)`; `--no-cache` on done, gate, race, cascade and
+  chain and on the MCP tools. Locally `.git/odd/verified.json` (shared with race attempts' clones) or `"cache_file"`;
+  under `--recompute` only a `"cache_file"` from the target branch's settings outside the repository and its git
+  directory, and only entries an earlier `--recompute` wrote; the file is snapshotted before any proof or agent runs
+  and put back after, so what they write to it is dropped. The guard now reports `N earlier proof(s) skipped as
+  unaffected` (`guards_skipped` in `--json`). Measured on the test fixture (one machine, Python 3.13): second `done`
+  0.22 s against 0.91 s, second `gate --recompute` 0.16 s against 0.73 s; with a 1 s proof 0.20 s against 5.70 s and
+  0.16 s against 5.66 s; a one-byte change runs in full (0.70 s, 5.70 s). A test per input kind (proof command,
+  setting, boundary file, test file, unchanged file outside the boundary, tool, base commit, a target-only setting
+  under `--recompute`) forces a full run; 17 mutants of the new code (odd.py 16, odd_mcp.py 1) each turned a new
+  test red, and one more survived as equivalent (using the local cache under `--recompute` is also refused because
+  it lies inside the git directory). Not done: the
+  learned file-to-proof map (selection stays by `in:` path); the CI recipe (restore on pull requests, save on the
+  target branch) is documented, not run on GitHub Actions; ignored files, installed packages and the environment are
+  not in the key; seconds per CI gate on a real repository and false passes on real work are not measured.
 
 ### 13. Boundary as context
 - **Outcome:** the agent is given the outcome's file boundary up front, so it explores less of the repository.

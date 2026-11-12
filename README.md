@@ -151,6 +151,16 @@ base proof as a reported guard that never fails the gate, prints `deleted <slug>
 and sends the auto lane to review. Overlap is by path: a break through a file outside the earlier `in:` is not seen. Not measured: earlier
 outcomes broken with and without it (BACKLOG item 9). Details: [DESIGN.md](DESIGN.md) section 5b.
 
+**A verification is not repeated when nothing it reads changed.** `odd done`, `race`, `cascade`, `chain` and `gate
+--recompute` key each verification on the tool, the settings, the base commit and every file that differs from it; a
+match with an earlier pass prints `cached (verified at <time>)` and runs no proof, and a one-byte change in any of
+them runs it in full (`--no-cache` always does). Locally the cache is under the git directory. In CI it is used only
+with `"cache_file"` (a tool newer than 0.4.0) set on the target branch to a path outside the repository, holding
+what an earlier `--recompute` wrote; restore it on pull requests and save it only from the target branch. The gate
+also says how many earlier proofs the regression guard skipped as unaffected. Measured on the test fixture: a second
+`done` 0.22 s against 0.91 s, a second `gate --recompute` 0.16 s against 0.73 s (5.66 s with a proof that sleeps 1 s).
+Ignored files, installed packages and the environment are not in the key. Details: [DESIGN.md](DESIGN.md) section 5d.
+
 **An auto-merge lane, off by default.** With `"auto_lane": true` (a tool newer than 0.4.0) the gate also says
 `"lane": "auto"` or `"lane": "review"` with its reasons: auto only when the gate passed, every outcome in the change
 is verified with every small break caught (`"auto_min_strength"`, default 1.0) and no changed line its proof never
@@ -334,6 +344,8 @@ given over three months, each measured and ruled on. Most were dropped.
 - State outside tracked files (installed dependencies, caches) is not reverted; a dependency bump or a pure refactor
   uses `counterfactual: skip - <reason>`, which the gate names in its result.
 - A proof that needs a real device, account or secret cannot be recomputed in CI.
+- The verification cache does not see ignored files, installed packages, the environment or the clock; use
+  `--no-cache` when the result depends on them.
 - Windows is untested.
 
 The full list is in [DESIGN.md](DESIGN.md#10-limits).

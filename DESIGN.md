@@ -417,7 +417,9 @@ product file is inside the boundary of exactly one verified in-play outcome, or 
   content (a hash of the proof, the boundary and the files inside it, kept under the git directory). A commit or an
   edit elsewhere changes nothing. This is fast feedback, and an agent with a shell could forge it.
 - **With `--recompute`**, nothing recorded is trusted. Every in-play outcome that is not parked is verified again,
-  and the settings are read from the base revision, so a change cannot loosen its own gate.
+  and the settings are read from the base revision, so a change cannot loosen its own gate. The one exception is
+  opt-in: a `"cache_file"` from the target branch's settings, outside the repository, holding results an earlier
+  `--recompute` wrote (section 5d).
 - "Could not run" is never reported as a pass.
 
 The gate report is written for the person who reviews the change. Per outcome: the files and lines taken out, the
@@ -512,7 +514,7 @@ product or test file). An earlier outcome is one whose file is tracked at the ba
 the base is its "proven in" commit) and is not in play in this change; parked, asked and skipped (`counterfactual:
 skip`) ones are not guards. Each guard's proof runs once on the tree as it is: green only, no take-out run, no
 strength check, so the cost is one proof run per guard. The gate prints `guard   <slug> (proven in <commit>): still
-passes, <s>s` per guard, `--json` has a `guards` list and the `--summary` a **Guards** list. `odd done` prints the
+passes, <s>s` per guard and how many earlier proofs it skipped as unaffected (5d), `--json` has a `guards` list and the `--summary` a **Guards** list. `odd done` prints the
 gate for the whole change afterwards, so it runs the guards too (its own exit code is unchanged). The setting
 `"guard"` decides what a failing guard does:
 
@@ -599,6 +601,64 @@ Mutants are capped by `"mutants"` (8 by default) and sampled, so k = n is of the
 fault. A local `odd gate` reads recorded results, which can be forged; only the Action's `--recompute` decides
 anything a merge rule should trust. Not measured: review minutes per merged change or defects escaping through the
 lane (BACKLOG item 11).
+
+### 5d. Verification cache and affected guards
+
+`odd done`, `race`, `cascade`, `chain` and `gate --recompute` all verify through one function, `verify()`. Before
+it runs a proof it computes a key over everything the check reads (`verify_key()`): the tool (its version and the
+sha256 of its own file), every setting in force (under `--recompute` the target branch's), the base commit (what the
+take-out check restores), and the state (content, mode, link target) of every path that differs from the base, the
+same `_state()` the local gate's content hash uses. With the base commit that names every tracked and untracked file
+the proof could read, inside the boundary or not, the outcome file and `.odd/config.json` included. When a
+verification with that key passed before, its result is returned with `cached` set to when it ran, and the report
+says `cached (verified at <time>): ...`; no proof runs. A failed or "could not run" check is never stored. `--no-cache`
+(on `done`, `gate`, `race`, `cascade`, `chain`, and the MCP tools) runs it in full. A changed path that is a
+directory (a submodule) gives no key, so that outcome always runs in full.
+
+Where it is kept:
+
+- **Locally**: `.git/odd/verified.json` (the common git directory, so a linked worktree shares it), or `"cache_file"`
+  (relative to the repository root) when set. Race, cascade and chain attempts run in clones under the git directory;
+  they read and write the user's cache, so `odd done` after a race reuses the winner's verification.
+- **Under `--recompute`**: only `"cache_file"` read from the target branch's settings, after `~` and `$VAR`
+  expansion, and only when it is an absolute path outside the work tree and outside the git directory; anything else
+  prints `cache   "cache_file" not used under --recompute: ...` and every outcome runs in full. Only entries written
+  by an earlier `--recompute` are trusted there (an entry carries `mode`), so what `odd done` writes never satisfies
+  CI. Without `"cache_file"`, `--recompute` uses no cache, as before.
+
+The file is read once, before any proof (or, for race, any agent) of the process runs, and each write puts back that
+snapshot plus the entries this process added (atomic rename), also at the end of every `gate --recompute` and every
+race; so what a proof or an agent writes to the file during the run is dropped. At most 1000 entries are kept, the
+newest. A write that fails loses only the cache.
+
+For CI, a cache step saves and restores the file. Restore it on pull requests and save it only from runs on the
+target branch (`actions/cache/restore` on `pull_request`, `actions/cache/save` on `push` to the default branch), so a
+pull request's own proofs never write the file a later run trusts. This recipe is not run on GitHub Actions here.
+
+`"cache_file"` needs a tool newer than 0.4.0: the Action at v0.4.0 refuses it as an unknown setting, so set it only
+once the pinned Action is newer. Without it, nothing changes in CI; locally `odd done` caches by default.
+
+**Affected guards.** The regression guard (5b) already selects earlier proofs by path. The gate now also prints
+`guard   N earlier proof(s) skipped as unaffected: no file this change touches is inside their boundaries` and
+`--json` has `guards_skipped`; it counts merged, not parked, asked or skipped outcomes whose boundary holds no touched
+file.
+
+Measured (one machine, Python 3.13, the fixture of `tests/test_odd.py`, script
+`measure.sh` in the step's scratch): a first `odd done` 0.91 s and a second 0.22 s; a first `gate --recompute` 0.73 s,
+a second 0.16 s, `--no-cache` 0.70 s, and after a one-byte change to the product file 0.70 s. With a proof whose test
+sleeps 1 s: 5.70 s and 0.20 s for done, 5.66 s and 0.16 s for the gate, 5.70 s after a one-byte change. Tests
+(`VerifyCache`) show that a one-byte change in each input kind forces a full run: the proof command, a setting, a
+file inside the boundary, a test file the proof runs, an unchanged-at-base file outside the boundary, the tool, the
+base commit, and a setting changed only on the target branch under `--recompute`.
+
+Limits: ignored files (build output, `node_modules`, a virtualenv), installed packages, the environment, the clock,
+the network and anything outside the repository are not in the key: a proof whose result depends on them gets the
+earlier result until a tracked or untracked file, a setting or the tool changes; `--no-cache` or a dependency file in
+the repository covers that. A flaky proof that passed once stays passed for that content. A `"cache_file"` outside the
+repository can be written by anything else on the machine, and a process a proof starts that escapes its process
+group could write it after odd exits; the restore-on-PR, save-on-target recipe is what keeps a pull request from
+planting entries. Not measured: seconds saved per CI gate on a real repository, and false passes on real work (none
+seen in the tests, which is not the same).
 
 ### 4a. Reproduce first: `kind: bug`
 

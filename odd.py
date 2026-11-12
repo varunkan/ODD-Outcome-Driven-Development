@@ -67,6 +67,7 @@ DEFAULTS = {
     'auto_lane': False,    # odd gate says "lane": "auto" or "review" (backlog item 11); odd itself never merges
     'auto_min_strength': 1.0,  # the auto lane: least share k/n of small breaks each outcome's proof must catch
     'auto_max_lines': 120,     # the auto lane: most changed product lines
+    'cache_file': None,    # backlog item 12: the verification cache file (default: under the git directory); a CI cache step saves it
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
 FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked')
@@ -84,8 +85,9 @@ SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
-RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength')  # what --json says of a verified outcome
+RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
+NO_CACHE = False  # --no-cache: every verification runs in full
 
 
 class Fail(Exception):
@@ -204,7 +206,8 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'guard': lambda v: v in ('off', 'report', 'enforce'),
             'auto_lane': lambda v: type(v) is bool,
             'auto_min_strength': lambda v: type(v) in (int, float) and 0 <= v <= 1,
-            'auto_max_lines': lambda v: type(v) is int and v >= 0}
+            'auto_max_lines': lambda v: type(v) is int and v >= 0,
+            'cache_file': lambda v: v is None or (isinstance(v, str) and bool(v.strip()))}
 
 
 def load_config(root, at=None):
@@ -626,9 +629,99 @@ def content_hash(root, cfg, o, changed, tests=None):
     h = hashlib.sha256()
     for k in ('proof', 'in', 'counterfactual'):
         h.update((k + '=' + o.get(k) + '\n').encode())
-    for path in sorted(set(tests) | {p for p in product if o.covers(p)}):
-        h.update((path + '\0' + json.dumps(_state(os.path.join(root, path))) + '\n').encode(errors='surrogateescape'))
+    _hash_paths(h, root, sorted(set(tests) | {p for p in product if o.covers(p)}))
     return h.hexdigest()[:20], sorted(tests)
+
+
+def _hash_paths(h, root, paths):
+    for path in paths:
+        h.update((path + '\0' + json.dumps(_state(os.path.join(root, path))) + '\n').encode(errors='surrogateescape'))
+
+
+def verify_key(root, cfg, o, base, changed):
+    """Backlog item 12: the identity of everything verify reads, or None when it cannot be named. The tool (version
+    and its own bytes), every setting in force (under --recompute the target branch's), the base commit (what the take-out check restores), and
+    each path that differs from the base as it is now: with the base that names every tracked and untracked file
+    the proof could read, inside the boundary or not. Ignored files and anything outside the repository are not in it."""
+    if any(os.path.isdir(os.path.join(root, p)) and not os.path.islink(os.path.join(root, p)) for p in changed):
+        return None  # a submodule or a directory: its content is not named here
+    with open(os.path.abspath(__file__), 'rb') as f:
+        tool = hashlib.sha256(f.read()).hexdigest()
+    h = hashlib.sha256(('odd %s %s\nbase=%s\n' % (VERSION, tool, rev(root, base) if base else '')).encode())
+    h.update(json.dumps({k: v for k, v in cfg.items() if k != 'cache_file'}, sort_keys=True).encode())
+    _hash_paths(h, root, changed)  # the outcome file and config.json too: changed, or as at the base
+    return h.hexdigest()
+
+
+class Cache(object):
+    """Verifications that passed, by verify_key. The file is read once, before any proof of this process runs, and
+    every write puts back that snapshot plus this process's entries, so whatever a proof or an agent wrote to it in
+    between is dropped. A write that fails loses only the cache."""
+    OPEN = {}
+    ALIAS = {}  # an attempt's clone (race, cascade, chain) -> the user's repository, whose cache it reads and writes
+
+    def __init__(self, path, mode):
+        self.path, self.mode, self.entries = path, mode, {}
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data.get('version') == 1 and isinstance(data.get('entries'), dict):
+                self.entries = {k: e for k, e in data['entries'].items() if isinstance(e, dict)}
+        except (OSError, ValueError):
+            pass
+
+    def get(self, key):
+        e = self.entries.get(key) if key else None
+        if not e or not isinstance(e.get('res'), dict) or not e.get('ts'):
+            return None
+        return e if self.mode != 'recompute' or e.get('mode') == 'recompute' else None
+
+    def put(self, key, slug, res):
+        if key:
+            self.entries[key] = dict(ts=now(), mode=self.mode, slug=slug, res=res)
+            self.save()
+
+    def save(self):
+        keep = dict(sorted(self.entries.items(), key=lambda kv: str(kv[1].get('ts')))[-1000:])
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            tmp = '%s.%d.tmp' % (self.path, os.getpid())
+            with open(tmp, 'w') as f:
+                json.dump({'version': 1, 'entries': keep}, f)
+            os.replace(tmp, self.path)
+        except OSError:
+            pass
+
+
+def _inside(path, *dirs):
+    path = os.path.realpath(path)
+    return any(path == d or path.startswith(d.rstrip(os.sep) + os.sep) for d in map(os.path.realpath, dirs))
+
+
+def cache_for(root, cfg, recompute=False):
+    """(Cache or None, a note for the gate). Locally: "cache_file" (relative to the repository root) or a file under
+    the git directory, shared by every worktree. Under --recompute only a "cache_file" from the target branch's
+    settings that lies outside the repository and its git directory, and only entries an earlier --recompute wrote:
+    nothing the change or its proofs could have written is trusted."""
+    if NO_CACHE:
+        return None, ''
+    root = root if recompute else Cache.ALIAS.get(os.path.realpath(root), root)
+    common = git(root, 'rev-parse', '--git-common-dir').strip()
+    common = common if os.path.isabs(common) else os.path.join(root, common)
+    named = cfg.get('cache_file')
+    if recompute:
+        if not named:
+            return None, ''
+        path = os.path.expanduser(os.path.expandvars(named))
+        if not os.path.isabs(path) or _inside(path, root, common):
+            return None, ('"cache_file" not used under --recompute: %s is inside the repository or its git directory, '
+                          'which the change could write; every outcome ran in full' % named)
+    else:
+        path = os.path.join(root, os.path.expanduser(os.path.expandvars(named))) if named else os.path.join(common, 'odd', 'verified.json')
+    path, mode = os.path.realpath(path), 'recompute' if recompute else 'local'
+    if (path, mode) not in Cache.OPEN:
+        Cache.OPEN[(path, mode)] = Cache(path, mode)
+    return Cache.OPEN[(path, mode)], ''
 
 
 def fingerprint(root, o, files):
@@ -1407,10 +1500,25 @@ def weak(cfg, o, res):
             ('not run', '%s:%s' % (f, n)) for f, ns in (x.rsplit(':', 1) for x in st.get('not_run') or []) for n in ns.split(',')])
 
 
-def verify(root, cfg, o, base, changed, say=lambda s: None):
+def verify(root, cfg, o, base, changed, say=lambda s: None, recompute=False):
     """Green, red with the change taken out, green again. Returns a result dict; raises Fail (the outcome is not
-    shown) or CouldNotRun (nothing was established)."""
+    shown) or CouldNotRun (nothing was established). A verification of byte-identical inputs that passed before is
+    reused (backlog item 12): its result, with "cached" set to when it ran."""
     check_seal(root, o)
+    cache = cache_for(root, cfg, recompute)[0]
+    key = verify_key(root, cfg, o, base, changed) if cache else None
+    hit = cache.get(key) if cache else None
+    if hit:
+        res = dict(hit['res'], cached=hit['ts'])  # only a pass is kept, under these very settings: weak() held
+        say('  inputs unchanged since %s: the earlier verification is reused (--no-cache runs it again)' % hit['ts'])
+        return res
+    res = _verify(root, cfg, o, base, changed, say)
+    if cache:
+        cache.put(key, o.slug, res)
+    return res
+
+
+def _verify(root, cfg, o, base, changed, say):
     _, _, _, product = classify(changed, cfg)
     targets = [p for p in product if o.covers(p)]
     lines = sum(sizes(root, base, targets).values())
@@ -1524,6 +1632,8 @@ def lines_run(st):
 
 
 def _describe(o, res):
+    if res.get('cached'):
+        return 'cached (verified at %s): %s' % (res['cached'], _describe(o, dict(res, cached=None)))
     if res.get('skip'):
         return 'SKIPPED the take-out check (%s): the proof passes; %d line(s) in %d file(s) not verified' % (
             res['skip'].split('-', 1)[-1].strip() or 'no reason', res['lines'], res['files'])
@@ -1567,8 +1677,13 @@ def guards(root, s, say=lambda s: None):
                 todo.append((b, '%s in this change' % ('parked' if o.parked else 'asked')))
     todo += [(b, 'its outcome file is deleted in this change') for b in
              (outcome_at(root, s['base'], rel) for rel, _ in s['deleted']) if b]
+    s['guards_skipped'], merged = 0, None
     for o, note in todo:
-        if o.parked or o.asked or o.skip or not any(o.covers(p) for p in touched):
+        if o.parked or o.asked or o.skip:
+            continue
+        if not any(o.covers(p) for p in touched):  # unaffected: counted when merged, so the report says what was saved
+            merged = set(zlist(root, 'ls-tree', '-r', '--name-only', '-z', s['base'], '--', '.odd/outcomes')) if merged is None else merged
+            s['guards_skipped'] += o.rel in merged
             continue
         commit = git(root, 'log', '-1', '--format=%h', s['base'], '--', o.rel).strip()
         if not commit:
@@ -1682,11 +1797,13 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
                             'them one outcome, or ship them as successive changes.' % (p, ' and '.join(owners)))
     if cfg['auto_lane']:  # until the end is reached: a gate that stops is never the auto lane
         facts.update(lane='review', lane_reasons=['the gate stopped before it finished'])
+    cache, note = cache_for(root, cfg, True) if recompute and active else (None, '')
+    lines += ['  cache   ' + note] if note else []
     for o in active:
         try:
             if recompute:
                 say('%s: %s' % (o.slug, o.get('proof')))
-                res = verify(root, cfg, o, base, changed, say)
+                res = verify(root, cfg, o, base, changed, say, recompute=True)
             else:
                 check_seal(root, o)
                 res = standing(root, cfg, o, changed)
@@ -1721,6 +1838,12 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
                             'proof: %s' % (name, last, o.get('proof')))
         else:
             lines.append('  guard   %s now fails: %s (reported only; "guard": "enforce" fails the gate)' % (name, last))
+    if cache:
+        cache.save()  # what a guard's proof wrote to the file after the last verification is dropped too
+    facts['guards_skipped'] = s.get('guards_skipped', 0)
+    if facts['guards_skipped']:
+        lines.append('  guard   %d earlier proof(s) skipped as unaffected: no file this change touches is inside their '
+                     'boundaries' % facts['guards_skipped'])
     facts['deleted'] = [dict(slug=os.path.basename(rel)[:-3], commit=c) for rel, c in s['deleted']]
     lines += ['  deleted %s (merged in %s): this change deletes its outcome file, so its proof is no longer enforced'
               % (os.path.basename(rel)[:-3], c) for rel, c in s['deleted']]
@@ -2179,6 +2302,7 @@ def _race_start(root, cfg, slug, base_arg):
     if not head:
         raise CouldNotRun('each attempt starts from a commit and there is none yet: commit first')
     base, _ = find_base(root, cfg, base_arg)
+    cache_for(root, cfg)  # the verification cache is read now, before any agent could write it
     tests = classify(changed_files(root, base), cfg)[2]
     fixed = [o.rel] + [p for p in tests if os.path.isfile(os.path.join(root, p)) and not os.path.islink(os.path.join(root, p))]
     fixed += ['.odd/config.json'] if os.path.isfile(odd_dir(root, 'config.json')) else []
@@ -2257,6 +2381,7 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
     try:
         for i, (cmd, name) in enumerate(zip(cmds, names), 1):
             wt = _worktree(root, run, str(i), head, fixed)
+            Cache.ALIAS[os.path.realpath(wt)] = root
             at = dict(n=i, name=name, wt=wt, start=rev(wt, 'HEAD'), cmd=cmd, lines=0, res=None,
                       prompt=os.path.join(keep, 'prompt-%s.md' % name), log=os.path.join(keep, 'agent-%s.log' % name))
             with open(at['prompt'], 'w', encoding='utf-8') as f:
@@ -2284,6 +2409,9 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names):
         for p in procs:
             _killpg(p)
         _drop_run(root, run)
+        cache = cache_for(root, cfg)[0]
+        if cache:
+            cache.save()  # whatever an agent wrote to the cache file is dropped
     return attempts, ranked, patch, setup + time.time() - t1
 
 
@@ -3110,7 +3238,7 @@ def cmd_hook(a, root):
 
 
 def main(argv=None):
-    global ODD
+    global ODD, NO_CACHE
     p = argparse.ArgumentParser(prog='odd', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--version', action='version', version='odd ' + VERSION)
     sub = p.add_subparsers(dest='cmd', required=True)
@@ -3135,6 +3263,7 @@ def main(argv=None):
     s = sub.add_parser('done')
     s.add_argument('slug')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s.add_argument('--no-cache', action='store_true', help='verify in full even when nothing changed since a verification')
     s = sub.add_parser('race')
     s.add_argument('slug')
     s.add_argument('--n', type=int, help='how many attempts (default: one per configured agent, or 3 for one agent)')
@@ -3161,6 +3290,7 @@ def main(argv=None):
     s = sub.add_parser('gate')
     s.add_argument('--base')
     s.add_argument('--recompute', action='store_true')
+    s.add_argument('--no-cache', action='store_true', help='verify every outcome in full, even when "cache_file" holds it')
     s.add_argument('--summary', metavar='FILE', help='also write the result as Markdown, for a pull request')
     s.add_argument('--json', metavar='FILE', help='also write the result as JSON')
     s = sub.add_parser('park')
@@ -3174,7 +3304,10 @@ def main(argv=None):
     s.add_argument('what', help='what went wrong, and where it was found')
     sub.add_parser('stats')
     sub.add_parser('hook').add_argument('event', choices=[arg for _, arg in HOOKS])
+    for name in ('race', 'cascade', 'chain'):
+        sub.choices[name].add_argument('--no-cache', action='store_true', help='verify each attempt in full')
     a = p.parse_args(argv)
+    NO_CACHE = getattr(a, 'no_cache', False)
     if os.path.basename(sys.argv[0]) == 'odd.py':
         rel = os.path.relpath(os.path.abspath(sys.argv[0]))
         ODD = 'python3 ' + (rel if not rel.startswith('..') else sys.argv[0])

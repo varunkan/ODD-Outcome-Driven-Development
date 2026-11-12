@@ -2855,7 +2855,8 @@ class RegressionGuard(Repo):
         self.write('other.py', 'X = 1\n')
         js = self.path('.git/s.json')
         out = self.ok('gate', '--json', js)
-        self.assertNotIn('guard', out)
+        self.assertNotIn('guard   add', out)
+        self.assertIn('guard   1 earlier proof(s) skipped as unaffected', out)  # backlog item 12 (b)
         self.assertEqual(json.loads(self.read('.git/s.json')).get('guards', []), [])
 
     def test_off_disables_and_report_reports_without_failing(self):
@@ -3269,6 +3270,213 @@ class Chain(Agents):
         self.use([self.solver('good')])
         self.ok(*argv)
         self.assertEqual(self.subjects()[0], 'odd: three proven')
+
+
+class VerifyCache(Repo):
+    """Backlog item 12: a verification whose inputs are byte-identical to an earlier successful one is reused
+    ("cached (verified at <time>)"); a one-byte change in any input forces the full run; --no-cache always runs it;
+    --recompute trusts only a "cache_file" outside the repository, written by an earlier --recompute."""
+
+    CACHED = 'cached (verified at '
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.runs = self.dir + '.runs'  # outside the repository: counts every run of the proof's test module
+        self.addCleanup(lambda: os.path.exists(self.runs) and os.remove(self.runs))
+        self.outcome()
+        self.write('tests/test_calc.py', TEST + 'open(%r, "a").write("x")\n' % self.runs)
+        self.write('calc.py', FIXED)
+
+    def count(self):
+        return len(self.read(self.runs)) if os.path.exists(self.runs) else 0
+
+    def test_a_second_done_with_nothing_changed_is_cached_and_runs_no_proof(self):
+        out = self.ok('done', 'add')
+        self.assertNotIn(self.CACHED, out)
+        first = self.count()
+        self.assertGreaterEqual(first, 3, 'green, red, green at least')
+        out = self.ok('done', 'add')
+        self.assertIn('add: verified. ' + self.CACHED, out)
+        self.assertIn('took out 1 file(s)', out, 'the earlier result is shown')
+        self.assertEqual(self.count(), first, 'no proof ran')
+        self.commit('work')  # a commit changes no input
+        self.assertIn(self.CACHED, self.ok('done', 'add'))
+        self.assertEqual(self.count(), first)
+        out = self.ok('done', 'add', '--no-cache')
+        self.assertNotIn(self.CACHED, out)
+        self.assertGreater(self.count(), first, '--no-cache runs the proof')
+
+    def full(self, *a, **k):
+        out = self.ok('done', 'add', *a, **k)
+        self.assertNotIn(self.CACHED, out, 'a changed input must force the full run')
+        out = self.ok('done', 'add', *a, **k)
+        self.assertIn(self.CACHED, out, 'and the result is then cached again')
+
+    def test_a_one_byte_change_in_any_input_forces_a_full_run(self):
+        self.full()
+        with self.subTest('the proof command'):
+            md = self.read('.odd/outcomes/add.md')
+            self.write('.odd/outcomes/add.md', md.replace('-m unittest -q', '-m unittest -v'))
+            self.full()
+        with self.subTest('a setting'):
+            self.write('.odd/config.json', json.dumps({'proof_timeout': 901}))
+            self.full()
+        with self.subTest('a file inside the boundary'):
+            self.write('calc.py', FIXED + '\n')
+            self.full()
+        with self.subTest('a test file the proof runs'):
+            self.write('tests/test_calc.py', self.read('tests/test_calc.py') + '\n')
+            self.full()
+        with self.subTest('an unchanged file outside the boundary the proof may read'):
+            self.write('README.md', 'calc!\n')
+            self.full()
+        with self.subTest('the tool'):
+            tool = os.path.join(self.bin_dir(), 'odd.py')
+            with open(ODD) as f, open(tool, 'w') as g:
+                g.write(f.read() + '\n# one more byte\n')
+            self.full(tool=tool)
+        with self.subTest('the base revision'):
+            self.commit('work')
+            self.git('checkout', '-q', 'main')
+            self.write('other.txt', 'x\n')
+            self.git('add', 'other.txt')
+            self.git('commit', '-qm', 'main moves')
+            self.git('checkout', '-q', 'feat')
+            self.git('merge', '-q', '--no-edit', 'main')  # the base is now main's new commit
+            self.full()
+
+    def bin_dir(self):
+        d = tempfile.mkdtemp(prefix='odd-tool-')
+        self.addCleanup(shutil.rmtree, d, True)
+        return d
+
+    def test_the_mcp_tools_pass_no_cache(self):
+        import odd_mcp
+        self.ok('done', 'add')
+        for name, given in (('done', {'slug': 'add'}), ('gate', {'recompute': True}), ('race', {'slug': 'add'}),
+                            ('cascade', {'slug': 'add'}), ('chain', {'ticket': 't'})):
+            argv = odd_mcp.argv_for(name, dict(given, **{'no-cache': True}))
+            self.assertIn('--no-cache', argv)
+        n = self.count()
+        self.assertNotIn(self.CACHED, self.ok(*odd_mcp.argv_for('done', {'slug': 'add', 'no-cache': True})))
+        self.assertGreater(self.count(), n)
+
+    def test_a_failed_verification_is_never_cached(self):
+        self.write('calc.py', BROKEN + '# 1\n')
+        self.no('done', 'add')
+        n = self.count()
+        self.assertNotIn(self.CACHED, self.no('done', 'add'))
+        self.assertGreater(self.count(), n)
+
+    def recompute_setup(self, cache, here=False):
+        if here:  # the same settings in the change, so done uses the same file and the same key
+            self.write('.odd/config.json', json.dumps({'cache_file': cache}))
+        self.commit('work')
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/config.json', json.dumps({'cache_file': cache}))
+        self.git('add', '.odd/config.json')
+        self.git('commit', '-qm', 'settings')
+        self.git('checkout', '-q', 'feat')
+
+    def test_a_second_recompute_reuses_a_cache_file_outside_the_repository(self):
+        cache = os.path.join(self.bin_dir(), 'odd-cache.json')
+        self.recompute_setup(cache, here=True)
+        self.ok('done', 'add')
+        self.assertIn(self.CACHED, self.ok('done', 'add'), 'done uses the cache file too')
+        out = self.ok('gate', '--recompute')
+        self.assertNotIn(self.CACHED, out, 'an entry written by done is never trusted by --recompute')
+        n = self.count()
+        out = self.ok('gate', '--recompute')
+        self.assertIn(self.CACHED, out)
+        self.assertEqual(self.count(), n, 'no proof ran')
+        self.assertNotIn(self.CACHED, self.ok('gate', '--recompute', '--no-cache'))
+        self.assertGreater(self.count(), n)
+        entries = json.load(open(cache))['entries']
+        self.assertTrue(any(e['mode'] == 'recompute' for e in entries.values()), entries)
+        self.git('checkout', '-q', 'main')  # the target branch changes a setting: every outcome runs in full again
+        self.write('.odd/config.json', json.dumps({'cache_file': cache, 'mutants': 7}))
+        self.git('commit', '-qam', 'settings')
+        self.git('checkout', '-q', 'feat')  # the change's tree and its base (the merge base) are as they were
+        out = self.ok('gate', '--recompute')
+        self.assertNotIn(self.CACHED, out)
+        self.assertIn(self.CACHED, self.ok('gate', '--recompute'))
+
+    def test_recompute_ignores_a_cache_file_inside_the_repository(self):
+        self.recompute_setup('.git/odd-cache.json')
+        self.ok('gate', '--recompute')
+        out = self.ok('gate', '--recompute')
+        self.assertNotIn(self.CACHED, out)
+        self.assertIn('"cache_file" not used', out)
+
+    def test_recompute_ignores_the_local_cache_under_the_git_directory(self):
+        self.commit('work')
+        self.ok('done', 'add')
+        self.ok('gate', '--recompute')
+        self.assertNotIn(self.CACHED, self.ok('gate', '--recompute'))
+
+    def test_recompute_never_trusts_the_change_settings_for_the_cache_file(self):
+        cache = os.path.join(self.bin_dir(), 'odd-cache.json')
+        self.write('.odd/config.json', json.dumps({'cache_file': cache}))  # the change's own settings
+        self.commit('work')
+        self.ok('gate', '--recompute', '--base', 'main')
+        self.assertNotIn(self.CACHED, self.ok('gate', '--recompute', '--base', 'main'))
+
+    def test_a_proof_writing_the_cache_file_cannot_plant_an_entry(self):
+        cache = os.path.join(self.bin_dir(), 'odd-cache.json')
+        self.write('tests/test_calc.py', self.read('tests/test_calc.py') +
+                   'open(%r, "w").write("{\\"version\\": 1, \\"entries\\": {\\"x\\": {}}}")\n' % cache)
+        self.recompute_setup(cache)
+        self.ok('gate', '--recompute')
+        entries = json.load(open(cache))['entries']
+        self.assertNotIn('x', entries)
+        self.assertEqual(len(entries), 1)
+        self.write('calc.py', BROKEN + '# 1\n')  # the proof fails: no entry is written, the file is still put back
+        self.commit('broken')
+        self.no('gate', '--recompute')
+        entries = json.load(open(cache))['entries']
+        self.assertNotIn('x', entries)
+        self.assertEqual(len(entries), 1)
+
+
+class AffectedGuards(Repo):
+    """Backlog item 12 (b): the regression guard reports how many earlier proofs it skipped as unaffected."""
+
+    def test_the_gate_says_how_many_guard_proofs_were_skipped_as_unaffected(self):
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add')
+        self.commit('add')
+        self.git('checkout', '-q', 'main')
+        self.git('merge', '-q', 'feat')
+        self.git('checkout', '-q', '-b', 'later')
+        self.write('other.py', 'X = 1\n')
+        js = self.path('.git/s.json')
+        out = self.ok('gate', '--json', js)
+        self.assertIn('guard   1 earlier proof(s) skipped as unaffected', out)
+        self.assertEqual(json.loads(self.read('.git/s.json'))['guards_skipped'], 1)
+        self.write('calc.py', FIXED + '# touched\n')
+        out = self.ok('gate', '--json', js)
+        self.assertNotIn('skipped as unaffected', out)
+        self.assertEqual(json.loads(self.read('.git/s.json'))['guards_skipped'], 0)
+
+
+class RaceCache(Agents):
+    """Backlog item 12: the cache is shared by the attempts' worktrees, so done after race reuses the winner's check;
+    a cache entry an agent writes is dropped."""
+
+    def test_done_after_race_reuses_the_winning_attempts_verification(self):
+        self.config([self.agent('correct', self.writes(FIXED))])
+        self.ok('race', 'add', '--n', '1')
+        self.assertEqual(self.read('calc.py'), FIXED)
+        self.assertIn('cached (verified at ', self.ok('done', 'add'))
+        self.assertNotIn('cached (verified at ', self.ok('done', 'add', '--no-cache'))
+
+    def test_an_agent_cannot_plant_a_cache_entry(self):
+        cache = os.path.join(self.bin, 'cache.json')
+        self.config([self.agent('forger', self.writes(BROKEN + '# x') + "\nprintf '{\"version\": 1, \"entries\": "
+                                '{\"x\": {}}}\' > %s' % cache)], cache_file=cache)
+        self.no('race', 'add', '--n', '1')  # not verified, so nothing is put: the race still puts the file back
+        self.assertNotIn('x', json.load(open(cache))['entries'])
 
 
 if __name__ == '__main__':

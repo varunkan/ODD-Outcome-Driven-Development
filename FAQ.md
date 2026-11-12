@@ -165,6 +165,13 @@ On GitHub Actions, one step at the end of your test job, made a required check:
 ```
 Other CI systems use the two lines `odd init` prints. The `strength`/`mutants` settings and `sealed:` need 0.4.0 or later; `test-change:` needs a tool newer than 0.4.0 (v0.4.0 refuses it as an unknown field).
 
+**Does it run the proofs again when nothing changed?** No (a tool newer than 0.4.0). A verification is keyed on the
+tool, the settings, the base commit and every file that differs from it; a second `odd done` with nothing changed
+prints `cached (verified at <time>)` and runs no proof. `--no-cache` runs it in full. In CI the cache is used only when
+the target branch sets `"cache_file"` to a path outside the repository, and only entries an earlier `--recompute`
+wrote count; restore that file on pull requests and save it only from the target branch, so a pull request cannot
+plant an entry. Ignored files, installed packages and the environment are not in the key (DESIGN.md section 5d).
+
 **Can a pull request's code get the comment token or forge odd's comment?** Not through the environment: the gate
 step, which runs the proofs, gets no token; a later step posts the comment. Only a comment by the bot (input
 `author`) starting with the marker is updated, and text from the change is escaped. A proof runs as the same user,

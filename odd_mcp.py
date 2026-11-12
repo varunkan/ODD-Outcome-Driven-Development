@@ -22,6 +22,8 @@ MEANING = {0: 'pass', 1: 'fail / not shown', 2: 'could not run'}
 S, B = {'type': 'string'}, {'type': 'boolean'}
 SLUG = ('slug', S, 'the outcome, as named in .odd/outcomes/<slug>.md')
 BASE = ('base', S, 'measure from this revision instead of the target branch')
+NOCACHE = ('no-cache', B, 'verify in full even when the inputs match an earlier verification (odd 0.4.0 with backlog '
+                         'item 12 and later)')
 POSITIONAL = ('slug', 'ticket', 'outcome', 'reason', 'what', 'question')
 TOOLS = (  # name, description, arguments (name, schema, description), the required ones
     ('new', 'State an outcome before the code: writes .odd/outcomes/<slug>.md. proof "auto" picks a narrow command '
@@ -39,18 +41,18 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
     ('seal', 'Optional, before the code: the proof must fail now; fingerprints the test files so a later edit shows.',
      [SLUG, BASE], ('slug',)),
     ('done', 'Verify an outcome: the proof passes, fails with the change taken out, and passes again.',
-     [SLUG, BASE], ('slug',)),
+     [SLUG, BASE, NOCACHE], ('slug',)),
     ('gate', 'Check the whole change: every changed product file is inside one verified outcome or an exemption.',
-     [BASE, ('recompute', B, 'trust nothing recorded: verify every outcome again (as CI does)')], ()),
+     [BASE, ('recompute', B, 'trust nothing recorded: verify every outcome again (as CI does)'), NOCACHE], ()),
     ('race', 'Run the outcome as N parallel agent attempts, each in its own git worktree; each is verified as done '
              'would, and the verified one with the strongest proof and fewest changed lines is applied.',
      [SLUG, ('n', S, 'how many attempts, as a number (default: one per configured agent, or 3)'),
-      ('agent', S, 'the agent command for every attempt, instead of "agents" in .odd/config.json'), BASE], ('slug',)),
+      ('agent', S, 'the agent command for every attempt, instead of "agents" in .odd/config.json'), BASE, NOCACHE], ('slug',)),
     ('cascade', 'Try the outcome with the configured agents in order, cheapest first, each attempt in its own git '
                 'worktree and verified as done would; escalate to the next agent, with the failure passed on, only when '
                 'no attempt is verified; park the outcome with every reason after the last.',
      [SLUG, ('agents', S, 'agent commands, cheapest first, comma-separated (default: "agents" in .odd/config.json)'),
-      ('race', S, 'attempts per level in parallel, as a number (default 1)'), BASE], ('slug',)),
+      ('race', S, 'attempts per level in parallel, as a number (default 1)'), BASE, NOCACHE], ('slug',)),
     ('chain', 'Do a long task as a chain of proven outcomes: .odd/chains/<ticket>.md lists outcome slugs in order; each '
               'one not yet proven is attempted as race (or cascade) would, verified, and committed as the checkpoint '
               '"odd: <slug> proven". An unproven one stops the chain, the tree is back at the last checkpoint and the '
@@ -58,7 +60,7 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
      [('ticket', S, 'the chain, as named in .odd/chains/<ticket>.md'),
       ('race', S, 'attempts per outcome in parallel, as a number (with cascade: per level, default 1)'),
       ('cascade', B, 'attempt each outcome with the agents in order, cheapest first, as cascade does'),
-      ('agents', S, 'agent commands, comma-separated (default: "agents" in .odd/config.json)'), BASE], ('ticket',)),
+      ('agents', S, 'agent commands, comma-separated (default: "agents" in .odd/config.json)'), BASE, NOCACHE], ('ticket',)),
     ('spec', 'Have another agent (in practice a stronger model) write only the proof, in its own git worktree; the '
              'test files come back and are sealed red before any code; retried, then parked, if the proof does not '
              'fail first.',
