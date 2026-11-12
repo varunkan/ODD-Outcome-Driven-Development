@@ -659,6 +659,15 @@ class Setup(Repo):
         self.ok('init')
         self.assertEqual(self.odd('gate', tool='.odd/odd.py')[0], 0)
 
+    def test_init_vendors_the_tool_as_odd_py_whatever_the_file_it_ran_from_is_called(self):
+        renamed = os.path.join(tempfile.mkdtemp(prefix='odd-renamed-'), 'odd-cache-1a2b.py')
+        self.addCleanup(shutil.rmtree, os.path.dirname(renamed), True)
+        shutil.copy(ODD, renamed)  # how the comparison harness and a downloaded copy run it
+        self.ok('init', tool=renamed)
+        with open(renamed) as f:
+            self.assertEqual(self.read('.odd/odd.py'), f.read())
+        self.assertEqual(sorted(os.listdir(self.path('.odd'))), ['config.json', 'odd.py', 'outcomes'])
+
 
 class ClaudeHooks(Repo):
     def hook(self, event, payload=None):

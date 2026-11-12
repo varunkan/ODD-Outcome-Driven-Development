@@ -1396,8 +1396,9 @@ def cmd_init(a, root):
         with open(cp, 'w') as f:
             json.dump(DEFAULTS, f, indent=1)
             f.write('\n')
-    for me in [os.path.abspath(__file__)] + ([server] if a.mcp else []):
-        mine = odd_dir(root, os.path.basename(me))
+    # fixed names: hooks, the method and the CI step all run .odd/odd.py, whatever the copy run here is called
+    for me, name in [(os.path.abspath(__file__), 'odd.py')] + ([(server, 'odd_mcp.py')] if a.mcp else []):
+        mine = odd_dir(root, name)
         if not (os.path.exists(mine) and os.path.samefile(me, mine)):
             shutil.copyfile(me, mine)
     did = ['.odd/odd.py and .odd/config.json (control files: changes to them need a person\'s review)']
