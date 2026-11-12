@@ -66,7 +66,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
 <body>
 <main>
 <header>
-  <span class="tag">odd 0.3.0 · early · MIT</span>
+  <span class="tag">odd 0.4.0 · early · MIT</span>
   <h1>An outcome counts as delivered only when its proof fails without the change.</h1>
   <p class="lede"><b>Outcome-Driven Development (ODD)</b>: work is done when a proof says so, not when the agent says
     so. It is one small command and a half-page method for building software with a coding agent. It works
@@ -127,7 +127,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
 <p>From there your coding agent follows the method in <code>AGENTS.md</code> by itself. To make it count, add the gate as
   a required check. On GitHub Actions it is one step:</p>
 <div class="term"><pre><span class="p">- uses: actions/checkout@v4
-- uses: varunkan/ODD-Outcome-Driven-Development@v0.3.0</span></pre></div>
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.4.0</span></pre></div>
 <p class="muted">The action judges each pull request with its own pinned copy of the tool, never the copy the pull
   request carries, and reads the settings from the target branch, so a change cannot loosen its own gate. Other CI
   systems use two lines that <code>odd init</code> prints.</p>

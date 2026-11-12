@@ -37,4 +37,4 @@ again. In CI it is recomputed from the code. One file, any agent that reads AGEN
 
 - awesome-claude-code and similar curated lists (one-line entry: "ODD: done is a proof that fails without the change").
 - The AGENTS.md examples list (agents.md), as a project that ships its method in AGENTS.md.
-- GitHub Marketplace, from the v0.3.0 release page.
+- GitHub Marketplace, from the v0.4.0 release page.
