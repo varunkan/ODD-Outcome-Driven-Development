@@ -111,6 +111,12 @@ configuration need a person's review to change, and (3) the agent cannot merge o
 step takes the tool and its settings from the base branch, so a pull request cannot loosen its own gate. `odd init`
 prints that step.
 
+**Sealed proofs (optional).** Write the test, run `odd seal <slug>`, then write the code. `seal` refuses a proof that
+already passes, and writes `sealed: proof@<hash>, tests/test_x.py@<hash>` into the outcome file. If the proof command
+or a sealed test file changes afterwards, `odd done` and the gate fail until it is resealed, and a reseal changes the
+outcome file, so it shows in the diff. It makes fitting the test to the code visible; it does not stop it. A reseal
+needs the proof red again, so take the product change out first. Unsealed outcomes work as before.
+
 ## In CI
 
 On GitHub Actions the gate is one step at the end of your test job:

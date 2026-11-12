@@ -1072,6 +1072,67 @@ class RedTeam(Repo):
         self.assertIn('@AGENTS.md', self.read('CLAUDE.local.md'))
 
 
+class SealedProof(Repo):
+    """`odd seal <slug>`: the proof fails before the change, and its test files are fingerprinted in the outcome file,
+    so an edit to them after the code is written fails done and the gate until it is resealed (visibly)."""
+
+    def sealed(self):
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)
+        out = self.ok('seal', 'add')
+        self.assertIn('sealed', out)
+        line = [l for l in self.read('.odd/outcomes/add.md').split('\n') if l.startswith('sealed: ')]
+        self.assertEqual(len(line), 1, 'one sealed: line in the outcome file')
+        self.assertIn('tests/test_calc.py@', line[0], 'the sealed files are named for a reviewer')
+        self.write('calc.py', FIXED)
+
+    def test_seal_refuses_a_proof_that_already_passes(self):
+        self.outcome()
+        self.solve()
+        out = self.no('seal', 'add')
+        self.assertIn('already passes', out)
+        self.assertNotIn('sealed:', self.read('.odd/outcomes/add.md'))
+
+    def test_a_sealed_proof_left_alone_passes_done_and_both_gates(self):
+        self.sealed()
+        self.assertIn('verified', self.ok('done', 'add'))
+        self.commit('work')
+        self.assertIn('PASS', self.ok('gate'))
+        self.assertIn('PASS', self.ok('gate', '--recompute'))
+
+    def test_an_edit_to_a_sealed_test_fails_done_and_both_gates_until_resealed(self):
+        self.sealed()
+        self.ok('done', 'add')
+        self.write('tests/test_calc.py', TEST.replace('5)', '5)\n        self.assertTrue(True)'))
+        msg = 'the sealed proof changed after it was sealed: tests/test_calc.py'
+        self.assertIn(msg, self.no('done', 'add'))
+        self.assertIn(msg, self.no('gate'))
+        self.commit('work')
+        self.assertIn(msg, self.no('gate', '--recompute'))
+        self.write('calc.py', BROKEN)  # a reseal needs the proof red again
+        self.ok('seal', 'add')
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+        self.commit('resealed')
+        self.assertIn('PASS', self.ok('gate', '--recompute'))
+
+    def test_a_changed_proof_command_breaks_the_seal_too(self):
+        self.sealed()
+        md = self.read('.odd/outcomes/add.md')
+        self.write('.odd/outcomes/add.md', md.replace('proof: ' + PROOF, 'proof: ' + PROOF + ' -v'))
+        self.assertIn('the sealed proof changed after it was sealed: the proof command', self.no('done', 'add'))
+        self.write('.odd/outcomes/add.md', md.replace('sealed: proof@', 'sealed: nothing'))
+        self.assertIn('is not a seal odd wrote', self.no('gate'))
+
+    def test_unsealed_outcomes_behave_as_before(self):
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add')
+        self.write('tests/test_calc.py', TEST + '\n')
+        self.assertNotIn('sealed', self.ok('done', 'add'))
+        self.assertNotIn('sealed', self.read('.odd/outcomes/add.md'))
+
+
 class ReviewSummary(Repo):
     """`odd gate --summary FILE` (Markdown) and `--json FILE`: what a reviewer reads instead of the diff."""
     TWO = ProofStrength.TWO

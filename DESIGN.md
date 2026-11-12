@@ -33,7 +33,8 @@ Free notes: questions asked and answered, decisions and why.
   never the whole suite. It asserts results or counts, not wall-clock time.
 - `in`: globs of the product files this outcome may change (its boundary).
 - Paths, globs and the proof are relative to the repository root.
-- Optional lines: `counterfactual: skip - <reason>`, `parked: <reason>`, `escaped: <slug>`.
+- Optional lines: `counterfactual: skip - <reason>`, `parked: <reason>`, `escaped: <slug>`, `sealed: ...` (written
+  by `odd seal`, section 4).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -44,6 +45,7 @@ files; their sentences and proofs are the specification, and each file is a task
 |---|---|---|
 | `odd init [--claude-hooks]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step and the conditions under which CI is the authority | 0 |
 | `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file | 0 |
+| `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
@@ -106,6 +108,18 @@ a line no test reaches, without any language's coverage tool.
 - The setting `strength`: `"report"` (default) prints the score and each survivor (file:line, the swap, the line) in
   `odd done` and the gate; `"enforce"` makes a survivor a failure; `"off"` makes no mutant. `--recompute` measures
   it again with the settings of the target branch.
+
+**Sealed proofs (optional).** `odd seal <slug>` runs the proof on the tree as it is and requires it to fail (run
+to completion, non-zero); a proof that passes is refused with exit 1, one that cannot run is exit 2. It then writes
+`sealed: proof@<hash>, <test file>@<hash>, ...` into the outcome file: a 12-hex sha256 of the proof command and of
+each test file changed since the base (content, mode, a link as a link). It refuses when no test file has changed.
+`odd done`, the local gate and `--recompute` then fail while the proof command or a sealed file differs, naming
+them: "the sealed proof changed after it was sealed: <files>; reseal it or restore it". Resealing is `odd seal`
+again; it needs the proof red again (take the product change out first) and it changes the outcome file, so it is
+visible in review. Limits: the seal is written by the party being checked, so it proves nothing about what the test
+was before `seal` ran, and a reseal is allowed; it covers only the files named, not helpers or fixtures added after;
+a malformed `sealed:` line fails. Outcomes without it behave exactly as before. Seal runs no in-place edit, so it
+needs no journal.
 
 **A skip is an exemption with a reason, not a verification.** `counterfactual: skip - <reason>` is for a change
 where nothing can fail first: a pure refactor, a dependency bump, a removal, a submodule pointer. The proof must

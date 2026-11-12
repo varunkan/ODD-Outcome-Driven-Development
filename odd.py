@@ -8,6 +8,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
 
   odd init [--claude-hooks]                               install or repair
   odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated>"
+  odd seal <slug> [--base REF]                            optional: the proof fails now; fingerprint its tests
   odd done <slug> [--base REF]                            exit 0 verified, 1 not shown, 2 could not run
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
@@ -49,7 +50,7 @@ DEFAULTS = {
     'mutants': 8,          # at most this many per outcome; each one is one proof run
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json')   # no outcome needed; always reported; read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed')
 SLUG = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 BIG = 10 ** 6  # a binary file or submodule pointer is never a "small change"
 WIDE = 120     # bytes that count as one line in the small-change lane
@@ -413,6 +414,30 @@ def content_hash(root, cfg, o, changed, tests=None):
     for path in sorted(set(tests) | {p for p in product if o.covers(p)}):
         h.update((path + '\0' + json.dumps(_state(os.path.join(root, path))) + '\n').encode(errors='surrogateescape'))
     return h.hexdigest()[:20], sorted(tests)
+
+
+def fingerprint(root, o, files):
+    """The `sealed:` value: `proof@<hash>, <test file>@<hash>, ...`, one short hash of the proof command and of each
+    test file as it is now (content, mode, links), so a reviewer sees which files are sealed."""
+    h = lambda text: hashlib.sha256(text.encode(errors='surrogateescape')).hexdigest()[:12]  # noqa: E731
+    return ', '.join(['proof@' + h(o.get('proof'))] +
+                     ['%s@%s' % (p, h(json.dumps(_state(os.path.join(root, p))))) for p in files])
+
+
+def check_seal(root, o):
+    """Fail when the outcome is sealed and its proof command or a sealed test file differs from the seal."""
+    if not o.get('sealed'):
+        return
+    files = [e.rsplit('@', 1)[0] for e in o.get('sealed').split(', ')[1:]]
+    now = dict(e.rsplit('@', 1) for e in fingerprint(root, o, files).split(', '))
+    was = dict(e.rsplit('@', 1) for e in o.get('sealed').split(', ') if '@' in e)
+    if 'proof' not in was:
+        raise Fail('%s: "sealed:" is not a seal odd wrote (proof@<hash>, <file>@<hash>, ...); run %s seal %s'
+                   % (o.rel, ODD, o.slug))
+    moved = ['the proof command' if k == 'proof' else k for k in was if now.get(k) != was[k]]
+    if moved:
+        raise Fail('the sealed proof changed after it was sealed: %s; reseal it (%s seal %s; the reseal shows in the '
+                   'diff) or restore it' % (', '.join(moved), ODD, o.slug))
 
 
 def standing(root, cfg, o, changed):
@@ -834,6 +859,7 @@ def weak(cfg, o, res):
 def verify(root, cfg, o, base, changed, say=lambda s: None):
     """Green, red with the change taken out, green again. Returns a result dict; raises Fail (the outcome is not
     shown) or CouldNotRun (nothing was established)."""
+    check_seal(root, o)
     _, _, _, product = classify(changed, cfg)
     targets = [p for p in product if o.covers(p)]
     lines = sum(sizes(root, base, targets).values())
@@ -951,6 +977,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
                 say('%s: %s' % (o.slug, o.get('proof')))
                 res = verify(root, cfg, o, base, changed, say)
             else:
+                check_seal(root, o)
                 res = standing(root, cfg, o, changed)
                 if not res:
                     raise Fail('run: %s done %s' % (ODD, o.slug))
@@ -1042,6 +1069,29 @@ def cmd_done(a, root):
     print('%s: verified. %s' % (a.slug, _describe(o, res)))
     code, lines = gate(root, a.base)
     print('\n'.join(['', 'the change as a whole:'] + lines))
+
+
+def cmd_seal(a, root):
+    """Red first, recorded: the proof must fail now, before the change; then the proof command and the test files
+    changed so far are fingerprinted in the outcome file. Optional; done and the gate check the seal when present."""
+    o, cfg = Outcome.load(root, a.slug), load_config(root)
+    base, _ = find_base(root, cfg, a.base)
+    tests = classify(changed_files(root, base), cfg)[2]
+    if not tests:
+        raise Fail('no test file has changed since %s, so there is nothing to seal: write the proof as a test under a '
+                   'test path first' % (base or 'the first commit')[:10])
+    rc, tail, _ = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+    if unrunnable(rc):
+        raise CouldNotRun('the proof did not run to completion (%s), so it is not red. A proof must run and exit '
+                          'non-zero before the change.\n%s' % ('timeout' if rc is None else 'exit %d' % rc, _indent(tail)))
+    if rc == 0:
+        raise Fail('the proof already passes, so it cannot be sealed red first: %s. Seal it before the change, or '
+                   'take the change out first.' % o.get('proof'))
+    o.f['sealed'] = fingerprint(root, o, tests)
+    o.save()
+    print('%s: sealed; the proof fails now (%s). Sealed: %s. Now write the code; a later edit to these files fails '
+          '%s done and the gate until it is resealed.' % (a.slug, (tail.strip().splitlines() or ['no output'])[-1][:120],
+                                                        ', '.join(tests), ODD))
 
 
 def cmd_gate(a, root):
@@ -1146,7 +1196,9 @@ For any change of more than a few lines, on a branch of its own:
    instead of guessing.
    `odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated, relative to the repository root>"`
 2. Write the proof as a test in a file of its own under a test path (`tests/`, `test_*.py`, `*_test.*`, `*.test.*`,
-   `*.spec.*`). Make it the narrowest command that shows the outcome, not the whole suite.
+   `*.spec.*`). Make it the narrowest command that shows the outcome, not the whole suite. Recommended: run
+   `odd seal <slug>` now, before the code; it checks the proof fails and fingerprints the test, so changing the test
+   later fails `done` until it is resealed, and the reseal shows in review.
 3. Make the change, staying inside the files the outcome names. If more are needed, add them to `in:` in
    `.odd/outcomes/<slug>.md`. Work that is not part of this outcome is a later outcome.
 4. Finish with `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change
@@ -1329,6 +1381,9 @@ def main(argv=None):
     s.add_argument('outcome')
     s.add_argument('--proof', required=True, help='a command that exits 0 only when the outcome holds')
     s.add_argument('--in', dest='in_', required=True, action='append', help='globs, comma-separated (may be repeated)')
+    s = sub.add_parser('seal')
+    s.add_argument('slug')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('done')
     s.add_argument('slug')
     s.add_argument('--base', help='measure from this revision instead of the target branch')

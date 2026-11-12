@@ -133,13 +133,14 @@ Superpowers, three times each, on two models. It measures whether the work is re
 | objection | answer |
 |---|---|
 | "Isn't this just TDD?" | TDD's red-first is the idea. ODD makes it the agent's definition of done, checks it automatically and enforces it at merge. |
-| "Another framework to learn?" | Six commands and twenty lines of method, which your agent reads itself. |
+| "Another framework to learn?" | Six commands (a seventh, `seal`, is optional) and about twenty lines of method, which your agent reads itself. |
 | "My tests are fine." | Then `odd done` passes in seconds. If it does not, you have learned something. |
 | "It will slow us down." | The proof runs three times, plus once per small break (at most eight), so make it the narrowest test that shows the outcome, usually seconds. Rework after a fake "done" costs more. |
 | "My agent could cheat it." | On a laptop an agent with a shell can bypass any local check, so CI is the authority: a required check, its own pinned copy of the tool, settings from the target branch. |
 | "We already use Spec Kit or BMAD." | Keep them. They plan; ODD checks the result. |
 | "Does it make agents better?" | Not proven. The comparison will say, and it will be published either way. |
 | "What if the work cannot be done?" | `odd park <slug> "<why>"`. An honest "blocked" is a valid result. |
+| "Can the agent just rewrite the test to fit its code?" | Only visibly, if the outcome is sealed. `odd seal <slug>` before the code checks the proof fails and fingerprints the test files in the outcome file; editing them later fails `done` and the gate until a reseal, which changes the outcome file in the diff. Optional; a reviewer still has to look. |
 | "Does it check that my test is thorough?" | Partly. It checks that the proof depends on the change, then makes up to eight small breaks in the changed lines and names each one the proof misses (`"strength": "enforce"` fails on them). No survivor is not proof of thoroughness; a person should still read the outcome sentence and the proof. |
 
 Full limits: [DESIGN.md](DESIGN.md#10-limits).
