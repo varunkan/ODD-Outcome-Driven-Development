@@ -55,7 +55,8 @@ repeats per arm, every reason read by a person. Full write-ups: [15](evidence/15
 | a cheap model can match a strong one's honesty | cascade (Haiku, then Sonnet when needed): 41 of 42 doable tasks, no false DONE, at about a quarter of plain Sonnet's cost; plain Haiku delivered all 42 on these tasks | [16](evidence/16-new-arms.md#with-disputed-proofs) |
 | a wrong proof no longer blocks correct work | in 18 runs a disputed proof went back to its author: 17 then delivered, none claimed DONE falsely | [16](evidence/16-new-arms.md#with-disputed-proofs) |
 | running the method found real defects | the gate refused correct work proven in steps (34 runs), fixed and shown on agents: refused correct work 11-13 per arm, then 0 | [16](evidence/16-new-arms.md) |
-| not shown yet | more correct work on real repositories where plain agents fail; any agent other than Claude Code | [BACKLOG](../BACKLOG.md) items 18, 22 |
+| holds for any model by construction | a proof that fails without the change means the same whichever model wrote the code; the measured gains above are Claude's | [THE-RULE](../THE-RULE.md) |
+| not shown yet | more correct work on real repositories where plain agents fail | [BACKLOG](../BACKLOG.md) item 18 |
 '''
 
 

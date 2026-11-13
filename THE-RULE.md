@@ -42,8 +42,9 @@ and for agents, with any model, in any repository.
 
 It does not make a model smarter, and on easy tasks a plain strong agent is already right. It does not show that a
 proof covers the whole requirement (a proof can encode a wrong reading of the ticket; held-out proofs and review
-narrow that). Gains on large real repositories and with other vendors' models are not measured yet
-([BACKLOG](BACKLOG.md) items 18 and 22). The rule makes "done" trustworthy; it does not make every "done" happen.
+narrow that). The guarantee does not depend on the model: a proof that fails without the change means the same
+whichever model wrote the code. The measured gains (tasks delivered, cost, false "done") are Claude's, and gains on
+large real repositories are not measured yet ([BACKLOG](BACKLOG.md) item 18). The rule makes "done" trustworthy; it does not make every "done" happen.
 
 ## How to follow it
 

@@ -573,6 +573,9 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Needs:** the other CLIs installed in the runner and their API keys; `bench/arm_agent.py`'s session command takes
   only the `claude` CLI today.
 - **Measure:** delivered, false DONE and cost per agent, as in 16.
+- **Not planned** (owner's decision, 2026-11-13): the guarantee does not depend on the model, since a proof that fails
+  without the change means the same whichever model wrote the code, and odd calls no model. What would differ by model
+  is the size of the gains (delivered, cost, false DONE), which are measured on Claude only.
 
 ### 23. A disputed proof goes back to be rewritten
 - **Outcome:** when the attempts at a sealed outcome all fail and say the proof itself is wrong (a line `odd-dispute:
