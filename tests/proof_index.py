@@ -44,19 +44,20 @@ THEMES = [
 RESULTS = '''## What the measurements show
 
 Measured on the comparison harness ([bench/](../bench/SPEC.md)): 16 tasks with hidden acceptance tests, three
-repeats per arm, every reason read by a person. Full write-ups: [15](evidence/15-comparison.md) and
-[16](evidence/16-new-arms.md).
+repeats per arm, every reason read by a person; then ten real sympy issues. Full write-ups: [15](evidence/15-comparison.md),
+[16](evidence/16-new-arms.md) and [18](evidence/18-real-repositories.md).
 
 | claim | measured | where |
 |---|---|---|
-| odd's own check agrees with hidden tests | on Sonnet, it never passed work the hidden tests failed (48 runs) | [15](evidence/15-comparison.md) |
+| odd's own check agrees with hidden tests | on Sonnet, it never passed work the hidden tests failed (48 synthetic runs); on real sympy issues it passed 5 runs the hidden tests failed, each where the test asked for more than the ticket shows | [15](evidence/15-comparison.md), [18](evidence/18-real-repositories.md) |
 | it costs little to leave on | about 1 to 3 cents a task more than plain Claude Code; Spec Kit and BMAD cost 2 to 5 times plain | [15](evidence/15-comparison.md) |
 | it lowers false "done" | cascade and race: 0 false DONE in 48 runs each, plain Haiku 2; honest NOT DONE on contradictions 6 of 6 against 4 of 6 (a hint: six runs) | [16](evidence/16-new-arms.md#with-disputed-proofs) |
 | a cheap model can match a strong one's honesty | cascade (Haiku, then Sonnet when needed): 41 of 42 doable tasks, no false DONE, at about a quarter of plain Sonnet's cost; plain Haiku delivered all 42 on these tasks | [16](evidence/16-new-arms.md#with-disputed-proofs) |
 | a wrong proof no longer blocks correct work | in 18 runs a disputed proof went back to its author: 17 then delivered, none claimed DONE falsely | [16](evidence/16-new-arms.md#with-disputed-proofs) |
 | running the method found real defects | the gate refused correct work proven in steps (34 runs), fixed and shown on agents: refused correct work 11-13 per arm, then 0 | [16](evidence/16-new-arms.md) |
 | holds for any model by construction | a proof that fails without the change means the same whichever model wrote the code; the measured gains above are Claude's | [THE-RULE](../THE-RULE.md) |
-| not shown yet | more correct work on real repositories where plain agents fail | [BACKLOG](../BACKLOG.md) item 18 |
+| more correct work on real repositories | **not shown**: ten sympy issues, 90 runs: cascade 24 of 30, plain Haiku 25, plain Sonnet 25; 5 false DONE each | [18](evidence/18-real-repositories.md) |
+| a proof reaches as far as the requirement shows | 12 of 15 false DONE did exactly what the ticket shows and failed on what it does not; the other 3, all plain agents, left the ticket's own example failing; none of odd's did (0 of 5) | [18](evidence/18-real-repositories.md) |
 '''
 
 

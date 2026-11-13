@@ -1,0 +1,30 @@
+{
+ "sympy__sympy-21930::test_NO": {
+  "ruling": "UNCLEAR",
+  "why": "The failing assertion wants standalone Bd(i) printed as '{b^\\dagger_{i}}'. The ticket asks only that the powered form become \"{b^\\dagger_{0}}^{2}\". Bracing inside the operator's own latex and bracing only under Pow both produce that output, and the ticket does not pick one."
+ },
+ "sympy__sympy-21930::test_Tensors": {
+  "ruling": "NOT IMPLIED",
+  "why": "The test also requires AntiSymmetricTensor to print as '{t^{ab}_{ij}}'. The ticket never mentions tensors, only \"double superscripts containing the dagger command\". The Bd assertion in this test has the same ambiguity as test_NO."
+ },
+ "sympy__sympy-21930::test_commutation": {
+  "ruling": "UNCLEAR",
+  "why": "This is the same failing assertion as test_NO: unpowered Bd(i) wrapped in braces. The ticket's example \"{b^\\dagger_{0}}^{2}\" is a Pow case, so bracing at the Pow level is an equally valid reading."
+ },
+ "sympy__sympy-21930::test_create": {
+  "ruling": "UNCLEAR",
+  "why": "The test asserts latex(Bd(i)) == '{b^\\dagger_{i}}' with no exponent. The ticket only says the double superscript \"should be correct by adding curly brackets\", which does not fix where the braces go."
+ },
+ "sympy__sympy-21930::test_create_f": {
+  "ruling": "UNCLEAR",
+  "why": "This is the same Bd(i) brace assertion; the test also expects bare Fd(p) to print as '{a^\\dagger_{p}}'. The ticket does not say whether an unpowered operator gets braces."
+ },
+ "sympy__sympy-22456::test_String": {
+  "ruling": "IMPLIED",
+  "why": "The ticket says String should support \"expr.func(*expr.args) == expr\", and the failing assertion is exactly st.func(*st.args) == st."
+ },
+ "sympy__sympy-23950::test_as_set": {
+  "ruling": "IMPLIED",
+  "why": "The ticket says returning Contains is wrong because \"Contains is not a set\", and its Piecewise example needs as_set() to return a set with as_relational. For Contains(x, S) that set is S. The submission raised NotImplementedError, which leaves the reported Piecewise failure in place. The FiniteSet(y) case with a second free symbol is not addressed in the ticket, but returning the set argument covers it."
+ }
+}

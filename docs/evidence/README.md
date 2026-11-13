@@ -22,6 +22,7 @@ documents behind it.
 | 14 | [What research says would make ODD more valuable](14-research.md) | Can anything make ODD 100 times better (no), which augmentations have evidence, and what will not help? | Three research angles over about 30 papers with URLs, each claim re-checked by a skeptic pass; numbers from the papers, none yet measured on our harness. |
 | 15 | [The comparison](15-comparison.md) | Does ODD, Spec Kit, BMAD or Superpowers do better than plain Claude Code? | 480 runs on two models, hidden tests, both grades and every reason verbatim. |
 | 17 | [How frontier models reason](17-how-frontier-models-reason.md) | What do the most capable models do to finish correctly, where do they still fail, and what can odd check? | Anthropic's guidance and system cards and the research literature, measured vs asserted; what was built and what not. |
+| 18 | [Real repositories](18-real-repositories.md) | Does odd get more correct work done on real open-source issues? | 90 runs on ten SWE-bench Verified sympy issues, design ruled by a judge, failures read from each tree and ruled blind: not shown; every false DONE but three did what the ticket shows. |
 | 16 | [The new arms](16-new-arms.md) | Do race, cascade or a strong model's proof make Haiku as good as Sonnet for less? | 576 runs; first no (two defects found); after the fixes and disputed proofs, cascade delivered 41 of 42 with no false DONE at a quarter of Sonnet's cost; plain Haiku still delivered all 42. |
 
 ## Data and tools
