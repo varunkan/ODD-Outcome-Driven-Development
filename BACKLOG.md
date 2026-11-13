@@ -588,7 +588,11 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Done** in the commit "B23: a disputed proof waits for an answer instead of parking" (`git log --grep '^B23:'`), a
   tool newer than 0.4.0 ([DESIGN 3d1](DESIGN.md)). Tests: `Disputes`. The harness sends a disputed proof back to its
   author once (`odd spec`; the arm's own model for race and cascade, the strong model for spec) and runs the attempts
-  again; test `test_a_disputed_proof_goes_back_to_its_author_once_and_the_race_runs_again`. Measure: not yet run.
+  again; test `test_a_disputed_proof_goes_back_to_its_author_once_and_the_race_runs_again`.
+- **Measured** (run D, [16](docs/evidence/16-new-arms.md#with-disputed-proofs)): in 18 runs a disputed proof went back
+  to its author; 17 then delivered correct work, 1 was refused, none claimed DONE falsely. Delivered rose for race (35
+  to 40 of 42), cascade (39 to 41) and spec (30 to 37); false DONE did not rise (race 0, cascade 1 to 0, spec 5 to 4).
+  Kept.
 
 ## From the source projects' session logs (2026-11-12)
 

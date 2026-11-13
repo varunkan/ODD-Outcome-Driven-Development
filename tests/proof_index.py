@@ -51,8 +51,9 @@ repeats per arm, every reason read by a person. Full write-ups: [15](evidence/15
 |---|---|---|
 | odd's own check agrees with hidden tests | on Sonnet, it never passed work the hidden tests failed (48 runs) | [15](evidence/15-comparison.md) |
 | it costs little to leave on | about 1 to 3 cents a task more than plain Claude Code; Spec Kit and BMAD cost 2 to 5 times plain | [15](evidence/15-comparison.md) |
-| it lowers false "done" | race: 0 false DONE in 48 runs, plain Haiku 2; honest NOT DONE on contradictions 6 of 6 against 4 of 6 (a hint: six runs) | [16](evidence/16-new-arms.md#after-the-fixes) |
-| a cheap model can come close to a strong one | cascade (Haiku, then Sonnet when needed): 39 of 42 doable tasks at a third of plain Sonnet's cost; plain Haiku delivered all 42 on these tasks | [16](evidence/16-new-arms.md#after-the-fixes) |
+| it lowers false "done" | cascade and race: 0 false DONE in 48 runs each, plain Haiku 2; honest NOT DONE on contradictions 6 of 6 against 4 of 6 (a hint: six runs) | [16](evidence/16-new-arms.md#with-disputed-proofs) |
+| a cheap model can match a strong one's honesty | cascade (Haiku, then Sonnet when needed): 41 of 42 doable tasks, no false DONE, at about a quarter of plain Sonnet's cost; plain Haiku delivered all 42 on these tasks | [16](evidence/16-new-arms.md#with-disputed-proofs) |
+| a wrong proof no longer blocks correct work | in 18 runs a disputed proof went back to its author: 17 then delivered, none claimed DONE falsely | [16](evidence/16-new-arms.md#with-disputed-proofs) |
 | running the method found real defects | the gate refused correct work proven in steps (34 runs), fixed and shown on agents: refused correct work 11-13 per arm, then 0 | [16](evidence/16-new-arms.md) |
 | not shown yet | more correct work on real repositories where plain agents fail; any agent other than Claude Code | [BACKLOG](../BACKLOG.md) items 18, 22 |
 '''

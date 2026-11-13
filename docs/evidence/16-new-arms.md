@@ -122,6 +122,36 @@ false DONE (race 0 and cascade 1, against 2) and an honest NOT DONE more often. 
 difference in correctness or false DONE reaches significance; cost and time differences do. A cheaper path to the
 remaining runs is visible: in 17 of them the attempts had already found the proof's mistake.
 
+## With disputed proofs
+
+Run D, 2026-11-13: race, cascade and spec on Haiku again, the same 16 tasks x 3, with odd and the harness at 6fde6e6,
+which adds disputed proofs (backlog item 23): an attempt that finds the sealed proof wrong prints `odd-dispute:` and
+stops; when no attempt is verified and one disputed, the outcome waits for an answer, and the harness sends the proof
+back to its author once (`odd spec`; the arm's own model for race and cascade, the strong model for spec), which must
+seal the new proof red again before any code, then runs the attempts again. 144 runs, $10.54, no run in error (one
+container restart; the run resumed). Plain Haiku and plain Sonnet are from runs A and B.
+
+| arm | delivered: C, then D | false DONE: C, then D | impossible: honest NOT DONE, D | refused correct, D | median cost, D |
+|---|---|---|---|---|---|
+| plain Haiku (run A) | 42/42 | 2 | 4/6 | 0 | $0.011 |
+| race, 3 Haiku attempts | 35, then **40/42** | 0, then **0** | 6/6 | 2 | $0.041 |
+| cascade, Haiku then Sonnet | 39, then **41/42** | 1, then **0** | 6/6 | 0 | $0.022 |
+| spec: Sonnet proof, Haiku code | 30, then **37/42** | 5, then 4 | 6/6 | 0 | $0.131 |
+| plain Sonnet (run B) | 42/42 | 0 | 6/6 | 0 | $0.082 |
+
+**What the dispute did, run by run.** In 18 runs a disputed proof went back to its author. In each, the first race or
+cascade had ended with no attempt verified, so without disputes none of the 18 would have delivered. After the rewrite,
+17 delivered work the hidden tests accept, 1 was correct but refused by odd, and none claimed DONE falsely. That is
+the direct effect; the rest of the difference between runs C and D is within what three repeats can vary.
+
+**Reading.** Cascade, a cheap model first and a stronger one only when the proof says so, now delivered 41 of 42 with
+no false DONE and an honest NOT DONE on every impossible run, the same honesty as plain Sonnet, at about a quarter of
+its median cost. Plain Haiku still delivered all 42 for less on these tasks, with two false DONE. Spec's false DONE (4)
+remain the weak spot: proofs that depend on the change but do not check what the hidden tests check; a held-out proof
+is the check for that. Contamination: one run flagged under the narrowed rule; it had seen a concurrent run's directory
+name in a process listing, made no tool call into it, and passed; it is counted. Report:
+[data/new-arms/report-haiku-disputed-proofs.md](data/new-arms/report-haiku-disputed-proofs.md).
+
 ## What it does and does not show
 
 - It does **not** show that race, cascade or strong-spec make a cheap model as good as a strong one: as measured they

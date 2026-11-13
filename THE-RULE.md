@@ -28,7 +28,10 @@ and for agents, with any model, in any repository.
 - **Judges and rules do not enforce.** AI monitors caught 42-65% of cheating; prompt wording moved cheating on
   repository tasks only from 66% to 54%. [Evidence 17](docs/evidence/17-how-frontier-models-reason.md).
 - **It worked here.** odd's own check never passed work that hidden tests rejected (48 runs on a strong model); with
-  three cheap attempts and the proof choosing, false "done" was 0 in 48 runs against 2 for one plain session.
+  three cheap attempts and the proof choosing, false "done" was 0 in 48 runs against 2 for one plain session; a cheap
+  model first and a stronger one only when the proof says so delivered 41 of 42 tasks with no false "done", at about a
+  quarter of the strong model's cost; and when attempts disputed a wrong proof, it went back to its author, after which
+  17 of 18 such runs delivered correct work.
   [Evidence 15](docs/evidence/15-comparison.md), [16](docs/evidence/16-new-arms.md).
 - **It is cheap.** About one to three cents a task over a plain agent. [Evidence 15](docs/evidence/15-comparison.md).
 - **It catches its own mistakes.** Applied to this project, the rule found a defect in odd's gate that refused
