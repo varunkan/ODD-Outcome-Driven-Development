@@ -521,6 +521,12 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Outcome:** the comparison is repeated on real open-source issues with their own tests (SWE-bench style), where
   agents do fail, because our hand-written tasks proved too easy for a strong model.
 - **Measure:** the same measures as today, published with spread, whatever they show.
+- **Done, result: not shown** ([evidence 18](docs/evidence/18-real-repositories.md); `bench/realtasks.py`). Ten SWE-bench
+  Verified sympy issues, 90 runs, $3.41: cascade 24 of 30 (per repeat 7, 9, 8), plain Haiku 25 (8, 9, 8), plain Sonnet
+  25 (9, 8, 8), 5 false DONE each, costs with min and max in the write-up. Plain agents claimed done three times with no
+  source change (one stale ticket), odd's arm 0, a hint (its take-out check was not triggered); odd's false DONE fixed what the ticket shows and missed what the hidden tests asked beyond
+  it (part 5 of THE-RULE, a principle, not a measurement). Next, if any: tasks where plain agents fail on what the
+  ticket does say.
 
 ### 19. New arms for the comparison
 - Haiku x 3 race, Haiku-then-Sonnet cascade, and strong-spec / cheap-code, against plain Sonnet and plain Haiku.

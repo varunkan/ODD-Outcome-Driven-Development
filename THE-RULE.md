@@ -8,7 +8,7 @@ Short form: **no proof, no done.**
 This is the one value this project has shown, kept here so every later change is held to it. It is written for people
 and for agents, with any model, in any repository.
 
-## The four parts
+## The five parts
 
 1. **Done is a fact, not a claim.** An agent, a person or a team saying "done" is a statement. Done is a command that
    exits 0 only when the outcome holds.
@@ -19,6 +19,9 @@ and for agents, with any model, in any repository.
    from the target branch).
 4. **Say what is not proven.** "Blocked", "not verified" and "owed on the real system" are honest answers. A forced
    pass is the wrong answer, even when it turns everything green.
+5. **A proof reaches only as far as the requirement it was written from.** What the requirement leaves unsaid is not
+   proven by a proof written from it. So write requirements as examples a check can run, and treat everything they
+   leave unsaid as not proven. (A principle the real-repository pilot is consistent with, not a measured law.)
 
 ## Why it holds
 
@@ -33,6 +36,10 @@ and for agents, with any model, in any repository.
   quarter of the strong model's cost; and when attempts disputed a wrong proof, it went back to its author, after which
   17 of 18 such runs delivered correct work.
   [Evidence 15](docs/evidence/15-comparison.md), [16](docs/evidence/16-new-arms.md).
+- **On real issues, a hint.** On ten real sympy issues (90 runs), plain agents, Sonnet included, claimed done three
+  times without changing any source file, all on one stale ticket; odd's arm did not, though its take-out check, which
+  refuses such a claim by construction, was never triggered there. odd's false "done"s fixed what the ticket shows and
+  missed what the hidden tests asked beyond it: part 5. [Evidence 18](docs/evidence/18-real-repositories.md).
 - **It is cheap.** About one to three cents a task over a plain agent. [Evidence 15](docs/evidence/15-comparison.md).
 - **It catches its own mistakes.** Applied to this project, the rule found a defect in odd's gate that refused
   correct work in 34 runs, corrected two figures in our own reports, and stopped a push that would have published
@@ -43,8 +50,10 @@ and for agents, with any model, in any repository.
 It does not make a model smarter, and on easy tasks a plain strong agent is already right. It does not show that a
 proof covers the whole requirement (a proof can encode a wrong reading of the ticket; held-out proofs and review
 narrow that). The guarantee does not depend on the model: a proof that fails without the change means the same
-whichever model wrote the code. The measured gains (tasks delivered, cost, false "done") are Claude's, and gains on
-large real repositories are not measured yet ([BACKLOG](BACKLOG.md) item 18). The rule makes "done" trustworthy; it does not make every "done" happen.
+whichever model wrote the code. The measured gains (tasks delivered, cost, false "done") are Claude's, and on real repositories
+they were not shown: on ten sympy issues odd delivered no more than a plain agent and claimed done falsely as often
+([evidence 18](docs/evidence/18-real-repositories.md)). The rule makes "done" as trustworthy as the proof behind it,
+and the proof is only as complete as the requirement it was written from; it does not make every "done" happen.
 
 ## How to follow it
 
