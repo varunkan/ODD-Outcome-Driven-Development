@@ -22,6 +22,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: git config --global user.email ci@example.com && git config --global user.name ci
       - run: python -m unittest discover -s tests
+      - run: python tests/proof_index.py --check
       - run: python -m unittest discover -s bench/tests
       - run: python bench/validate.py
   gate:

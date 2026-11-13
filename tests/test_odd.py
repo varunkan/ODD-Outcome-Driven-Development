@@ -3796,7 +3796,7 @@ class CostPerOutcome(Agents):
 
     def test_every_attempt_records_its_cost_and_seconds(self):
         self.config([self.agent('broken', self.writes(BROKEN.replace('0', 'a - b')) + '\necho odd-cost: 0.25'),
-                     self.agent('fixed', self.writes(FIXED, wait=0.3) + '\necho odd-cost: \$0.5'),
+                     self.agent('fixed', self.writes(FIXED, wait=0.3) + '\necho odd-cost: \\$0.5'),
                      self.agent('quiet', self.writes(FIXED))])
         self.ok('race', 'add')
         rows = sorted(self.spend(), key=lambda e: e['attempt'])

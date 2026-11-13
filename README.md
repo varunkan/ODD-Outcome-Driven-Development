@@ -10,6 +10,11 @@ Here an outcome is something a command can check.)
 Claude Code, Cursor, Copilot, Codex or anything else that can run a shell command, because it needs only a shell and
 git.
 
+
+**The proof, in one page:** [docs/PROOF.md](docs/PROOF.md) lists every claim odd makes with the tests that show it
+(all of them, run on Linux and macOS on every push), grouped by what they prove, and what the measurements show and do not show. It is generated from the test suite,
+and CI fails when it is out of date.
+
 ## The problem
 
 Coding agents report "done" for work that is not done. The tests pass, but they test nothing the change does; the bug
