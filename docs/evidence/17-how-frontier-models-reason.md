@@ -47,12 +47,12 @@ marked measured (the source gives numbers) or asserted. odd still calls no model
 |---|---|---|
 | 1, 10: outside ground truth; no LLM judge as the arbiter | the take-out check, recompute in CI, strength; `odd challenge` is advisory only | built before |
 | 2: a check that runs picks among attempts | race and cascade judged by the proof | built before |
-| 3: passing is not correctness | proof strength, held-out proofs, `same:`; cross-checking passing attempts against each other | partly; backlog 39 |
-| 4: test edits and special-casing | sealed proofs, refused test edits, held-out proofs; a warning for literals copied from the proof | built; backlog 40 |
+| 3: passing is not correctness | proof strength, held-out proofs, `same:`; `probe:`: passing attempts that disagree pick no winner | built (backlog 39) |
+| 4: test edits and special-casing | sealed proofs, refused test edits, held-out proofs; a warning for literals copied from the proof | built (backlog 40, advisory) |
 | 5: broken tasks and a stop option | `odd park` and disputed proofs; `assume:` premises now run before any attempt is spent | built (this round) |
 | 6: early endings | `"finish_turn"`: the Stop hook blocks once while work in the change is open | built (this round) |
 | 7: smoke test first | `odd start <slug>`: premises, then earlier proofs on the same files, refusing a red baseline | built (this round) |
-| 7: end to end | a proof that executes the outcome's declared entry point | backlog 41 |
+| 7: end to end | `entry:`: the proof must execute the outcome's declared entry point | built (backlog 41) |
 | 8: the check must exercise the change | the take-out check and the execution check | built before |
 | 9: repeated code | `"duplication"` | built (this round) |
 | predicting the failure first | `red-because:` | built; **not measured anywhere**: rests on reasoning |

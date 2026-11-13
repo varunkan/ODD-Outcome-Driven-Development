@@ -717,13 +717,21 @@ cost to build.
 - **Outcome:** when two or more attempts pass, each one's proof (and the held-out proofs) runs against the others; if
   passing attempts disagree, the proof is under-specified: flag it instead of picking a winner.
 - **Evidence:** 29.6% of passing patches behave differently from the reference fix ([17](docs/evidence/17-how-frontier-models-reason.md)).
+- **Done** in the commit "B39-41: passing attempts cross-checked, copied literals, the entry point" (`probe:`, `disagree()`; tests `Probe`;
+  [DESIGN 3b](DESIGN.md) step 4). The attempts share one sealed proof, so running it across them shows nothing, and
+  held-out proofs never run locally; the cross-check is the outcome's `probe:` command instead. Not measured on the
+  harness: its tasks carry no `probe:` line.
 
 ### 40. Literals copied from the proof
 - **Outcome:** a warning (never a gate) when changed lines contain constants that appear in the proof's expected
   values, or equality overloads and call counters in the diff, asking for a `dispute` or an `assume`.
 - **Evidence:** special-casing survives read-only tests ([17](docs/evidence/17-how-frontier-models-reason.md)); noisy,
   so advisory only.
+- **Done** in the commit "B39-41: passing attempts cross-checked, copied literals, the entry point" (`copied()`; tests `CopiedLiterals`; [DESIGN
+  3l](DESIGN.md)). Call counters are not detected: no textual form of one is specific enough to name.
 
 ### 41. A proof that reaches the entry point
 - **Outcome:** an outcome may name its entry point (a CLI, a route, a binary); at least one proof run must execute it.
 - **Evidence:** features marked done after unit tests while failing end to end ([17](docs/evidence/17-how-frontier-models-reason.md)).
+- **Done** in the commit "B39-41: passing attempts cross-checked, copied literals, the entry point" (`entry:`, `reaches()`; tests `EntryPoint`;
+  [DESIGN 3l](DESIGN.md)).

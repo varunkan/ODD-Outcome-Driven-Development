@@ -42,7 +42,10 @@ Free notes: questions asked and answered, decisions and why.
   the same tool version and the same refusal by an older one), `kind: bug` (section 4a), `asked: <question>`
   (written by `odd ask`: an open question, section 4b; the same tool version and the same refusal by an older one),
   `same: <command>` (the command's output must be identical with and without the change, section 4e; the same tool
-  version and the same refusal by an older one).
+  version and the same refusal by an older one), `probe: <command>` (run in every passing attempt of a race or a
+  cascade level; passing attempts must agree on its output, section 3b step 4; the same tool version and the same
+  refusal by an older one), `entry: <command or .py file>` (where a user reaches the outcome; the proof must execute
+  it, section 3l; the same tool version and the same refusal by an older one).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -140,6 +143,16 @@ refuses an unknown setting, so a project that adds them vendors the newer `odd.p
    product files against the attempt's start), then the earliest agent finish. The output is a table of attempts
    (strength, lines, seconds of agent and of verification, verified or the first line of why not) and the reason
    the winner beat the runner-up.
+   **Passing attempts must agree** (backlog item 39): with two or more verified attempts and a `probe: <command>` line
+   (a command printing what the code does on inputs beyond the proof's, such as the `same:` commands), the probe runs
+   in each verified attempt's worktree before the winner is picked. When the output or exit code differs between
+   them, the proof leaves the behaviour open: passing patches behave differently from the reference fix in 29.6% of
+   cases ([evidence 17](docs/evidence/17-how-frontier-models-reason.md)), and a rank would pick one of them
+   arbitrarily. Then no winner is picked; each passing attempt is marked as disputing the proof with the first
+   differing line, so the dispute path of section 3d1 takes over (the outcome waits with `asked: Is the proof right?`,
+   a cascade does not escalate, `odd spec` gives the disagreement to the proof's author). A passing attempt is not
+   counted as a failure for the attempt budget. Without `probe:`, or with one verified attempt, nothing changes. The
+   probe's output is not a proof: it has no expected values, only agreement.
 5. **Applying**: the winner's diff is written to `.git/odd/race/<slug>/winner.patch` and applied with `git apply`
    only if no path inside `in:` differs from HEAD in the user's tree; otherwise, or if `git apply` refuses, the tree
    is left alone and the patch path is printed (exit 1). The race records no evidence in the user's tree: run
@@ -440,6 +453,28 @@ so a planner writes them from the start. Both are present-only in the verificati
 reason is matched as text, so a vague one ("Error") checks little; a premise is only as good as its command. No
 measured study shows that stating the predicted failure first improves agents (the nearest evidence is indirect); the
 check rests on reasoning: a red for another reason shows nothing about the change.
+
+### 3l. End to end, and special-casing: `entry:` and literals copied from the proof
+
+Needs a tool newer than 0.4.0 (backlog items 40 and 41).
+
+- **`entry: <command or .py file>`** (a check). Where a user reaches the outcome: a command run through PATH, or a
+  `.py` file of the repository. `done` and `gate --recompute` run the proof once more and require that it executes
+  the entry point: a command is seen by a shim put first on PATH (it notes the call, takes its own directory out of
+  PATH and runs the real command), a `.py` file by the execution check's trace (any of its lines run by a Python
+  process of the proof, `_traced()`, shared with the execution check of section 4). A proof that never reaches it fails
+  with `the proof never executed the entry point <entry>`; anything else is could not run. Why: work was marked done
+  on unit tests while the feature failed end to end ([evidence 17](docs/evidence/17-how-frontier-models-reason.md),
+  item 7). It costs one proof run. Limits: a command called by absolute path, or a script of another language called
+  by its path, is not seen by the shim, and such an entry is refused as could not run rather than guessed.
+- **Literals copied from the proof** (advisory, never failing). After a verification, `copied()` names changed product
+  lines that branch (`==`, `!=`, `if`, `case`, `match`, `in (...)`) on two or more literals of the proof's own test
+  files, or on one string of 3 or more characters, and changed lines that add an equality overload (`__eq__`,
+  `operator==`, `equals`). The test files are those the proof command names (`proof_runs()`) and the sealed ones.
+  It is shown as `literals from the proof in a branch: <file:line (literals from test)>`, with the advice to make the
+  change general or to say with `odd-dispute:` or `assume:` that the proof forces it; the auto lane will not take
+  such a change. Why: special-casing survives sealed and read-only tests (evidence 17, item 4). Not a gate, because
+  a correct fix can share a constant with its test; it is a pointer for review.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 

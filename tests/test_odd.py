@@ -2110,6 +2110,12 @@ class Agents(Repo):
     def no_worktrees_left(self):
         self.assertEqual(len(self.git('worktree', 'list').splitlines()), 1, self.git('worktree', 'list'))
 
+    def mark(self, name):
+        return 'touch %s/%s.ran' % (self.bin, name)
+
+    def ran(self, name):
+        return os.path.exists(os.path.join(self.bin, name + '.ran'))
+
 
 class Race(Agents):
     """odd race: N agent attempts, each in its own clone outside the repository; the proof picks the winner."""
@@ -4223,12 +4229,6 @@ class Disputes(ProofAuthors, Agents):
         self.ok('seal', 'add')
         self.commit('a wrong proof, sealed')
 
-    def mark(self, name):
-        return 'touch %s/%s.ran' % (self.bin, name)
-
-    def ran(self, name):
-        return os.path.exists(os.path.join(self.bin, name + '.ran'))
-
     def test_a_disputed_race_asks_instead_of_failing_blind_and_is_not_parked(self):
         self.config([self.agent('honest', DISPUTE)])
         out = self.no('race', 'add', '--n', '2')
@@ -4266,6 +4266,115 @@ class Disputes(ProofAuthors, Agents):
         self.config([self.agent('fixer', self.writes(FIXED))])
         self.ok('race', 'add', '--n', '1')
         self.assertEqual(self.read('calc.py'), FIXED)
+
+
+SPECIAL = 'def add(a, b):\n    return 5 if (a, b) == (2, 3) else 0\n'  # passes the visible proof, special-cased
+
+
+class Probe(Agents):
+    """Backlog item 39: when two or more attempts pass, "probe: <command>" runs in each; passing attempts that disagree
+    mean the proof does not pin the behaviour down, so no winner is picked and the proof goes back to its author."""
+
+    def setUp(self):
+        Agents.setUp(self)
+        self.add_line('add', 'probe: ' + SAME)
+
+    def test_passing_attempts_that_disagree_pick_no_winner_and_ask_about_the_proof(self):
+        self.config([self.agent('right', self.writes(FIXED)), self.agent('special', self.writes(SPECIAL, wait=0.3))])
+        out = self.no('race', 'add')
+        self.assertEqual(self.read('calc.py'), BROKEN, 'nothing is applied while passing attempts disagree')
+        self.assertIn('disagree on "probe:"', out)
+        self.assertIn('5 0 0.75', out)
+        md = self.read('.odd/outcomes/add.md')
+        self.assertRegex(md, r'(?m)^asked: Is the proof right\? 2 of 2 attempt\(s\) dispute it: .*disagree on "probe:"')
+        self.assertNotIn('parked:', md)
+        self.assertEqual(oddmod.failures(self.dir, 'add'), [], 'a passing attempt is not a failed one')
+
+    def test_passing_attempts_that_agree_still_pick_a_winner(self):
+        self.config([self.agent('right', self.writes(FIXED)),
+                     self.agent('commented', self.writes('# adds\n' + FIXED, wait=0.3))])
+        out = self.ok('race', 'add')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertIn('"probe:" gives the same output in all 2 passing attempts', out)
+
+    def test_without_probe_a_race_is_unchanged(self):
+        md = self.read('.odd/outcomes/add.md')
+        self.write('.odd/outcomes/add.md', '\n'.join(l for l in md.split('\n') if not l.startswith('probe:')))
+        self.config([self.agent('right', self.writes(FIXED)), self.agent('special', self.writes(SPECIAL, wait=0.3))])
+        out = self.ok('race', 'add')
+        self.assertNotIn('probe', out)
+
+    def test_a_disagreeing_cascade_level_stops_the_escalation(self):
+        self.no('cascade', 'add', '--race', '2', '--agents', '%s,%s' % (
+            self.agent('cheap', 'if mkdir %s/first 2>/dev/null; then %s; else %s; fi' % (  # mkdir: one attempt wins it
+                self.bin, self.writes(FIXED), self.writes(SPECIAL))), self.agent('dear', self.mark('dear'))))
+        self.assertFalse(self.ran('dear'), 'a stronger model does not fix a proof that leaves the behaviour open')
+        self.assertIn('asked: Is the proof right?', self.read('.odd/outcomes/add.md'))
+
+
+class CopiedLiterals(Repo):
+    """Backlog item 40: changed lines that branch on literals copied from the proof, or add an equality overload, are
+    named after a verification (advisory: special-casing survives read-only and sealed tests, and the gate never fails
+    on it)."""
+
+    def setUp(self):
+        super().setUp()
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)
+
+    def test_a_branch_on_the_proofs_inputs_is_named_and_does_not_fail(self):
+        self.write('calc.py', SPECIAL)
+        out = self.ok('done', 'add')
+        self.assertRegex(out, r'literals from the proof in a branch: calc\.py:2 \(2, 3, 5 from tests/test_calc\.py\)')
+        self.assertIn('odd-dispute', out)
+        self.assertIn('special-cases', self.ok('gate'))
+
+    def test_a_general_fix_is_not_named(self):
+        self.write('calc.py', FIXED)
+        self.assertNotIn('literals from the proof', self.ok('done', 'add'))
+
+    def test_an_added_equality_overload_is_named(self):
+        self.write('calc.py', FIXED + '\n\nclass Total(float):\n    def __eq__(self, other):\n        return True\n')
+        self.assertIn('calc.py:6 adds an equality overload', self.ok('done', 'add'))
+
+
+class EntryPoint(Repo):
+    """Backlog item 41: "entry: <command or .py file>" names where a user reaches the outcome; one run of the proof must
+    execute it, so unit-green work that fails end to end is not verified."""
+
+    CLI = 'import sys\nfrom calc import add\nprint(add(int(sys.argv[1]), int(sys.argv[2])))\n'
+
+    def setUp(self):
+        super().setUp()
+        self.write('cli.py', self.CLI)
+        self.commit('a command line')
+        self.write('tests/test_calc.py', TEST)
+        self.write('calc.py', FIXED)
+
+    def entry(self, entry, proof=PROOF):
+        self.outcome(proof=proof, in_='calc.py')
+        self.add_line('add', 'entry: ' + entry)
+
+    def test_a_proof_that_never_runs_the_entry_file_is_refused(self):
+        self.entry('cli.py')
+        out = self.no('done', 'add')
+        self.assertIn('the proof never executed the entry point cli.py', out)
+
+    def test_a_proof_through_the_entry_file_passes_and_says_so(self):
+        self.entry('cli.py', proof='%s && test "$(%s cli.py 2 3)" = 5' % (PROOF, sys.executable))
+        self.assertIn('the proof executed the entry point cli.py', self.ok('done', 'add'))
+
+    def test_a_command_entry_is_seen_through_path(self):
+        os.makedirs(self.path('bin'))
+        self.write('bin/calc-cli', '#!/bin/sh\nexec %s "$(dirname "$0")/../cli.py" "$@"\n' % sys.executable, mode=0o755)
+        self.entry('calc-cli', proof='%s && test "$(PATH="$PATH:bin" calc-cli 2 3)" = 5' % PROOF)
+        self.assertIn('the proof executed the entry point calc-cli', self.ok('done', 'add'))
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace(' && test "$(PATH="$PATH:bin" calc-cli 2 3)" = 5', ''))
+        self.assertIn('never executed the entry point calc-cli', self.no('done', 'add'))
+
+    def test_an_entry_that_is_neither_a_command_nor_a_python_file_cannot_be_checked(self):
+        self.entry('bin/run me')
+        self.assertIn('"entry:" must be', self.no('done', 'add', code=2))
 
 
 class Checks(Repo):

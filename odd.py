@@ -81,7 +81,7 @@ DEFAULTS = {
     'checks': [],          # backlog 24: standing project rules, [{"name", "cmd", "in"}], run by every gate, output shown
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume', 'probe', 'entry')
 KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
 REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
 HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
@@ -98,7 +98,7 @@ WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
 RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint', 'target',
-          'lookalikes', 'premises', 'red_because', 'repeats')  # what --json says of a verified outcome
+          'lookalikes', 'premises', 'red_because', 'repeats', 'copied', 'entry')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -723,7 +723,7 @@ def content_hash(root, cfg, o, changed, tests=None):
     h = hashlib.sha256()
     for k in ('proof', 'in', 'counterfactual'):
         h.update((k + '=' + o.get(k) + '\n').encode())
-    for k in ('same', 'target', 'target-is', 'red-because', 'assume'):  # present-only: earlier identities unchanged
+    for k in ('same', 'target', 'target-is', 'red-because', 'assume', 'entry'):  # present-only: earlier identities unchanged
         if o.get(k):
             h.update((k + '=' + o.get(k) + '\n').encode())
     _hash_paths(h, root, sorted(set(tests) | {p for p in product if o.covers(p)}))
@@ -751,7 +751,7 @@ def verify_key(root, cfg, o, base, changed):
         tool = hashlib.sha256(f.read()).hexdigest()
     h = hashlib.sha256(('odd %s %s\nbase=%s\n' % (VERSION, tool, rev(root, base) if base else '')).encode())
     h.update(json.dumps({k: v for k, v in cfg.items() if k != 'cache_file'}, sort_keys=True).encode())
-    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is', 'red-because', 'assume')]).encode())
+    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is', 'red-because', 'assume', 'entry')]).encode())
     _hash_paths(h, root, changed)  # the outcome file and config.json too: changed, or as at the base
     return h.hexdigest()
 
@@ -1472,6 +1472,62 @@ if os.environ.get('ODD_TRACE_DIR'):
 """
 
 
+def _traced(d, paths, env=None):
+    """The environment of a proof run whose Python processes record which lines of `paths` (real paths) they run, into
+    `d` (TRACE); read back with _dumps(d). Shared by the execution check and the entry check."""
+    with open(os.path.join(d, 'sitecustomize.py'), 'w') as f:
+        f.write(TRACE)
+    with open(os.path.join(d, 'targets.json'), 'w') as f:
+        json.dump(sorted(paths), f)
+    env = dict(env or os.environ)
+    return dict(env, ODD_TRACE_DIR=d, PYTHONPATH=os.pathsep.join([d] + [x for x in [env.get('PYTHONPATH')] if x]))
+
+
+def _dumps(d):
+    out = []
+    for name in sorted(os.listdir(d)):
+        if name.startswith('ran-'):
+            with open(os.path.join(d, name)) as f:
+                out.append(json.load(f))
+    return out
+
+
+def reaches(root, cfg, o):
+    """Backlog item 41: "entry:" names where a user reaches the outcome (a command run through PATH, or a .py file of the
+    repository); one more run of the proof must execute it. A command is seen by a shim put first on PATH that notes
+    the call and runs the real command with the shim's directory taken out; a .py file by the execution check's trace
+    (any of its lines run by a Python process of the proof). Features marked done on unit tests while failing end to
+    end are the failure this catches. Returns what --json records."""
+    entry = o.get('entry')
+    full = os.path.join(root, entry)
+    d = tempfile.mkdtemp(prefix='odd-entry-')
+    mark = os.path.join(d, 'called')
+    try:
+        if entry.endswith('.py') and os.path.isfile(full):
+            env, want = _traced(d, [os.path.realpath(full)]), os.path.realpath(full)
+        elif re.match(r'^[A-Za-z0-9_][A-Za-z0-9._+-]*$', entry):
+            shim, want = os.path.join(d, 'bin'), None
+            os.mkdir(shim)
+            with open(os.path.join(shim, entry), 'w') as f:
+                f.write('#!/bin/sh\necho >> %s\nPATH=$(printf %%s "$PATH" | tr : "\\n" | grep -vxF %s | paste -sd: -)\n'
+                        'export PATH\nexec %s "$@"\n' % (shlex.quote(mark), shlex.quote(shim), shlex.quote(entry)))
+            os.chmod(os.path.join(shim, entry), 0o755)
+            env = dict(os.environ, PATH=shim + os.pathsep + os.environ.get('PATH', ''))
+        else:
+            raise CouldNotRun('"entry:" must be a command name run through PATH or a .py file in the repository: %s' % entry)
+        rc, tail, secs = run_proof(root, o.get('proof'), cfg['proof_timeout'], env)
+        hit = os.path.exists(mark) if want is None else any(x['ran'].get(want) for x in _dumps(d))
+    finally:
+        shutil.rmtree(d, True)
+    if rc != 0:
+        raise CouldNotRun('the proof, run once more to see whether it executes "entry: %s", %s:\n%s' % (
+            entry, 'timed out' if rc is None else 'exited %d' % rc, _indent(tail)))
+    if not hit:
+        raise Fail('the proof never executed the entry point %s ("entry:"), so it shows the parts, not the outcome end to '
+                   'end: %s\n  make the proof go through %s the way a user does.' % (entry, o.get('proof'), entry))
+    return 'the proof executed the entry point %s, %s s' % (entry, secs)
+
+
 def ran(root, cfg, o, base, targets):
     """The execution check, for Python only: the proof run once more with a trace hook (a sitecustomize put first on
     PYTHONPATH, sys.settrace) restricted to the changed .py files. Returns (["file:line,line", ...] for changed
@@ -1487,18 +1543,8 @@ def ran(root, cfg, o, base, targets):
     real = {os.path.realpath(os.path.join(root, p)): p for p in py}
     d = tempfile.mkdtemp(prefix='odd-trace-')
     try:
-        with open(os.path.join(d, 'sitecustomize.py'), 'w') as f:
-            f.write(TRACE)
-        with open(os.path.join(d, 'targets.json'), 'w') as f:
-            json.dump(sorted(real), f)
-        env = dict(os.environ, ODD_TRACE_DIR=d, PYTHONPATH=os.pathsep.join(
-            [d] + [x for x in [os.environ.get('PYTHONPATH')] if x]))
-        rc, _, secs = run_proof(root, o.get('proof'), cfg['proof_timeout'], env)
-        dumps = []
-        for name in sorted(os.listdir(d)):
-            if name.startswith('ran-'):
-                with open(os.path.join(d, name)) as f:
-                    dumps.append(json.load(f))
+        rc, _, secs = run_proof(root, o.get('proof'), cfg['proof_timeout'], _traced(d, real))
+        dumps = _dumps(d)
     finally:
         shutil.rmtree(d, True)
     if rc != 0:
@@ -1659,6 +1705,57 @@ def repeats(root, cfg, base, targets):
             if other:
                 q, (c, d) = other[0]
                 out.append('%s:%d-%d repeats %s:%d-%d' % (p, a, b, q, c, d))
+    return out
+
+
+BRANCH = re.compile(r'==|!=|\b(?:if|elif|case|when|switch|match)\b|\bin\s*[(\[{]')
+EQUALITY = re.compile(r'\bdef\s+__eq__\b|\boperator\s*==|\bbool(?:ean)?\s+[Ee]quals\s*\(|\bfn\s+eq\s*\(')
+LITERAL = re.compile(r'(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])|"([^"\n]{3,80})"|\'([^\'\n]{3,80})\'')
+
+
+def _literals(text):
+    """The literals of `text` that could pin an answer: numbers other than 0 and 1, and strings of 3 to 80 characters."""
+    out = set()
+    for m in LITERAL.finditer(text):
+        v = m.group(1) or m.group(2) or m.group(0)
+        if v.lstrip('-') not in ('0', '1', '0.0', '1.0'):
+            out.add(v)
+    return out
+
+
+def copied(root, cfg, o, base, targets):
+    """Backlog item 40, advisory: changed product lines that branch on two or more literals of the proof's own test
+    files (or on one string of them), the shape of a change special-cased to the proof's inputs, and changed lines that
+    add an equality overload, which can make any comparison pass. Special-casing survives sealed and read-only tests,
+    so this is named after a verification; it never fails one, since a real fix can share a constant with its test."""
+    files = set(zlist(root, 'ls-files', '-z', '-co', '--exclude-standard'))
+    proof = proof_runs(o.get('proof'), [p for p in files if matches(p, cfg['test_globs'])])
+    proof += [e.rsplit('@', 1)[0] for e in (o.get('sealed') or '').split(', ')[1:] if e.rsplit('@', 1)[0] not in proof]
+    known = {}
+    for t in proof:
+        path = os.path.join(root, t)
+        if os.path.isfile(path) and os.path.getsize(path) <= 2 * 10 ** 6:
+            for v in _literals(read_text(path)):
+                known.setdefault(v, t)
+    out = []
+    for p in targets:
+        full = os.path.join(root, p)
+        if not os.path.isfile(full) or os.path.getsize(full) > 200000:
+            continue
+        try:
+            raw = read_text(full).split('\n')
+        except ValueError:
+            continue
+        code, changed = _code('\n'.join(raw)).split('\n'), changed_lines(root, base, p)
+        for n, (line, bare) in enumerate(zip(raw, code), 1):
+            if changed is not None and n not in changed:
+                continue
+            if EQUALITY.search(bare):
+                out.append('%s:%d adds an equality overload' % (p, n))
+            elif BRANCH.search(bare):
+                hits = sorted((v for v in _literals(line) if v in known), key=lambda v: (len(v), v))
+                if len(hits) >= 2 or any(not re.match(r'^-?[\d.]+$', v) for v in hits):
+                    out.append('%s:%d (%s from %s)' % (p, n, ', '.join(hits), known[hits[0]]))
     return out
 
 
@@ -1883,6 +1980,10 @@ def _verify(root, cfg, o, base, changed, say):
         if res['repeats'] and cfg['duplication'] == 'enforce':
             raise Fail('the change repeats existing code ("duplication": "enforce"): %s\n  use or extend the existing '
                        'code instead of copying it.' % '; '.join(res['repeats'][:8]), [('repeats', r) for r in res['repeats']])
+    if targets:
+        res['copied'] = copied(root, cfg, o, base, targets)
+    if o.get('entry'):
+        res['entry'] = reaches(root, cfg, o)
     if o.get('same') and targets:
         res['same'] = same_behaviour(root, cfg, o, base, targets, say)
     if o.skip and o.bug:
@@ -1986,14 +2087,21 @@ def same_behaviour(root, cfg, o, base, targets, say):
     (rc1, _, s1, (d1, h1)), (rc2, _, s2, (d2, h2)) = runs
     if (rc1, d1) == (rc2, d2):
         return 'same output with and without the change (exit %d), %s+%s s' % (rc1, s1, s2)
-    a, b = h1.splitlines(), h2.splitlines()
-    n = next((i for i in range(min(len(a), len(b))) if a[i] != b[i]), min(len(a), len(b)))
-    line = lambda ls: ls[n] if n < len(ls) else '(no line %d)' % (n + 1)  # noqa: E731
+    n, la, lb = first_difference(h1, h2)
     raise Fail('"same:" output differs with the change taken out, so the change alters behaviour: %s\n'
                '  exit with the change %d, without it %d; first differing line (%d):\n'
                '    with the change:    %s\n    without the change: %s\n'
                '  if the change is meant to alter behaviour, it is not a refactor: drop "same:" and prove the new behaviour.'
-               % (cmd, rc1, rc2, n + 1, line(a)[:300], line(b)[:300]))
+               % (cmd, rc1, rc2, n, la, lb))
+
+
+def first_difference(h1, h2):
+    """(1-based line number, that line in h1, that line in h2) where two outputs first differ; shared by "same:" and
+    "probe:"."""
+    a, b = h1.splitlines(), h2.splitlines()
+    n = next((i for i in range(min(len(a), len(b))) if a[i] != b[i]), min(len(a), len(b)))
+    line = lambda ls: ls[n][:300] if n < len(ls) else '(no line %d)' % (n + 1)  # noqa: E731
+    return n + 1, line(a), line(b)
 
 
 NO_REPRO = ('the proof does not reproduce the bug: it passes at the base revision (%s), so it cannot show the fix.\n'
@@ -2064,6 +2172,8 @@ def _describe(o, res):
         text += '\n          ' + res['same']
     if res.get('target'):
         text += '\n          target: ' + res['target']
+    if res.get('entry'):
+        text += '\n          ' + res['entry']
     if res.get('red_because'):
         text += '\n          red for the predicted reason: ' + res['red_because']
     if res.get('premises'):
@@ -2071,6 +2181,10 @@ def _describe(o, res):
         text += '\n          premises: %d checked%s' % (pr['checked'], '; unchecked: ' + '; '.join(pr['unchecked']) if pr['unchecked'] else '')
     if res.get('repeats'):
         text += '\n          repeats existing code: ' + '; '.join(res['repeats'][:8])
+    if res.get('copied'):
+        text += ('\n          literals from the proof in a branch: %s. If this special-cases the proof\'s inputs, make '
+                 'it general; if the proof forces it, say so with odd-dispute: or an "assume:" line (advisory)'
+                 % '; '.join(res['copied'][:8]))
     if res.get('lookalikes'):
         text += '\n          class "%s": %d match(es) the change did not touch: %s%s' % (
             o.get('class'), len(res['lookalikes']), ', '.join(res['lookalikes'][:12]), ', ...' if len(res['lookalikes']) > 12 else '')
@@ -2173,6 +2287,7 @@ def lane(root, s, facts, skips, allowed):
             why += ['%s: steps are owed on the real system (%s)' % (o['slug'], '; '.join(o['owed']))] if o.get('owed') else []
             why += ['%s: %d look-alike(s) of the bug left untouched' % (o['slug'], len(o['lookalikes']))] if o.get('lookalikes') else []
             why += ['%s: the change repeats existing code' % o['slug']] if o.get('repeats') else []
+            why += ['%s: the change may special-case the proof (%s)' % (o['slug'], '; '.join(o['copied'][:3]))] if o.get('copied') else []
             why += ['%s: unchecked premise(s): %s' % (o['slug'], '; '.join(o['premises']['unchecked']))] if (
                 o.get('premises') or {}).get('unchecked') else []
         elif o['state'] in ('parked', 'asked'):
@@ -3077,6 +3192,8 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names, judge=No
                    **dict(dict(failed='attempt %s' % at['name'], why=(at.get('detail') or at['why'])[:300])
                           if at['why'] and counted else {}, **_kind(o)))
         ranked = sorted([x for x in attempts if not x['why']], key=_rank)
+        if disagree(cfg, o, ranked):
+            ranked = []
         patch = ''
         if ranked:
             w = ranked[0]
@@ -3092,6 +3209,34 @@ def _attempts(root, cfg, o, base, head, fixed, cmds, keep, text, names, judge=No
         if cache:
             cache.save()  # whatever an agent wrote to the cache file is dropped
     return attempts, ranked, patch, setup + time.time() - t1
+
+
+def disagree(cfg, o, ranked):
+    """Backlog item 39: with two or more verified attempts and a "probe:" command, run it in each attempt's worktree.
+    Passing attempts whose probe output or exit code differ show that the proof leaves the behaviour open (29.6% of
+    passing patches behave differently from the reference fix): each is marked as disputing the proof, so no winner is
+    picked and the existing dispute path sends the proof back to its author. Returns the finding, or ''."""
+    cmd = o.get('probe')
+    if not cmd or len(ranked) < 2:
+        return ''
+    seen = {}
+    for at in ranked:
+        rc, _, _, (digest, head) = run_proof(at['wt'], cmd, cfg['proof_timeout'], whole=True)
+        at['probe'] = (rc, head)
+        seen.setdefault((rc, digest), []).append(at)
+    if len(seen) < 2:
+        print('  "probe:" gives the same output in all %d passing attempts' % len(ranked))
+        return ''
+    (x, *_), (y, *_) = list(seen.values())[:2]
+    n, lx, ly = first_difference(x['probe'][1], y['probe'][1])
+    code = lambda at: 'timeout' if at['probe'][0] is None else 'exit %d' % at['probe'][0]  # noqa: E731
+    why = ('passing attempts disagree on "probe:" (%s): %d behaviours among %d passing attempts, so the proof does not pin '
+           'the behaviour down; line %d, attempt %s (%s): %s; attempt %s (%s): %s'
+           % (cmd, len(seen), len(ranked), n, x['name'], code(x), lx, y['name'], code(y), ly))
+    print('  ' + why)
+    for at in ranked:
+        at['why'], at['dispute'] = 'passes, but disagrees with another passing attempt on "probe:"', why
+    return why
 
 
 def _table(attempts, ranked, more=()):
@@ -3613,6 +3758,7 @@ in: <comma-separated globs of the product files this outcome may change>
 covers: <the requirement ids it covers, e.g. R1, R3>
 assume: <each premise the work relies on, with the command that checks it: claim :: command ;; claim :: command>
 red-because: <the part of the proof's failure message you predict before the change>
+entry: <optional: the command, or .py file, a user runs to reach this outcome; the proof must run it>
 ---
 why: <one line: why this outcome is shaped and bounded this way>
 
