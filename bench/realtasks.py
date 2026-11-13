@@ -85,7 +85,7 @@ def build(row, root, strict=False):
     scratch = tempfile.mkdtemp(prefix='realtask-test-')
     try:
         target = os.path.join(scratch, files[0])
-        os.makedirs(os.path.dirname(target))
+        os.makedirs(os.path.dirname(target), exist_ok=True)  # a test file at the project root lives in scratch itself
         if os.path.exists(os.path.join(repo, files[0])):
             shutil.copy2(os.path.join(repo, files[0]), target)
         with open(os.path.join(scratch, 'test.patch'), 'w', encoding='utf-8') as f:

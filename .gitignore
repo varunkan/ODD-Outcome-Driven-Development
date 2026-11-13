@@ -6,3 +6,4 @@ bench/results/
 build/
 dist/
 *.egg-info/
+.claude/settings.local.json
