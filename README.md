@@ -2,6 +2,10 @@
 
 **An outcome counts as delivered only when its proof fails without the change.**
 
+> **The rule:** nothing counts as done until a check that runs says so: a check that fails without the change, run
+> by someone other than the one claiming it. **No proof, no done.** Why it holds, what it does not promise, and how to
+> follow it with or without odd: [THE-RULE.md](THE-RULE.md).
+
 Work is done when a proof says so, not when the agent says so. (Not to be confused with the product-management use of
 "outcome-driven", aligning work with business goals, or with observability-driven development, also abbreviated ODD.
 Here an outcome is something a command can check.)
