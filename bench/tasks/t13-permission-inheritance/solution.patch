@@ -1,0 +1,99 @@
+diff --git a/rolegate/audit.py b/rolegate/audit.py
+index 4a754ea..cce66e4 100644
+--- a/rolegate/audit.py
++++ b/rolegate/audit.py
+@@ -2,6 +2,8 @@
+ 
+ from collections import namedtuple
+ 
++from .model import ALLOW
++
+ AuditEntry = namedtuple('AuditEntry', 'action pattern effect role')
+ 
+ 
+@@ -9,7 +11,8 @@ def audit_user(policy, user):
+     """One entry per distinct (action, pattern) among the rules the user has, on an assigned role or inherited:
+     the effect the user gets for it and the role that effect comes from. Sorted by action, then pattern.
+ 
+-    Roles are visited from the assigned ones outwards, so a rule on a nearer role is the one reported."""
++    When the user has both an allow and a deny for the same action and pattern, the entry is the deny, with the role
++    it is on. Otherwise roles are visited from the assigned ones outwards, so a rule on a nearer role is reported."""
+     entries = {}
+     seen = set()
+ 
+@@ -18,7 +21,11 @@ def audit_user(policy, user):
+             return
+         seen.add(role)
+         for rule in policy.rules(role):
+-            entries.setdefault((rule.action, rule.pattern), AuditEntry(rule.action, rule.pattern, rule.effect, role))
++            key = (rule.action, rule.pattern)
++            known = entries.get(key)
++            # Deny wins, as in the resolver: a deny replaces an allow for the same action and pattern, from any role.
++            if known is None or (known.effect == ALLOW and rule.effect != ALLOW):
++                entries[key] = AuditEntry(rule.action, rule.pattern, rule.effect, role)
+         for parent in policy.graph.parents(role):
+             visit(parent)
+ 
+diff --git a/rolegate/resolver.py b/rolegate/resolver.py
+index f8b99ec..52df0f7 100644
+--- a/rolegate/resolver.py
++++ b/rolegate/resolver.py
+@@ -5,6 +5,19 @@ from .model import ALLOW, NO_MATCH, Decision
+ from .patterns import check_resource
+ 
+ 
++def decide(rules, action, resource):
++    """The Decision for one request from the user's (role, rule) pairs, nearest first. Deny wins: the first matching
++    deny decides, wherever it is; otherwise the first matching allow; otherwise refused."""
++    allowed = None
++    for role, rule in rules:
++        if rule.applies(action, resource):
++            if rule.effect != ALLOW:
++                return Decision(False, rule.effect, role, rule)
++            if allowed is None:
++                allowed = Decision(True, rule.effect, role, rule)
++    return allowed if allowed is not None else NO_MATCH
++
++
+ class Resolver:
+     """Reads a Policy and keeps itself up to date by subscribing to it.
+ 
+@@ -43,11 +56,8 @@ class Resolver:
+         allowed = []
+         for resource in resources:
+             check_resource(resource)
+-            for role, rule in rules:
+-                if rule.applies(action, resource):
+-                    if rule.effect == ALLOW:
+-                        allowed.append(resource)
+-                    break
++            if decide(rules, action, resource).allowed:
++                allowed.append(resource)
+         return allowed
+ 
+     def roles(self, user):
+@@ -63,11 +73,7 @@ class Resolver:
+     # -- inside ----------------------------------------------------------------------------------------------------
+ 
+     def _decide(self, user, action, resource):
+-        for role in self.roles(user):
+-            for rule in self.policy.rules(role):
+-                if rule.applies(action, resource):
+-                    return Decision(rule.effect == ALLOW, rule.effect, role, rule)
+-        return NO_MATCH
++        return decide(((role, rule) for role in self.roles(user) for rule in self.policy.rules(role)), action, resource)
+ 
+     def _rules_for(self, user):
+         rules = self._compiled.get(user)
+@@ -82,7 +88,10 @@ class Resolver:
+         elif kind == 'role':
+             affected = []  # a new role is held by nobody yet, and a role still held cannot be removed
+         else:
+-            affected = self.policy.users_with(role)
++            # A rule or the parents of a role change the answers of everyone who has that role: the users it is
++            # assigned to, and the users of every role that inherits from it, at any depth.
++            having = {role} | self.policy.graph.descendants(role)
++            affected = sorted({name for r in having for name in self.policy.users_with(r)})
+         for name in affected:
+             self.cache.drop_user(name)
+             self._compiled.pop(name, None)

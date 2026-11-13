@@ -1,0 +1,23 @@
+name: release
+# Push a tag vX.Y.Z equal to odd.VERSION: the package goes to PyPI (trusted publishing, no stored token) and the
+# tag becomes the version people pin in `uses: varunkan/ODD-Outcome-Driven-Development@vX.Y.Z`.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: The tag must match the version in odd.py
+        run: test "${GITHUB_REF_NAME#v}" = "$(python -c 'import odd; print(odd.VERSION)')"
+      - run: python -m pip install build && python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1

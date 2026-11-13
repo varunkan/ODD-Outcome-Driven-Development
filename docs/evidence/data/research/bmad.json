@@ -1,0 +1,137 @@
+{
+ "subject": "BMAD Method (bmad-code-org/BMAD-METHOD, \"Breakthrough Method for Agile AI Driven Development\")",
+ "what_it_is": "An MIT-licensed, role-based agile framework for AI coding tools, published by BMad Code, LLC. As read on 2026-11-11 the repo shows 55.3k stars and 6.2k forks; stable is v6.12 (npm installer, bug fixes only) and v7 is a preview alpha with breaking changes.\n\nStructure, classic (v4 through early v6, per a secondary explainer):\n- Two phases. Agentic Planning: Analyst, PM and Architect produce a brief, PRD, UX spec and architecture, often in a web UI via \"web bundles\". Context-Engineered Development: Scrum Master, Dev and QA work in the IDE.\n- The Scrum Master shards the PRD and architecture into self-contained story files. Each carries context, implementation details, architectural guidance, constraints, embedded tests and links to the source docs.\n- Dev implements one story at a time and QA reviews it.\n- Roster: Analyst, PM, Architect, PO, Scrum Master, Dev, QA, UX Expert, plus Orchestrator and Master agents.\n- \"Expansion packs\" extended it to games, creative writing and business.\n\nStructure, current docs (v6.12 / v7):\n- Personas are skills: Mary (Analyst), John (PM), Sofia (Product Owner: spec, tickets, board, replan), Winston (Architect), Amelia (Developer: BUILD, TESTS, REVIEW, RETRO), Sally (UX). The Tech Writer is on hiatus. Scrum Master and QA no longer appear as separate personas; their work sits with Sofia and Amelia.\n- Expansion packs are now \"modules\": Builder, Creative Intelligence Suite, Test Architect, Loop, Game Dev Studio.\n- Four planning paths sized to the work: trivial (BMAD optional), one session (straight to `bmad-build`), epic-sized (intent, spec and stories, one build per story, retrospective), project-sized (about 20+ sessions; shared product, UX and technical contracts, then epics).\n- Artifacts: `prd-<slug>.md`, `architecture-<slug>.md`, `DESIGN.md`, `EXPERIENCE.md`, story and epic files, `.memlog.md`, an ordered `tickets.toml`, per-run plan files, `deferred-work.md`.\n\nIn Claude Code:\n- Skills install to `.claude/skills/` via `npx bmad-method install`, `npx skills add bmad-code-org/BMAD-METHOD --skill '*'`, or `/plugin marketplace add bmad-code-org/bmad-plugins`. Both routes need uv and Python.\n- `bmad-build` runs in a fresh chat: investigate the repo, route to a light or full plan, human approves the plan, implement, parallel reviewer lenses (Blind Hunter, Edge Cases Hunter, Verification Gap Finder), triage, local commit. The ticket is left at `built`; only a human or orchestrator marks it done.\n- `bmad-build-auto` is an unattended single-ticket worker. Multi-agent discussion (\"party mode\") defaults to one model voicing every persona.",
+ "core_principles": [
+  "\"AI is the facilitator. The human is the expert.\" AI amplifies both skilled and weak thinking.",
+  "The spec is the work: invest in planning before building, because assistants \"often turn unstated assumptions into code\".",
+  "\"The rigour should match the work\": small changes go straight to build, complex work gets depth.",
+  "Agile evolved, not abandoned: the epic is the unit of work, opening with an inception and closing with a retrospective.",
+  "Role separation: each persona has a bounded role and one deliverable, and documents carry decisions forward instead of chat history.",
+  "Fresh context per workflow, with self-contained story or ticket files so the dev agent does not re-read the whole PRD.",
+  "Human stays in the loop: plan approval, open questions answered before build, and only a human marks work done.",
+  "\"Autonomy is earned with evidence\": hand over more only as shipped results hold up.",
+  "No vendor lock-in: not tied to one model or harness; organisations inject their own modules and standards."
+ ],
+ "enforcement": "Mostly advisory prompting with human checkpoints. I found no Claude Code hooks, no PreToolUse guards and no merge gate in the pages I read.\n\n- The build page describes sizing, routing, triage and status handling as agent behaviour. Tests are an output only \"if your project has a test suite\", and verification is a review lens, not a gate.\n- Review is advisory: \"The review never changes the ticket's status: marking it done is yours.\"\n- The deterministic parts are thin. `_bmad/method/scripts/tickets.py` (`next`, `find`, `status`, `mark`) resolves tickets and routes on status. Build Auto handles one ticket per invocation, commits but never pushes, and never sets `done`.\n- Build Auto halts on named blocked outcomes: unclear intent, no subagents, ticket not resolved, implementation verification failed. A review repair loop halts as non-convergent after 5 iterations, and a blocked plan stops later dispatch of that ticket until someone resets it.\n- `bmad-eval` is a skill-testing harness (clean temp directory, three runs per case, no-partial-credit grader). It tests skills, not the user's delivery.\n- The repo listing shows `.pre-commit-config.yaml`, but that covers BMAD's own repo, not the user's project.\n\nI could not read the skill source files, because GitHub API access to that repo was not enabled in this session. This verdict rests on the documentation, not the code.",
+ "strengths": [
+  "Widest lifecycle coverage of the compared frameworks; one practitioner writes \"only BMAD covers the full span from research to retro\".",
+  "It now states when to skip itself: trivial edits need no BMAD, and a PRD is required only when several people must agree.",
+  "Self-contained story and ticket files plus fresh sessions are sound context engineering.",
+  "On large tickets it held its merge rate at 80% where the no-spec control fell to 50% (vendor benchmark, 10 large tickets).",
+  "Fewer review defects and rework rounds than no-spec in the same benchmark: 0.49 vs 0.86 defects per merged ticket, 0.46 vs 0.74 rework rounds.",
+  "Review triage is disciplined: findings are verified at the named location, dismissals carry a recorded reason, and \"a problem this change caused is never deferred\".",
+  "The build never marks its own work done, which keeps the done-claim out of the agent's hands.",
+  "It is honest about role-play: the docs say \"One model voicing five personas tends to make them agree\" and offer separate subagents when independence matters.",
+  "Large adoption (55.3k stars) and an active module ecosystem."
+ ],
+ "weaknesses": [
+  "Most expensive arm in the one controlled benchmark I found: $4.23 per merged ticket vs $2.43 for no-spec, about 74% more.",
+  "Slowest in that benchmark: 55 minutes median to merge vs 29 for no-spec, with a 28-minute median spec phase.",
+  "Spec work took 43.9% of tokens (227k median spec-phase tokens), the highest share of any arm.",
+  "Its +10 point merge-rate gain over no-spec sits at the edge of the benchmark's own \u00b110 point noise band.",
+  "Spec drift was 12.2%, against 2.4% for OpenSpec and 4.9% for Kiro: the long documents go stale.",
+  "Engineers rated its spec review effort 2 out of 5 (others 4), and only 3 of 5 would use it again on client work, the lowest.",
+  "Ceremony on small work: one practitioner spent 2 days and got \"Zero lines of actual code\", writing \"I needed a TODO app, not a sprint ceremony.\"",
+  "False done-claims are reported: one user spent 9+ hours on an auth system the pipeline \"erroneously marked as complete\". A reviewer argues agents reviewing agents is not real verification.",
+  "Steep learning curve: about two months to proficiency by one estimate, with 50+ commands and sub-workflows in v6.",
+  "Token burn at scale: one user reported about 230 million tokens in a week; an earlier monolithic workflow averaged about 31,667 tokens per run before v6 stepping cut it to about 8,333.",
+  "Persona theatre: the default discussion mode is a single model voicing every persona, which the docs concede drifts to agreement.",
+  "Churn: v4, v6 and v7 differ in install path, commands and roster, so most tutorials are stale and v7 alpha warns of breaking changes.",
+  "No hard enforcement of tests or gates in the user's project; quality depends on the model following instructions and the human checking."
+ ],
+ "evidence_of_effectiveness": "The project itself publishes no benchmarks. The README carries no results, and the `bmad-eval` page describes a method but gives no scores.\n\nThe only controlled data I found is a vendor benchmark by Uvik Software (run 2026-10-15): 50 brownfield Python tickets, claude-sonnet-5, Claude Code, BMAD 6.x, reviewers blind to the workflow.\n\n| Metric | BMAD | No-spec control | Best other arm |\n|---|---|---|---|\n| Merge rate | 82% (41/50) | 72% (36/50) | OpenSpec 84% |\n| Cost per merged ticket | $4.23 | $2.43 | Kiro $2.35 |\n| Median time to merge | 55 min | 29 min | OpenSpec 36 min |\n| Review defects per merged ticket | 0.49 | 0.86 | Kiro 0.39 |\n| Rework rounds per ticket | 0.46 | 0.74 | (BMAD lowest) |\n| Spec drift | 12.2% | n/a | OpenSpec 2.4% |\n| Merge rate, large tickets | 80% | 50% | not extracted |\n\nCaveats on that benchmark: one company with services to sell, private code, Python only, one model, 45-minute time boxes, engineers not blind during the run, and a \u00b110 point noise band on merge rate.\n\nOther evidence is anecdotal. One practitioner \"built about 75% of the app in one afternoon\" after about eight hours of planning. A secondary source reports 5.5 hours with BMAD vs 12 minutes with OpenSpec on one dashboard build. Adoption is 55.3k stars and 6.2k forks.",
+ "lessons_for_odd": [
+  "Copy: sizing the process to the work, including an explicit \"this is trivial, skip the toolkit\" path. BMAD added this after the ceremony complaints.",
+  "Copy: the build never marks its own work done. Keep the done-claim behind a check the agent cannot write.",
+  "Copy: named blocked outcomes and a hard cap on repair loops (BMAD halts after 5 review iterations as non-convergent).",
+  "Copy: self-contained work units read in a fresh context, about one session or roughly 500 changed lines each.",
+  "Copy: review triage that verifies each finding at its location and records a reason for every dismissal.",
+  "Copy: testing your own skills against the bare model (BMAD's Baseline mode), and publish the result. BMAD has the harness but no published numbers, so this is where ODD can beat it.",
+  "Avoid: personas as the organising idea. BMAD's own docs say one model voicing several personas tends to agree; use a separate context only where independence changes the answer.",
+  "Avoid: front-loaded documents. BMAD spent 43.9% of tokens on specs and still drifted 12.2%; one outcome sentence plus a proof test is cheaper to keep true than a 188-line spec.",
+  "Avoid: a large command surface. 50+ commands and a two-month learning curve are the most repeated complaints; a handful of entry points is the lean answer.",
+  "Avoid: breaking installs between versions. Keep the contract in plain files and scripts so it survives model and harness changes.",
+  "Beat: enforcement. BMAD's tests and reviews are advisory in the user's repo; a hook or script gate that refuses \"done\" without a RED-then-GREEN proof targets the documented \"marked complete but broken\" failure.",
+  "Beat: cost reporting. BMAD's docs carry no cost warnings; reporting tokens per outcome makes the overhead visible and falsifiable.",
+  "Caution for ODD: the benchmark shows no-spec is cheapest and fastest on small tickets (85% merge rate for both on small). Any added process must prove it pays on small work or step aside."
+ ],
+ "sources": [
+  {
+   "title": "BMAD-METHOD repository (README, stats, versions, modules, install)",
+   "url": "https://github.com/bmad-code-org/BMAD-METHOD"
+  },
+  {
+   "title": "BMAD README (raw)",
+   "url": "https://raw.githubusercontent.com/bmad-code-org/BMAD-METHOD/main/README.md"
+  },
+  {
+   "title": "BMAD docs: Skills and agents reference",
+   "url": "https://docs.bmad-method.org/reference/skills-and-agents/"
+  },
+  {
+   "title": "BMAD docs: Choose a planning path",
+   "url": "https://docs.bmad-method.org/plan/choose-a-planning-path/"
+  },
+  {
+   "title": "BMAD docs: Build a change",
+   "url": "https://docs.bmad-method.org/build/build-a-change/"
+  },
+  {
+   "title": "BMAD docs: Review a change",
+   "url": "https://docs.bmad-method.org/build/review-a-change/"
+  },
+  {
+   "title": "BMAD docs: Autonomous development loops",
+   "url": "https://docs.bmad-method.org/build/autonomous-development-loops/"
+  },
+  {
+   "title": "BMAD docs: Run multi-agent discussions",
+   "url": "https://docs.bmad-method.org/customize/run-multi-agent-discussions/"
+  },
+  {
+   "title": "BMAD docs: bmad-eval",
+   "url": "https://docs.bmad-method.org/toolsmith/bmad-eval/"
+  },
+  {
+   "title": "BMAD docs: site navigation",
+   "url": "https://docs.bmad-method.org/"
+  },
+  {
+   "title": "BMad Code: Philosophy",
+   "url": "https://www.bmadcode.com/philosophy"
+  },
+  {
+   "title": "Uvik: Spec-driven development benchmark (50 tickets)",
+   "url": "https://uvik.net/spec-driven-development-benchmark/"
+  },
+  {
+   "title": "Limitations of BMAD Method (asantos2000, 2026-01-10)",
+   "url": "https://asantos2000.github.io/blog/post-3/"
+  },
+  {
+   "title": "bmad method disappointment (guillim, 2026-02-08)",
+   "url": "https://guillim.github.io/ai/development/2026/02/08/bmad-method-disappointment.html"
+  },
+  {
+   "title": "Stephan Miller: BMAD, Spec Kit, Superpowers, OpenSpec by project size",
+   "url": "https://www.stephanmiller.com/bmad-spec-kit-superpowers-openspec-which-agent-skill-framework-fits-your-project-size/"
+  },
+  {
+   "title": "The BMAD Method Explained (codemyspec, 2026-06-03)",
+   "url": "https://codemyspec.com/blog/bmad-method-explained"
+  }
+ ],
+ "unverified": [
+  "I could not read the BMAD skill source files or repo tree: GitHub API access to that repo was not enabled in this session. The enforcement verdict rests on the docs only, so hooks or scripts beyond `tickets.py` may exist.",
+  "The classic v4/v6 structure (two phases, Scrum Master, QA, story files, expansion packs, web bundles) comes from a secondary explainer, not a primary v4 source. The old docs URLs now redirect.",
+  "Whether \"party mode\" is still the product name: current docs call it multi-agent discussions.",
+  "The Uvik benchmark is a single vendor study on private code; I could not check its data.",
+  "The token and cost figures in the limitations blog (31,667 to 8,333 tokens per run, $847 to $220 a month, 230M tokens in a week, two-month learning curve, 9+ hour auth failure) are second-hand reports I did not trace to their originals.",
+  "The Reenbit comparison (5.5 hours BMAD vs 12 minutes OpenSpec) is quoted from a secondary source; I did not read the original.",
+  "The \"up to 90% token saving from sharding\" claim appeared only in a search summary and I did not open its source.",
+  "I found no Reddit or Hacker News threads in two searches, so practitioner criticism here comes from blogs.",
+  "The author's personal identity: the pages I read name only BMad Code, LLC.",
+  "BMad Loop's actual behaviour: the docs say it \"does not dispatch from the ticket tree yet\", and I read no Loop module page.",
+  "All WebFetch content was summarised by a small model, so short quotes may be imperfect; the benchmark table was not re-checked against the page by hand."
+ ]
+}

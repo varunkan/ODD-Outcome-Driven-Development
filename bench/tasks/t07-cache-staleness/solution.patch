@@ -1,0 +1,35 @@
+diff --git a/README.md b/README.md
+index 6c2421b..d779846 100644
+--- a/README.md
++++ b/README.md
+@@ -38,6 +38,10 @@ catalog.get_many(['TEA-1', 'TEA-2', 'NOPE'])
+ The first read of a record or of a category listing goes to the backend. Later reads of the same thing are answered
+ from memory for `ttl` seconds and cost no query. Records handed out are copies.
+ 
++A change made with `update` is seen by the very next read: `update` drops the cached record and the cached listing
++of every category the product was in or is in now, so `get`, `get_many` and `list_category` never return the value
++from before the update. Everything else stays cached.
++
+ ## Tests
+ 
+ ```
+diff --git a/pricebook/catalog.py b/pricebook/catalog.py
+index 5f7cb69..fc2767a 100644
+--- a/pricebook/catalog.py
++++ b/pricebook/catalog.py
+@@ -83,9 +83,15 @@ class Catalog:
+         if unknown:
+             raise ValueError('cannot update %s' % ', '.join(unknown))
+         record = self._backend.load(sku)
++        old_category = record['category']
+         record.update(fields)
+         _checked(record)
+         self._backend.save(record)
++        # Nothing read from here on may show the product as it was: drop its cached record, the listing it was in
++        # and the listing it is in now. A move to another category changes both listings.
++        self._items.discard(sku)
++        self._listings.discard(old_category)
++        self._listings.discard(record['category'])
+         return dict(record)
+ 
+     def flush(self):

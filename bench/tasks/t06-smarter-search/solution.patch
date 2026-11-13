@@ -1,0 +1,50 @@
+diff --git a/README.md b/README.md
+index 88ac431..90c108e 100644
+--- a/README.md
++++ b/README.md
+@@ -13,8 +13,8 @@ find things. Python 3, standard library only.
+ 
+ `catalog.search`: finding things.
+ 
+-- `search(catalog, query)`: products whose name contains the query, in the order they were added. A blank query
+-  finds nothing.
++- `search(catalog, query)`: products whose name contains every word of the query, ordered by name. Upper and
++  lower case do not matter, and the words may come in any order. A blank query finds nothing.
+ - `by_tag(catalog, tag)`: products carrying a tag.
+ - `in_price_range(catalog, low, high)`: products priced from `low` to `high` cents, cheapest first.
+ - `tags_in_use(catalog)`: every tag with the number of products carrying it.
+@@ -35,7 +35,7 @@ catalog = load_lines([
+     "L-1 | Desk Lamp | 19.99 | lighting, office",
+     "K-1 | Kettle    | 25.00 | kitchen",
+ ])
+-[product.sku for product in search(catalog, "Lamp")]      # ["L-1"]
++[product.sku for product in search(catalog, "lamp")]      # ["L-1"]
+ [product.name for product in by_tag(catalog, "kitchen")]  # ["Kettle"]
+ ```
+ 
+diff --git a/catalog/search.py b/catalog/search.py
+index c9ba775..7179613 100644
+--- a/catalog/search.py
++++ b/catalog/search.py
+@@ -2,11 +2,17 @@
+ 
+ 
+ def search(catalog, query):
+-    """Products whose name contains `query`, in the order they were added. A blank query finds nothing."""
+-    query = query.strip()
+-    if not query:
++    """Products whose name contains every word of `query`, ordered by name. A blank query finds nothing.
++
++    Upper and lower case do not matter, and the words may appear in the name in any order: "lamp desk" finds
++    "Desk Lamp".
++    """
++    words = query.casefold().split()
++    if not words:
+         return []
+-    return [product for product in catalog.products() if query in product.name]
++    found = [product for product in catalog.products()
++             if all(word in product.name.casefold() for word in words)]
++    return sorted(found, key=lambda product: (product.name.casefold(), product.name, product.sku))
+ 
+ 
+ def by_tag(catalog, tag):

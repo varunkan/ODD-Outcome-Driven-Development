@@ -1,0 +1,337 @@
+{
+ "name": "Outcome-Driven Development (ODD): one outcome, one proof that can fail, one gate",
+ "one_line": "Start from one user-visible outcome and one proof that has been seen to fail, let scripts and content-hashed evidence decide \"done\", keep the few no-exception rules in code and the human-owned acts with the human, and measure the method itself so that rules which do not pay are removed.",
+ "principles": [
+  {
+   "id": "P1",
+   "principle": "Start every feature or fix from one user-visible outcome sentence and one end-to-end proof test. Trace the outcome's path on the current tree, fix only what blocks it, and stop when it is proven. Anything else found is one backlog line and becomes the next outcome; a change that does not serve the outcome is split out before merge. For a defect keep one short record (wrong behaviour, correct behaviour, test, result, tree hash); add plan or design documents only when risk or size requires, and stop reviewing a plan once it has passed unless the outcome itself is wrong.",
+   "why": "Strongest single result: outcome-first reached a host proof in about 2 hours against 14 hours, 81 agents and 23 REVISEs of 30 verdicts for the REQ-306 swarm (pos.json paid/4, waste/0). p90 product-merge lead time 133 h to 11.7 h (METHOD-MEASUREMENT.md:23,49; observational, not attributable to one rule). Cost of ignoring scope: three hours on backlog tasks with the outcome unreached; wave 3 spent about 3.4M tokens before the owner stopped it (DECISIONS.md:3110-3111); 5 cards merged while 12 were added in a day. Caveat: one instance, self-measured, and the first real-backend run failed on a 403 no fake produced. The '18 judge rounds, about 12M tokens' figure was not verified and must be re-cited or removed.",
+   "mechanism": "Script: the runner refuses a run without requirement, outcome, path and proof; a merge check lists files that trace to no outcome. Skill text for stop/park behaviour.",
+   "durability": "durable",
+   "traces": [
+    "OU-R1",
+    "OU-R2",
+    "OU-R3",
+    "OU-R4",
+    "OU-R20",
+    "PR-R43",
+    "PR-R42",
+    "DE-R40"
+   ]
+  },
+  {
+   "id": "P2",
+   "principle": "If a command can answer the question, write the command. Counts, diffs, greps, conflicts, git facts and rule-decided verdicts are scripts; agents are for judgement (correctness, root cause, design). Before working a set item by item, run one script over the whole set and look at the distribution, and before repeating any manual procedure ask what would make the whole class cheap. Write device, UI and end-to-end checks as committed tests with an exit code, and name the legs that cannot be converted.",
+   "why": "106 triage and judge agents on 53 branches were killed with no verdicts; one script answered in about 4 minutes and found all 53 conflict-free and 44 blocked by one cause (pos.json paid/1). About 450 tool calls, 830k tokens and 2 hours for about 40 hand-driven legs against about 8 tool calls and 128 s for 8 integration tests, with the stated limit that only 13 of 57 legs were convertible. A crash reporter printing file:line turned 241 candidate sites in 52 files into a 17-line fix list. Two of the three ledger results with a real before/after.",
+   "mechanism": "Skill text plus a habit check at dispatch; a hook refuses hand-driven device input where a test runner exists.",
+   "durability": "durable",
+   "traces": [
+    "FR1-R1",
+    "PR-R21",
+    "OU-R11",
+    "PR-R20",
+    "OU-R10",
+    "VE-R1"
+   ]
+  },
+  {
+   "id": "P3",
+   "principle": "To go faster, change the shape of the work, not the amount of checking. Dispatch per invariant: one branch closes every open item that is an instance of the same property, each kept as an acceptance row. Set the amount of process from the risk of the diff, computed by a script (full review for the project's high-risk classes, a light path for scripts and docs). While working, run only the tests that can observe the change; run cheap checks first; run the full gate once per merge batch on the exact tree that will land, and attribute a red batch by computation rather than reverting everything. Added checks buy caught defects, not speed.",
+   "why": "REQ-161 closed 4 cards for about 200k tokens against about 3.4M as four ladders, 17x on one instance (pos.json paid/0). A uniform seven-stage ladder cost about 840k tokens per card regardless of risk. 20 cards gated alone took 4 h against 12 min shared; per-card trains repeated about 3,400 tests for each of eight cards, 1.6 hours; 25 developers ran 109 full suites in one audit. A 200k-token battery and an owner login round ran on a build that wedged on launch. The mutation generator cost about 600k tokens with no delivery speedup. Hand attribution of a red batch cost two suite runs and about forty minutes. Caveat: the 17x does not separate batching from tiering.",
+   "mechanism": "Scripts: tier-from-diff, file-overlap check, batch gate on the composed tree, red attribution; a test wrapper that scopes working runs.",
+   "durability": "durable",
+   "traces": [
+    "PR-R16",
+    "OU-R19",
+    "PR-R17",
+    "DE-R12",
+    "PR-R37",
+    "SA1-R27",
+    "DE-R41",
+    "FR1-R13",
+    "VE-R2",
+    "VE-R28",
+    "DE-R7",
+    "PR-R22"
+   ]
+  },
+  {
+   "id": "P4",
+   "principle": "Measure the method and keep the instruction set small. Before a process change, state the number it should move; record cost per outcome by script from transcripts (context tokens read, not output); measure again on real work and remove the change if no after-figure shows it paid. Keep one short always-loaded file of facts the model cannot infer (outcome, constraints, irreversible domain rules, who owns which decision) under a size budget a script checks. Each rule lives in one committed place, enters with its incident or number and a date, and is deleted when a script or broader rule covers it. When a defect escapes, add the check that would have caught it rather than a prose rule. Domain rules load only with the code they govern.",
+   "why": "Every usable figure in the ledger came from the token script (1.85 billion context tokens read against 1.2 million output on 2026-09-04). 74% of one swarm's 338M tokens read was always-loaded context; CLAUDE.md fell from 101,112 to 31,671 bytes under a scripted budget while a prose cap on lessons did not hold (60 live against about 30). A mandatory instruction-change-per-rework rule grew charter bytes 227,205 to 361,883 in four weeks. Directive #51 lived in an uncommitted scratch file, vanished and was restated a week later. The instruction file named scripts that did not exist. Caveats: the token effect of the size cut was never measured; #61, #62, #64 and #66 have no after-figure; project total spend is unrecorded.",
+   "mechanism": "Scripts: transcript cost ledger per outcome, size budget, a check that every named command and file exists. Habit: review-and-delete pass on the rule list.",
+   "durability": "durable",
+   "traces": [
+    "DE-R6",
+    "FR1-R18",
+    "FR1-R9",
+    "DE-R33",
+    "DE-R34",
+    "DE-R36",
+    "DE-R1",
+    "OU-R27",
+    "VE-R38",
+    "OU-R28"
+   ]
+  },
+  {
+   "id": "P5",
+   "principle": "Bound every unattended run in code. The workflow script caps agents or tokens in one place and hands back to the human when the cap is spent without a pass. The harness, not the agent, decides progress (remaining work shrank or a non-bookkeeping file changed) and stops a loop that makes none. Rework is bounded: the pass bar is stated first, each blocking finding arrives as a failing test, and at the round limit the run stops and reports rather than passing. Limit work in progress and check by script that an item can reach merged before spending an agent on it. Never use model turns to wait on a machine: start long jobs in the background and resume through one scripted wait or the harness signal. Automate a multi-stage flow only after it paid by hand, and dry-run it with stubbed agents.",
+   "why": "One wave spent about 130 agents with no judge pass and nothing stopped it; a stuck run had 48 agents and 0 judge calls. Sixteen continuations 'progressed' on a context-note line alone, 29M tokens. 24 collect agents read 24.6M tokens only to answer PENDING; 43 of 294 agents sleep-polled. A 12-agent workflow ran 68 minutes and 1.8M tokens on ten cards and merged zero. 15 dispatches returned BLOCKED on an empty work list. A stale lock read as live for four days. All figures measure the waste; no after-figure records a cap or waiter saving a run.",
+   "mechanism": "Workflow code (agent cap, progress test, round limit, can-finish check); a hook refusing sleep and poll loops; one health script that reports stalls on two independent signals and does not kill.",
+   "durability": "durable",
+   "traces": [
+    "FR1-R22",
+    "PR-R5",
+    "DE-R30",
+    "DE-R31",
+    "PR-R6",
+    "FR1-R2",
+    "PR-R3",
+    "PR-R23",
+    "PR-R15"
+   ]
+  },
+  {
+   "id": "P6",
+   "principle": "Enforce the few rules that have no exceptions with a hook, gate or test, and leave preferences as prose. When a prose rule is broken or misread twice, enforce it, rewrite it or delete it; do not restate it. Treat each enforcer as product code: a planted violation turns it red, a known-good input stays green, it fails loudly before the guarded action, fails open on its own errors, has a logged override so a legitimate action always has a legal path, and is verified as installed at session start. Every gate must be passable by the agent in the session; a gate nobody can pass is repaired or removed by a recorded decision, never routed around. A ruling takes effect only through a tracked item with a named executor.",
+   "why": "Over 294 swarm agents every rule was already written and still broken (developers ran a median 11 minutes against a 3-minute rule). The step-cap guard double-counted tool calls (median ratio 1.94 over 309 runners) for four weeks while its own suite passed 36/36; runners became 82% of a 446M-token run. Eight instruments were found silently wrong in one day, all by running them. Lint and coverage gates that could not pass were routed around; remote CI failed for weeks without starting. Five rulings with no named actor produced no action. The draft toolkit's hook pointed at a file not in the package. External: vendor guidance warns that at around forty hooks most are preferences (models.json). Caveat: the failure of prose is measured; no before/after shows the hooks reduced violations.",
+   "mechanism": "Hooks and gate scripts, each with fixture tests that replay real transcripts; a session-start doctor command.",
+   "durability": "durable",
+   "traces": [
+    "DE-R2",
+    "DE-R3",
+    "FR1-R24",
+    "VE-R14",
+    "VE-R4",
+    "DE-R4",
+    "SA1-R9",
+    "SA1-R13",
+    "SA1-R12",
+    "PR-R34"
+   ]
+  },
+  {
+   "id": "P7",
+   "principle": "Give every unit of work a contract and an honest exit. Before work starts, write the acceptance criteria as a short list, each naming an observable a run can assert, a number and unit for any comparative or visual target, and the check that reads it. Each dispatch names its inputs and outputs on disk and one check command. It ends done (output and passing check), incomplete (exact remainder) or blocked (reason and questions); incomplete and blocked are acceptable results. When no run can satisfy a criterion, or it passes while the mechanism is unsound, the criterion is the defect: correct it on record, never waive it. One scripted preflight passes before spending a device, a long run or owner time.",
+   "why": "External: an explicit 'this is impossible' option cut one model's cheating from 54% to 9% on an ImpossibleBench variant (practices.json); this supports the blocked verdict directly and the rest by analogy, and there is no in-repo measurement. In the repo: fifteen unsatisfiable criteria surfaced in one test window; three criteria in two days could not fail; a combined measure-and-certify round rejected sound work at about 280k tokens; an owner login round and a 6-leg battery were spent on a build that failed 5 of 5 on first launch.",
+   "mechanism": "Schema on step results (three end states); a script checks that criteria exist and each names a check; preflight script with an exit code.",
+   "durability": "durable",
+   "traces": [
+    "PR-R1",
+    "OU-R24",
+    "DE-R29",
+    "OU-R12",
+    "OU-R13",
+    "DE-R23",
+    "PR-R18",
+    "PR-R19"
+   ]
+  },
+  {
+   "id": "P8",
+   "principle": "Keep the proof out of the implementer's reach. Gate scripts, proof tests, thresholds and the done-ledger are not writable by the agent doing the work; a diff check on test and gate paths flags any edit. Never skip, delete or weaken a test to get green. Only a script writes 'done', and it refuses on any red check at the tip. At a hook or permission denial the agent stops or uses a non-destructive form and reports. Only the owner relaxes a check, in a recorded decision naming what is no longer checked.",
+   "why": "External: telling a model not to cheat had almost no effect (80% to 80%) while hiding tests drove cheating near zero (practices.json). In the audit of the draft toolkit, forged ledger lines turned a failing gate green and Bash writes bypassed the write guard (audit.json). In the repo: of 14 branches composed for a test window, five failed their own tests and four of those carried a DELIVERED event; a rework branch was missing 91 tests; a default runner skipped a 54-test root that is the only coverage of two services. Caveat: no in-repo before/after for the tamper-resistant form.",
+   "mechanism": "Hook (deny edits to gate, proof and control paths, including shell write routes or an after-the-fact diff at gate time); done-script that owns the ledger.",
+   "durability": "durable",
+   "traces": [
+    "VE-R5",
+    "DE-R17",
+    "VE-R9",
+    "SA1-R10"
+   ]
+  },
+  {
+   "id": "P9",
+   "principle": "A test counts as proof only after it has been seen to fail for the reason it exists. Run every proof on the unfixed tree first; if it passes there, rewrite it. On the project's high-risk changes derive mutants from the diff by script (delete each added guard, default or catch) and treat a survivor as a missing test; changed-line coverage is a floor only. Test the path production uses, naming each fake at an I/O boundary. The battery validates its own harness (fixtures compile, each mutation matches exactly once, an unmutated control passes). Treat 'cannot happen' and 'cannot be tested' as claims to falsify by building the case. Test-first applies to tasks that add behaviour, not to declarations or config.",
+   "why": "Nine guards read correctly and did nothing. Eight guards each left a 64-assertion suite green when deleted; four mutations of a new tender backstop left a 1,792-test suite and six gates green. A judge changed one collection name and 1,957 tests, 26 battery rows and every gate stayed green. 19 rows and 7 mutations ran a fake printer while the real one threw. A prior '11/11 RED' battery had measured nothing because every row died at build. The draft toolkit accepted proofs such as 'test 1 = 1' (audit.json). External: 30-76% reward hacking on benchmarks; about 17% of real faults couple to no mutant; test-first ordering itself is weakly evidenced, so this is an anti-gaming device, not a quality claim. Cost on record: the mutation generator took about 600k tokens with no speedup, which is why it is risk-scoped.",
+   "mechanism": "Scripts: red-on-base run recorded with the proof, diff-derived mutation battery with self-validation, production-path check.",
+   "durability": "durable",
+   "traces": [
+    "VE-R10",
+    "OU-R14",
+    "VE-R11",
+    "VE-R13",
+    "VE-R17",
+    "VE-R15",
+    "PR-R41"
+   ]
+  },
+  {
+   "id": "P10",
+   "principle": "A result belongs to the content it ran on. Record every test, gate and build result with a hash of the product content (not the commit id), cite it while that hash is unchanged, and discard it when the content changes. Done is one gate result on one tree: proof and review pass on the same hash. A check has three results (pass, fail, could not run) taken from exit code and log together, with at least one executed assertion; missing evidence never reads as green. The merge gate is one local command that runs from a fresh clone on the merge tree. Reports list every check run and every check not run. Claims relative to main are made against the fetched remote, and commit references in tracked files must resolve from the remote.",
+   "why": "The full suite ran 5 times for one batch; 216 abandoned builds covered 9 distinct trees. Four device legs printed 'Some tests failed' while the driver exited 0 and the runner wrote PASS; three flows reported PASS with zero assertions. A clean textual merge hid a compile error on the composed tree. A run alone was 13/13 and composed 12/13. Numbers written into the instruction file went stale five times. 257 local-only tags made four batteries red in every other clone. The draft toolkit keyed on commit id and a plain commit turned every proof stale (audit.json). No isolated saving figure; kept as cheap rules against recorded incident classes and because hash-keyed evidence is the scaffold all sources agree survives model upgrades.",
+   "mechanism": "Scripts: evidence store keyed by content hash, three-state result parser, local gate runner, remote-ref check.",
+   "durability": "durable",
+   "traces": [
+    "FR1-R12",
+    "PR-R36",
+    "VE-R6",
+    "DE-R20",
+    "VE-R8",
+    "DE-R21",
+    "VE-R3",
+    "SA1-R30",
+    "SA1-R31"
+   ]
+  },
+  {
+   "id": "P11",
+   "principle": "Decide from the tree, not from a report or memory. Every path, count or list cited comes from a command run in this pass; anything else is marked unverified. A claim of completeness or safety ('every writer', 'the only caller', 'dead code') carries the query that produced it. Fix the class, not the instance: list every sibling site by a cited search, let evidence pick which need the change. Before writing new code, search this branch and unmerged branches for code that already does it and extend that. Before a fix, state the root cause in one sentence and confirm the suspected mechanism actually runs; decide whether the fault is in the harness or the product. Look at the production-shaped data before changing code for a data problem, and verify vendor tables against the vendor's own reference. Back any stated property with a test that fails when it stops being true, or delete the statement. In committed documents cite symbols or files rather than line numbers.",
+   "why": "3 of 3 citations in one requirement were stale and 3 of 7 callers named; six design citations were mechanically wrong. One fix took three consecutive reworks, each finding the sibling of the last; a line grep found 15 of 22 delete sites. Recomputation falsified two of four carried artifacts; a '1.97 s vs 0.06 s' claim measured 0.06 vs 0.07. 6,144 of 6,180 'pending' orders had no items. A threshold written without measuring could never pass (670 local against 27,069 cloud records). An unchallenged printer-command table became a false identity key. A cross-branch audit found a requirement re-deriving fixes two open PRs already held. These are counted catches, not a before/after. Boundary with P10: a result with a content hash may be cited; a bare summary may not.",
+   "mechanism": "Script: citation and name checker before review, completeness-claim check at commit, cross-branch overlap search as a gate step. Skill text for call-chain and root-cause discipline.",
+   "durability": "durable",
+   "traces": [
+    "OU-R6",
+    "OU-R7",
+    "OU-R8",
+    "VE-R7",
+    "VE-R16",
+    "PR-R32",
+    "PR-R27",
+    "PR-R25",
+    "PR-R24",
+    "DE-R24",
+    "DE-R25",
+    "DE-R38",
+    "OU-R16",
+    "OU-R17",
+    "OU-R18",
+    "VE-R31",
+    "VE-R32"
+   ]
+  },
+  {
+   "id": "P12",
+   "principle": "Host tests and simulation may gate a merge but do not prove an outcome. Label every proof as real system or simulated, and call an outcome proven, and release, only after one run on the real system with the shipping artifact. Check the effect, not the command: confirm by checksum that the artifact under test is the one built and read config, signing and version from the artifact itself. For state shared across instances, verify from the data in every replica after sync settles; 'no errors in the log' is not evidence. After a UI change a script launches the build on every shipped form factor and a person or vision pass looks at the screenshots. End-to-end tests save evidence as they go. Where performance is gated, gate on deterministic counts.",
+   "why": "The one real-backend run on record stopped on a 403 that no fake produced, and no successful real install-to-first-order is recorded (pos.json honest_assessment). One requirement had 57 green harness cases, 36 mutation rows and 0 survivors and could not complete a real-device run. 1,588 green tests shipped a build whose restore path wedged at 0%. Reinstall-over hid a missing-column defect; a debug-key fallback shipped production artifacts debug-signed; ten indexes sat undeployable for over ten months. Torn reads showed one device with 12,703 orders then 3,079 two minutes later. 17 overflow errors shipped because the visual check ran on one form factor. The simulation-only directive has no recorded cost or benefit, and no research source supports dropping real-system verification.",
+   "mechanism": "Scripts: proof label (real or simulated) in the evidence record, artifact checksum preflight, replica comparison, visual launch check; one human or vision look.",
+   "durability": "durable",
+   "traces": [
+    "VE-R18",
+    "VE-R19",
+    "VE-R21",
+    "VE-R26",
+    "VE-R34",
+    "VE-R35"
+   ]
+  },
+  {
+   "id": "P13",
+   "principle": "Run every mechanical check first and have the author clear the failures; then use one fresh-context reviewer who did not write the change. The reviewer is read-only, checks that the change delivers the outcome and adds nothing outside it, verifies load-bearing claims itself (opens the line, runs the cheapest refuting command), reports all findings in one pass, and sends work back only for a reproduced product defect. Process findings are noted and do not block. Add a second independent review only for the project's high-risk classes. Spawn each agent from a minimal definition with only the tools its job needs. For high-risk changes write one short design note stating what a miss does under each option.",
+   "why": "Against stacked review: 14 hours, 81 agents, 23 REVISEs of 30 verdicts; six of seven wave-2 REVISEs named no product defect and four of six wave-3 reworks were classes existing scripts covered. Eleven recorded rulings were wrong because the judge did not check the claim. A lane looped over three hours on harness items sent to the developer. For one reviewer: blocking defects caught before a device (a tautological guard, an unmeetable criterion, two unpinned call sites), with no count or cost recorded. A default agent started at about 95k tokens of context and a restricted one at about 48k. External: fresh-context review helps; multi-agent costs about 15x chat tokens (practices.json). The single reviewer's value rests on incidents and external guidance, not a measurement.",
+   "mechanism": "Script: prejudge checks before any reviewer is spawned; reviewer agent definition with read-only tools; skill text for the brief.",
+   "durability": "durable",
+   "traces": [
+    "DE-R8",
+    "DE-R9",
+    "DE-R11",
+    "VE-R23",
+    "PR-R33",
+    "FR1-R7",
+    "PR-R30"
+   ]
+  },
+  {
+   "id": "P14",
+   "principle": "Isolate parallel work. One writer per file and per worktree; split work by the files it edits and compute that the sets are disjoint. Each runner gets its own worktree, scratch and temp data, claimed by a lease the launcher checks; nothing mutable is shared between agents. One coordinator or locking script composes shared files and allocates shared ids. Derive dashboards and baselines instead of hand-editing them on branches. Cap heavy concurrent runs with one machine-wide lock whose limit is a measured value in the lock script.",
+   "why": "Both merge trains of one day blocked on a shared dashboard after gating cleanly. A prose one-runner rule failed three times in about ten minutes. Of 52 unmerged branches, 15 collided only on hand-edited dashboards and 12 on a generated baseline. Two suites in one tree clobbered each other's database fixtures; a relaunch ran zero battery rows on a shared tree. A trial merge landed on main, went unnoticed for 20 commands and was pushed. Load average reached 137 while the concurrency cap existed only as prose. The draft toolkit's single shared 'active' pointer is a listed failure mode (audit.json). The lock's own effect is unmeasured.",
+   "mechanism": "Scripts: disjoint-file check at dispatch, worktree lease, machine-wide lock, bookkeeping merge resolver.",
+   "durability": "durable",
+   "traces": [
+    "PR-R11",
+    "PR-R12",
+    "DE-R39",
+    "SA1-R22",
+    "VE-R27",
+    "PR-R4",
+    "SA1-R29"
+   ]
+  },
+  {
+   "id": "P15",
+   "principle": "Keep working state in the repository. Commit anything a later step or session must read; scratch lives in an ignored folder inside the repo, never system temp, and is never the source of record. Keep status in git plus one append-only ledger written by script and derive every board and count from them; on resume the repository wins over prose. Resume interrupted work from committed files, not from the conversation. Delete a task's files only after its completion is recorded. Keep one source of truth per dependency.",
+   "why": "A session resume recreated the temp scratchpad empty and lost every review, a test plan, a pulled build and the merge resolver. A hand-updated state file went 6 days stale while nine cards merged. 44 of 53 stranded branches were blocked by one missing ledger event, so the ledger writer itself needs the P6 treatment. A vendored framework copy ended 550 commits ahead of its source. No cost figures; three recorded losses and near-zero cost. External guidance lists git as state among scaffolding to keep (models.json).",
+   "mechanism": "Scripts: checkpoint commit, ledger writer, derived board; pre-commit check for outside paths.",
+   "durability": "durable",
+   "traces": [
+    "PR-R9",
+    "DE-R27",
+    "DE-R28",
+    "SA1-R26",
+    "SA1-R16"
+   ]
+  },
+  {
+   "id": "P16",
+   "principle": "Name once the acts only the owner performs: credentials, billing, consoles, deploys, release, production data deletion, irreversible changes, relaxing a rule. The agent decides every reversible question from the goal and the evidence, records it and continues; it batches owner asks into one list, parks blocked work with one line and takes the next ready item, and never fakes or skips a step that needs a credential. Record a decision only when it changes a requirement or is hard to reverse. Automation touches only disposable accounts and reserved environments and fails closed on a live target. It never disturbs an environment the user is using. Bulk writes to a shared backend run staged: dry-run, small throttled batches, saved originals. The release build is a script that refuses any state that must not ship. If rulings per requirement keep rising, stop and clarify the requirement.",
+   "why": "Nine drivers bypassed a guard and four tendered real bills on a live production tenant. 3,837 unstaged deletes stalled menu, users and tables on every connected till. A wipe ran on the owner's emulator while in use. A copied PIN used 3 of 5 allowed attempts and locked a test device. A store build would have shipped a refusing sign-in card. The owner boundary was misread both ways: a merge go waited about 5 hours, and a requirement parked at 207 of 341 tasks waiting on the owner. Cost of over-deciding: 733 rulings in 44 days, 278 on one requirement that is still no-go. Owner time saved was never measured. External: human confirmation for irreversible actions is retained in every generation of vendor guidance (models.json).",
+   "mechanism": "Hooks deny the destructive subset; fail-closed target guard in test and data scripts; refusing release script; skill text for the reversible-decision rule.",
+   "durability": "durable",
+   "traces": [
+    "DE-R16",
+    "DE-R15",
+    "DE-R18",
+    "PR-R7",
+    "SA1-R8",
+    "SA1-R18",
+    "SA1-R20",
+    "SA1-R21",
+    "VE-R25",
+    "VE-R36",
+    "SA1-R6"
+   ]
+  },
+  {
+   "id": "P17",
+   "principle": "Main is production and history is recoverable. Every change is a branch merged through the gate; a hook rejects a direct commit on main. Before any destructive git operation require a clean tree and a recovery tag; retire merged branches by script. Stage explicit paths, read the staged diff before committing, and keep a commit to what its title says. One owner merges and pushes; nobody amends or rebases a pushed commit.",
+   "why": "The orchestrating session itself committed to main through a chained command and history had to be rewritten. A forced worktree removal destroyed a certified verdict; 60 scratch worktrees (18 GB) accumulated with zero removals. Twice in one day a directory sweep staged another requirement's half-written file. An amend after push diverged a branch and recovery cost a force-push. All incident-backed. Note: the guard refusing 'git add -A' was not found in the source repo and is still to be built.",
+   "mechanism": "Hook (main-commit block, sweep-add block); branch-retirement script; tool restrictions on workers for push.",
+   "durability": "durable",
+   "traces": [
+    "SA1-R4",
+    "SA1-R1",
+    "SA1-R24",
+    "SA1-R25"
+   ]
+  },
+  {
+   "id": "P18",
+   "principle": "Tunable defaults, not rules. These compensate for current model or harness limits and ship as settings, loose or off by default, each with a retirement test. (a) Locate before reading a large file; the size threshold is a setting. (b) One deliverable per dispatch; no hard-coded minute budgets, call caps or step shapes. (c) A derived code index only locates and never proves; keep one only with a mechanical freshness check, otherwise use search. (d) A one-page list of test traps, one line added per escaped defect. (e) No hard-coded model id in a workflow step; inherit or use a tier alias. Retirement test at each model upgrade: run the same outcome with the default off; if the proof, escaped defects and cost per outcome hold, delete it.",
+   "why": "The measured evidence is against the hard forms: the enforced step cap produced 39-71 runner sessions per outcome and about 90M tokens per outcome, with runners 82% of a 446M-token run. A 15-card wave re-read 235,682 tokens per turn over 3,512 turns, which shows the cost mechanism but no before/after exists for the read guard. The code index was 35 days and 1,737 commits stale while every charter told agents to consult it. 44 swap-only mutations passed review while one collapse left 1,909 tests green. External: step micro-management encodes weak context handling and should be configurable and re-measured per model (models.json RULE 2, RULE 6). The model-id incident and the 22.2M-token projection were not found in the repo records and are unverified.",
+   "mechanism": "Config values with an optional guard; a one-line lint for pinned model ids; skill text.",
+   "durability": "model-workaround",
+   "traces": [
+    "FR1-R3",
+    "PR-R2",
+    "OU-R9",
+    "VE-R12",
+    "FR1-R23"
+   ]
+  }
+ ],
+ "additions": [
+  "Proof strength as the quality signal: require a mutation step on every proof (revert or break the change and the proof must go red), not only on high-risk diffs' guards. Evidence: the draft toolkit accepted proofs such as 'test 1 = 1' and a free 'red: n/a' exit (audit.json failure_modes, missing); mutation, not coverage, measures fault detection, with the stated limit that about 17% of real faults couple to no mutant (practices.json).",
+  "Real-system calibration of the simulation: a cheap periodic run on the real system with the shipping artifact, with every escaped defect recorded as the simulation's error rate. Evidence: the only real-backend run failed on a 403 no fake produced, #66 then removed the real device from the merge conditions with no measured cost or benefit, and no source read supports simulation-only proof (pos.json honest_assessment; practices.json lessons_for_odd).",
+  "An honest abort exit beyond blocked: a 'cannot be done as specified' verdict on the outcome itself, treated as a success, with pressure to return done removed. Evidence: an abort option cut cheating from 54% to 9% on an ImpossibleBench variant (practices.json); the repo has no measurement of its own three-state rule.",
+  "Tamper resistance for control state: split agent-writable outcome files from control files (ledger, config, active pointer), let only the tool write the latter, hash-chain ledger entries, and detect out-of-boundary edits by diff at gate time so shell write routes are covered. Evidence: forged ledger lines turned a failing gate green and Bash writes bypassed the guard (audit.json, measured).",
+  "Judge calibration: keep a small human-labelled set of past verdicts, score the reviewer against it, and allow an 'unknown' verdict. Evidence: 23 REVISEs of 30 verdicts with most naming no product defect; eleven rulings wrong for lack of checking; 733 rulings in 44 days; vendor guidance to calibrate LLM judges against humans (pos.json; practices.json).",
+  "Rule expiry: every learned rule carries a date, its triggering incident, its scope and reason, and a review-or-expire step; rules are written plainly without capitals or absolute emphasis. Evidence: 68 directives, 28 policies and 204 governance scripts with 53% of commits touching no product or test code; two three-day-old rules were broken on a day there were already 45; newer models follow accumulated cautions more literally (pos.json; models.json RULE 9, RULE 10).",
+  "Measure the method on versus off: run the same outcome with a component disabled at each model upgrade and compare tokens, tool calls, wall clock, escaped defects and rework rate; report lead time and change failure rate, not gates passed. Run the same task through Spec Kit, BMAD and Superpowers with the same figures before making any comparative claim. Evidence: most 'paid' figures are single self-measured instances; no after-figure for #61, #62, #64, #66, #67; developers in a METR study believed they were 20% faster while measured 19% slower (pos.json; practices.json; audit.json missing).",
+  "A small-change lane: one outcome block (outcome, proof, boundary), red, code, green, done, in one file; the fuller pipeline is opt-in. Evidence: the draft toolkit required six stage files for a one-line fix, and a one-flag change cost the same 840k tokens as a schema migration (audit.json over_engineered; pos.json waste/4).",
+  "Content-scoped staleness: key evidence on the content hash of the files inside an outcome's boundary so a commit or an unrelated edit does not invalidate proofs. Evidence: in the draft toolkit a plain commit turned every proof stale and re-proving was quadratic (audit.json, measured).",
+  "Per-session run state and a doctor command: key the active run by session id so parallel sessions and subagents work, and ship one command that says whether each hook is installed and live. Evidence: one shared active pointer blocked unrelated sessions; a missing hook file exits 2 and blocks every matched tool call; fail-open without a health check hides absent enforcement (audit.json).",
+  "A recorded project total: one script that sums token spend per outcome and for the project. Evidence: total spend is not recorded anywhere, only per-run figures (pos.json honest_assessment).",
+  "Before publication, re-cite or remove the figures this validation could not verify: the '18 judge rounds, about 12M tokens' figure (OU-R3), the 22.2M-versus-26.6k projection (FR1-R3), the pinned-model incident (FR1-R23), the 6.3M-token audit figure (DE-R38), and the conflicting 95 KB and 101 KB peak sizes for the instruction file."
+ ],
+ "dropped_classes": [
+  "Totals from the validation stats: 224 clusters ruled across six areas; 93 kept and 52 refined (the 145 surviving rules traced above), 48 merged into another cluster as duplicates, 31 dropped; 78 first-pass verdicts were overturned on review and 0 instruction ids were left unruled. Counts below are clusters; the number of the 1,856 source instructions inside dropped clusters was not computed in this step.",
+  "Step micro-management, 7 clusters (FR1-R4, FR1-R6, FR1-R8, PR-R26, PR-R39, VE-R42, SA1-R15): fixed 200-line read windows, locator-call ratios, 30-tool-call step caps, fixed step durations and launch/collect shapes, mandated task DAGs with 30-second nodes, timed commit steps. Dropped because the only real data shows higher cost (about 90M tokens per outcome under the cap) and models.json RULE 6 classes them as workarounds for weak context handling. Their surviving residue is P18's tunable defaults.",
+  "Fixed role relays and specification ceremony, 4 clusters (PR-R38, OU-R32, DE-R14, OU-R29): pods of persona agents, analyst-architect document pipelines, a constitution file, per-role failure attribution. Dropped because no statement had a measured payoff and the measured evidence is all against (14 hours and 81 agents on one requirement; 43.1 MB of process markdown against 7.7 MB of product code).",
+  "Layered LLM judging, 4 clusters (FR1-R19, OU-R30, OU-R31, DE-R13): a judge over every agent and artifact, three parallel lens judges, a general 'best product ever' objective, a token-efficiency judge. Dropped as measured cost with no recorded benefit (23 REVISEs of 30 verdicts; 733 rulings in 44 days). One fresh-context reviewer survives in P13 and stall detection in P5.",
+  "Unmeasured tooling and habit instructions, 5 clusters (FR1-R15, FR1-R16, FR1-R17, VE-R44, DE-R35): standing delegation of wide searches to subagents, a context-compression proxy, compaction every 1M tokens, adversarial self-review before every commit, a mandatory lessons line on every artifact. Dropped for failing the project's own measure-or-revert rule; standing delegation lines are reported to raise cost on current models (models.json).",
+  "Project-specific content, 7 clusters (FR1-R25, PR-R31, PR-R40, OU-R33, VE-R43, DE-R42, SA1-R37): this product's data-layer traps, build and device details, licensing notes, lock-script fixes, a broken remote CI account. Dropped from the method and kept in the project's own rules files, which P4 says load only with the code they govern.",
+  "Prose restatements and implementation details with no incident, 4 clusters (SA1-R5, SA1-R14, SA1-R33, SA1-R35): a release-flow checklist already covered by the release script, an ignore-file rule, a lock-ownership detail, a ledger backfill for a cost the governance itself created."
+ ],
+ "method_markdown": "# Outcome-Driven Development (ODD)\n\nA lean method for building software with coding agents. It was distilled from 1,856 instructions given while building a production multi-device point-of-sale system (Aug-Nov 2026), after measuring which ones paid.\n\n## The idea in four sentences\n\n1. Start from one user-visible outcome and one end-to-end proof.\n2. Trust a proof only after it has been seen to fail, and keep it out of the implementer's reach.\n3. Let scripts and content-hashed evidence decide \"done\"; keep the few no-exception rules in code and the irreversible acts with the human.\n4. Measure the method itself, and delete what does not pay.\n\n## How to read the evidence\n\nEach principle carries a grade:\n\n- **Before/after**: a measured comparison. All are single instances measured by the session that made the change.\n- **Measured waste**: the cost of not having the rule is counted; the rule's own saving is not.\n- **Incident**: the rule prevents a recorded failure class; no number.\n- **External**: published research or vendor guidance, not this project.\n\nOnly three results have a real before/after: invariant batching (17x on one instance), scripts instead of agents (about 4 minutes against 106 agents), and device checks as code (about 450 tool calls against about 8, on 13 of 57 convertible legs). Outcome-first has one strong data point (about 2 hours against 14). Everything else is graded lower and says so.\n\n## The principles, strongest evidence first\n\n### 1. One outcome, one proof (before/after, one instance)\nWrite one user-visible outcome sentence and one end-to-end test that asserts it. Trace the path on the current tree, fix only what blocks it, and stop when it is proven. Anything else you find is one backlog line and becomes the next outcome. For a defect, keep one short record: wrong behaviour, correct behaviour, test, result, content hash. Add plan or design documents only when risk or size requires.\n\n*Evidence:* about 2 hours to a host proof against 14 hours, 81 agents and 23 send-backs in 30 verdicts for the full multi-stage swarm. 90th-percentile lead time to merge fell from 133 h to 11.7 h (observational).\n\n### 2. Commands for mechanical questions, agents for judgement (before/after)\nIf a command can answer it (counts, diffs, greps, git facts, rule-decided verdicts), write the command. Run one script over a whole backlog and look at the distribution before working items one by one. Write device, UI and end-to-end checks as committed tests; name the ones that cannot be converted.\n\n*Evidence:* 106 agents on 53 branches were killed with no answer; one script answered in about 4 minutes and found 44 blocked by a single cause.\n\n### 3. Change the shape of the work, not the amount of checking (before/after)\n- One branch closes every open item that is an instance of the same invariant.\n- A script sets the amount of process from the risk of the diff.\n- While working, run only the tests that can observe the change; cheap checks first.\n- Run the full gate once per merge batch, on the exact tree that will land.\n\nAdded checks buy caught defects, not speed.\n\n*Evidence:* 4 items for about 200k tokens against about 3.4M done separately; 20 items gated alone took 4 h against 12 min shared.\n\n### 4. Measure the method; keep the instruction set small (measured waste)\nState the number a process change should move before making it, measure after on real work, and remove the change if it did not pay. Record cost per outcome by script, as context tokens read. Keep one short always-loaded file of facts the model cannot infer, under a size budget a script checks. A rule enters with its incident and a date, lives in one place, and is deleted when a script covers it. When a defect escapes, add the check, not a paragraph.\n\n*Evidence:* 74% of one run's 338M tokens read was always-loaded instructions; a scripted budget cut the file from 101 KB to 32 KB where a prose cap had failed. The token saving from the cut was never measured.\n\n### 5. Bound every unattended run in code (measured waste)\nThe workflow script caps agents or tokens and hands back to the human when the cap is spent. The harness decides whether a loop made progress. Rework has a round limit and never passes by default. Limit work in progress. Never spend model turns waiting on a machine.\n\n*Evidence:* about 130 agents spent with no passing verdict; 29M tokens on continuations that changed only a note; 24.6M tokens read by agents whose only answer was \"pending\".\n\n### 6. Enforce few rules, in code, and test the enforcers (measured waste)\nRules with no exceptions get a hook, gate or test; preferences stay prose. A rule broken twice is enforced, rewritten or deleted, never restated. Each enforcer is product code: a planted violation turns it red, it fails open on its own errors, it has a logged override, and one command confirms it is installed. A gate nobody can pass is repaired or removed.\n\n*Evidence:* across 294 agents every rule was written down and still broken. One guard miscounted by a factor of 1.94 for four weeks behind a green test suite.\n\n### 7. A contract and an honest exit for every unit of work (external)\nAcceptance criteria are a short list; each names an observable, a number where one applies, and the check that reads it. Each dispatch ends done, incomplete or blocked, and the last two are acceptable. A criterion no run can satisfy is itself the defect: correct it on record, never waive it.\n\n*Evidence:* an explicit \"this is impossible\" option cut one model's cheating from 54% to 9% on a benchmark. Fifteen unsatisfiable criteria surfaced in one test window here.\n\n### 8. Keep the proof out of the implementer's reach (external)\nProof tests, gate scripts, thresholds and the done-ledger are not writable by the agent doing the work. Only a script writes \"done\". Only the owner relaxes a check, on record.\n\n*Evidence:* telling a model not to cheat changed nothing (80% to 80%); hiding the tests drove cheating near zero. In an audit, forged ledger lines turned a failing gate green.\n\n### 9. A proof must be able to fail (incident)\nRun every proof on the unfixed tree first. On high-risk changes, delete each added guard by script and require a test to go red. Test the path production uses and name every fake. The test battery validates itself with an unmutated control.\n\n*Evidence:* eight guards could each be deleted with the suite green; a one-character change to a collection name left 1,957 tests and every gate green. Mutation misses about 17% of real faults, so it is a bar, not a guarantee.\n\n### 10. Evidence belongs to the content it ran on (incident)\nRecord each result with a hash of the product content, not the commit id. Cite it while the content is unchanged; discard it when the content changes. A check has three results: pass, fail, could not run. The merge gate is one local command on the merge tree. Reports list what was run and what was not.\n\n### 11. Decide from the tree, not from a report (incident)\nEvery cited path, count or list comes from a command run in this pass. A claim of \"every\" or \"only\" carries its query. Fix the class, not the instance. Search for existing code before writing new code. State the root cause and confirm the mechanism runs before fixing.\n\n### 12. Simulation gates; the real system proves (incident)\nLabel each proof as real or simulated. Call an outcome proven, and release, only after one run on the real system with the shipping artifact. Confirm by checksum that what was tested is what was built. For shared state, compare the data in every replica.\n\n*Evidence:* the one real-backend run on record failed on an error no fake produced.\n\n### 13. Scripts first, then one independent reviewer (incident)\nOne fresh-context, read-only reviewer who did not write the change checks the outcome, verifies load-bearing claims itself, reports everything in one pass, and sends work back only for a reproduced product defect. A second review only for high-risk classes.\n\n### 14. Isolate parallel work (incident)\nOne writer per file and per worktree, computed, not assumed. No shared mutable state between agents. One coordinator composes shared files. One machine-wide lock caps heavy runs.\n\n### 15. State lives in the repository (incident)\nCommit what a later session must read. Derive boards from git and one append-only ledger. On resume, the repository wins over prose.\n\n### 16. Human-owned acts stay human-owned (incident)\nName the owner's acts once: credentials, billing, deploys, release, production deletion, anything irreversible, relaxing a rule. The agent decides everything reversible and continues. Automation touches only disposable accounts, fails closed on a live target, and never disturbs an environment in use. Bulk writes are staged.\n\n### 17. Main is production; history is recoverable (incident)\nEvery change is a branch through the gate. Tag before any destructive git operation. Stage explicit paths. One owner pushes; pushed history is not rewritten.\n\n### 18. Tunable defaults, not rules (model workarounds)\nThese ship as settings, loose or off by default:\n\n| Default | Compensates for |\n|---|---|\n| Locate before reading a large file | context cost |\n| One deliverable per dispatch, no fixed budgets | short reliable horizons |\n| A code index only locates, never proves | search cost |\n| A one-page list of test traps | test-design gaps |\n| No hard-coded model id | model retirement |\n\n**Retirement test:** at each model upgrade, run the same outcome with the default off. If the proof, escaped defects and cost per outcome hold, delete it.\n\n## What the method adds beyond the source rules\n\n- A mutation step on every proof, as the quality signal.\n- A periodic real-system run that calibrates the simulation, with escaped defects recorded as its error rate.\n- A \"cannot be done as specified\" exit on the outcome itself.\n- Control files only the tool can write, with a hash-chained ledger.\n- A human-labelled set of past verdicts to calibrate the reviewer, which may answer \"unknown\".\n- An expiry step on every learned rule.\n- Method on-versus-off runs, reported as lead time, change failure rate, rework rate and cost per outcome.\n- A small-change lane: one outcome block, red, code, green, done.\n\n## What was dropped\n\nOf 224 rule clusters, 145 survive in the principles above, 48 were duplicates, and 31 were dropped:\n\n| Class | Clusters | Reason |\n|---|---|---|\n| Step micro-management (call caps, read windows, timed steps, task graphs) | 7 | The only real data shows higher cost |\n| Fixed role relays and specification ceremony | 4 | No measured payoff; measured cost |\n| Layered LLM judging | 4 | 23 send-backs in 30 verdicts, most naming no defect |\n| Unmeasured tooling and habits | 5 | Failed the measure-or-remove rule |\n| Project-specific content | 7 | Belongs in the project's own rules |\n| Prose restatements with no incident | 4 | Covered by a script or a default |\n\n## Known limits\n\n- Most figures are single instances measured by the session that built the change.\n- The central product outcome was never observed on the real system end to end.\n- Hook effectiveness has no before/after: the failure of prose is measured, the effect of enforcement is not.\n- Project total token spend was never recorded.\n- No comparison run against Spec Kit, BMAD or Superpowers exists yet; any comparative claim needs the same task run through each with cost and escaped defects recorded.\n- Five figures could not be verified in the records and must be re-cited or removed before publication: the \"18 judge rounds, about 12M tokens\" figure, a 22.2M-token read projection, the pinned-model incident, a 6.3M-token audit figure, and the peak instruction-file size (95 KB or 101 KB).\n"
+}

@@ -1,0 +1,1692 @@
+[
+ {
+  "instruction": "Retire a merged branch immediately: tag it completed/<branch>@<date> so history stays recoverable, remove its worktree, delete the branch. Refuse when the worktree has uncommitted files. Never let residue accumulate.",
+  "outcome": "A forced worktree removal destroyed a CERTIFIED verdict (L-11). Retiring on merge stops merged work being picked up again by accident.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/complete_branch.sh (SKIPs dirty worktrees, line 49)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:93-97"
+  ],
+  "id": "SA-001"
+ },
+ {
+  "instruction": "Treat the main branch as production: build release artifacts only from main, and let nothing reach main without a full regression pass and an explicit go.",
+  "outcome": "Hard constraint.",
+  "owner_words": "",
+  "enforcement": "merge gate",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:149-151"
+  ],
+  "id": "SA-002"
+ },
+ {
+  "instruction": "Never commit or push directly to main, agents included. Cut a branch for every feature or defect from an updated main (fix/<issue-id>-<slug> or feat/<slug>).",
+  "outcome": "Hard constraint.",
+  "owner_words": "",
+  "enforcement": "branch policy",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:153-159"
+  ],
+  "id": "SA-003"
+ },
+ {
+  "instruction": "Follow a fixed release flow: branch -> dev build -> verify -> gate -> merge -> version bump -> tag -> release build from main -> push.",
+  "outcome": "Hard constraint.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:161-164"
+  ],
+  "id": "SA-004"
+ },
+ {
+  "instruction": "Ship the store artifact as the store bundle format, built from main and signed with the owner's upload key. Verify the signature and never ship a debug-signed or fat artifact.",
+  "outcome": "Store requirements; details in .claude/rules/builds.md.",
+  "owner_words": "",
+  "enforcement": "scripts/build_prod.sh; jarsigner -verify",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:163-164,247"
+  ],
+  "id": "SA-005"
+ },
+ {
+  "instruction": "Version with a patch bump for defects and a minor bump for features; the build code must always increase. Tag the merge commit and push the tag.",
+  "outcome": "Android rejects a non-increasing versionCode.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:251-253"
+  ],
+  "id": "SA-006"
+ },
+ {
+  "instruction": "Never disturb the user's running devices or emulators: no wipe, reinstall-over, force-stop or data clear without asking, and never kill an emulator mid-session. Read-only inspection is fine. This overrides 'run autonomously'.",
+  "outcome": "A fresh install destroys local state and forces a re-login.",
+  "owner_words": "",
+  "enforcement": "none (devices rules)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:260-265"
+  ],
+  "id": "SA-007"
+ },
+ {
+  "instruction": "Give every guard an explicit, reasoned escape hatch (e.g. '# guard-ok: <reason>', '--no-verify' with the reason in the commit message) and log every refusal and override.",
+  "outcome": "A guardrail with no escape hatch gets disabled wholesale.",
+  "owner_words": "",
+  "enforcement": ".claude/scratch/guard/denials.jsonl; commit-message reason",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:20, 129; docs/process/history/CLAUDE.md:713-715"
+  ],
+  "id": "SA-008"
+ },
+ {
+  "instruction": "Retire a branch on merge: tag it completed/<branch>@<date>, remove its worktree and delete it. Refuse when the worktree holds uncommitted files. Never let residue accumulate.",
+  "outcome": "A forced worktree removal destroyed a CERTIFIED verdict (L-11).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/complete_branch.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:28, 30; docs/process/history/CLAUDE.md:95-99"
+  ],
+  "id": "SA-009"
+ },
+ {
+  "instruction": "Treat main as production. Never commit or push directly to main (the assistant included). Branch every feature or defect from freshly pulled main as fix/<issue-id>-<slug> or feat/<slug>.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": "none named",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:53-58"
+  ],
+  "id": "SA-010"
+ },
+ {
+  "instruction": "Follow the release flow in order: branch, dev build, verify, gate, merge, version bump, tag, production artifact from main, push.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:60"
+  ],
+  "id": "SA-011"
+ },
+ {
+  "instruction": "Bump the patch version for defects and the minor version for features. The build number always increases. Tag the merge commit and push the tag.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:95"
+  ],
+  "id": "SA-012"
+ },
+ {
+  "instruction": "Never disturb the user's running devices or emulators: no wipe, reinstall-over, force-stop or data clear on a device in use without asking, and never kill an emulator mid-session. Read-only inspection is fine. This overrides 'run autonomously'.",
+  "outcome": "A fresh install destroys local state and forces a re-login.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:100; docs/process/history/CLAUDE.md:260-265"
+  ],
+  "id": "SA-013"
+ },
+ {
+  "instruction": "When a safety classifier refuses a command, re-issue it in sanctioned form (no --force, no rm -rf, git -C instead of cd, one question per call) and relaunch from disk.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:105"
+  ],
+  "id": "SA-014"
+ },
+ {
+  "instruction": "Adversarially self-review before every commit (what did you not test or assume?), then check the actual state with git status and git diff --cached. Never commit blind.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:116; docs/process/history/CLAUDE.md:603-607"
+  ],
+  "id": "SA-015"
+ },
+ {
+  "instruction": "Install the repo's git hooks once per clone, and have session start set the hooks path. Hooks do not self-activate.",
+  "outcome": "A doc row once said the SessionStart hook 'warns' when it actually installs, which made the guardrail sound optional.",
+  "owner_words": "",
+  "enforcement": "bash .githooks/install.sh; SessionStart in .claude/settings.json",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:129; docs/process/history/CLAUDE.md:695-706"
+  ],
+  "id": "SA-016"
+ },
+ {
+  "instruction": "Block commits that stage generated artifacts (code-graph output, build directories, review-tool output).",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": ".githooks/pre-commit; policy_check POLICY 4",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:129"
+  ],
+  "id": "SA-017"
+ },
+ {
+  "instruction": "Block commits of product code alongside a fix doc whose verification checkbox is unticked.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": ".githooks/pre-commit",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:129"
+  ],
+  "id": "SA-018"
+ },
+ {
+  "instruction": "Keep the repo self-contained: no paths outside it, no submodules, no foreign framework material in scripts, configs, CI or hooks. Run a grep check whose any output means a dependency crept back.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": ".githooks/pre-commit blocks sibling paths and .gitmodules",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:139-146"
+  ],
+  "id": "SA-019"
+ },
+ {
+  "instruction": "Never edit, analyze or vendor a sibling framework repo during product work.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": "pre-commit standalone check",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:199"
+  ],
+  "id": "SA-020"
+ },
+ {
+  "instruction": "If a production identifier move is genuinely intended, bypass the guard with a stated reason and a rollout plan for clients already in the field.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": "--no-verify with reason",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/rules/firebase-config.md:38-40"
+  ],
+  "id": "SA-021"
+ },
+ {
+  "instruction": "Tag a gated composition before removing anything.",
+  "outcome": "A train that gated cleanly then found the checkout contended saved its work by tagging. An untagged detached commit is collectable.",
+  "owner_words": "",
+  "enforcement": "complete_branch.sh tags completed/<branch>@<date>",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:172; docs/process/history/CLAUDE.md:946-947"
+  ],
+  "id": "SA-022"
+ },
+ {
+  "instruction": "Refuse the shortcut that looks like success.",
+  "outcome": "A train declined to move main to its own merge, because the working copy would then read as a revert and the next commit would silently erase the merged rows.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:172; docs/process/history/CLAUDE.md:948-950"
+  ],
+  "id": "SA-023"
+ },
+ {
+  "instruction": "Test only on disposable tenants or accounts. Never install over, write to or log into live production accounts or the devices that hold them, and re-check which devices currently carry live sessions.",
+  "outcome": "An emulator's stored session was switched on-device to the live tenant (D364), so it inherited the never-touch rules.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:195; .claude/rules/devices.md:85-90"
+  ],
+  "id": "SA-024"
+ },
+ {
+  "instruction": "No agent types a password, and no credential or PIN is ever written into a file or commit. Use a carried session or an out-of-repo autologin file; the setup script refuses to write inside the repo.",
+  "outcome": "Session carry across a fresh install was proven at 21-23 s with zero owner logins.",
+  "owner_words": "",
+  "enforcement": "scripts/setup_dev_autologin.sh refuses an in-repo path; scripts/verify/session_carry.sh",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "CLAUDE.md:195; .claude/rules/devices.md:60-77"
+  ],
+  "id": "SA-025"
+ },
+ {
+  "instruction": "Block staging of generated or tool-output directories (build output, dependency caches, code-graph output, external review-tool output) in a pre-commit check.",
+  "outcome": "Guards against an external tool's output ever being committed; no incident numbers given.",
+  "owner_words": "",
+  "enforcement": ".githooks/pre-commit -> scripts/policy_check.sh POLICY 4",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:559-561,704"
+  ],
+  "id": "SA-026"
+ },
+ {
+  "instruction": "Before committing, check the actual current state (git status, git diff --cached, re-read the files), because an earlier step may have changed something. Never commit blind on the assumption that a previous step worked.",
+  "outcome": "Standing principle; no measurement given.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:605-608"
+  ],
+  "id": "SA-027"
+ },
+ {
+  "instruction": "Install the repo's git hooks once per clone, because they do not self-activate. Have the session-start hook set core.hooksPath and make the pre-commit executable, and describe guardrail enforcement precisely (installs vs warns).",
+  "outcome": "A doc row said the SessionStart hook 'warns' when it actually installs; corrected 2026-08-28 because the wrong wording made the guardrail sound optional. The hook never runs install.sh, so only pre-commit gets chmod-ed.",
+  "owner_words": "",
+  "enforcement": ".githooks/install.sh + .claude/settings.json SessionStart",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:695-699,707"
+  ],
+  "id": "SA-028"
+ },
+ {
+  "instruction": "Block commits that stage paths outside the repo, env vars pointing at a sibling framework, absolute sibling paths, or a submodule file.",
+  "outcome": "Prevents the vendored-framework divergence incident from recurring (see the standalone item).",
+  "owner_words": "",
+  "enforcement": ".githooks/pre-commit -> scripts/policy_check.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:702"
+  ],
+  "id": "SA-029"
+ },
+ {
+  "instruction": "Give hooks a deliberate escape hatch (--no-verify), because a guardrail with no escape hatch gets disabled wholesale; anyone who bypasses says why in the commit message. Keep the hook a thin wrapper over one policy script that CI also runs, so a bypassed hook is still checked.",
+  "outcome": "A rule enforced only in a hook is on the honour system, since --no-verify skips every hook.",
+  "owner_words": "",
+  "enforcement": "scripts/policy_check.sh --staged (shared by hook and CI)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:713-715; .githooks/pre-commit:4-6,13"
+  ],
+  "id": "SA-030"
+ },
+ {
+  "instruction": "Keep the repo standalone. Never add a path outside the repo, an env var pointing at a sibling framework, a git submodule, or vendored copies of another project's material.",
+  "outcome": "The repo once vendored a framework as ~338 tracked files plus a submodule; the copies diverged until the vendored one was 550 commits ahead of the standalone repo.",
+  "owner_words": "",
+  "enforcement": ".githooks/pre-commit + dependency-check command",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:794-805"
+  ],
+  "id": "SA-031"
+ },
+ {
+  "instruction": "Treat production cloud configuration as frozen. Never change project, app or database ids, make additive edits only, and never regenerate config from another project or account.",
+  "outcome": "Devices in the field still talk to those ids.",
+  "owner_words": "",
+  "enforcement": "scripts/policy_check.sh POLICY 7",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:842-844"
+  ],
+  "id": "SA-032"
+ },
+ {
+  "instruction": "Stage bulk remote writes: batch them, throttle between batches, prefer a quiet window, dry-run first, and audit-log the original document bodies.",
+  "outcome": "3,837 unstaged deletes once stalled menu_items, users and tables on every connected till.",
+  "owner_words": "",
+  "enforcement": ".claude/rules/sync.md",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:848"
+  ],
+  "id": "SA-033"
+ },
+ {
+  "instruction": "Tag a gated composition (a merge result) before removing or moving anything; an untagged detached commit is collectable.",
+  "outcome": "A train that gated cleanly and then found the checkout contended saved its work by tagging it.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:942-943"
+  ],
+  "id": "SA-034"
+ },
+ {
+  "instruction": "Refuse the shortcut that looks like success. For example, do not move a branch ref when the working tree would then read as a revert of what was just merged.",
+  "outcome": "A train declined to move the main ref to its own merge: the working-tree copy would have read as a revert, and the next commit would have silently erased the merged rows.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:944-946"
+  ],
+  "id": "SA-035"
+ },
+ {
+  "instruction": "A COMMIT step (2 min) stages only the named paths, writes the activity-log entry and commits.",
+  "outcome": "One of the five allowed dispatch shapes.",
+  "owner_words": "",
+  "enforcement": ".githooks/pre-commit (activity log)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:982"
+  ],
+  "id": "SA-036"
+ },
+ {
+  "instruction": "Give every guard a sanctioned policy door so a legitimate action (such as a revert) always has a legal path.",
+  "outcome": "The REQ-148 policy door unblocked a revert that had no other legal path; it paid in kind (unblocked vs blocked), not in speed.",
+  "owner_words": "",
+  "enforcement": "scripts/policy_check.sh (REQ-148 door)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:1021"
+  ],
+  "id": "SA-037"
+ },
+ {
+  "instruction": "Take test logins only from a session carry or a home-directory autologin file that is never in the repo. No agent types a password, and no credential or PIN is ever written to a file or commit.",
+  "outcome": "Security rule.",
+  "owner_words": "",
+  "enforcement": ".claude/rules/devices.md",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:1093"
+  ],
+  "id": "SA-038"
+ },
+ {
+  "instruction": "Never edit or analyze a sibling framework repo during app work, and never vendor it back in.",
+  "outcome": "The vendored-framework divergence (550 commits) is the incident behind this rule.",
+  "owner_words": "",
+  "enforcement": "pre-commit standalone checks",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/CLAUDE.md:1105-1107"
+  ],
+  "id": "SA-039"
+ },
+ {
+  "instruction": "Never commit on the production branch. Branch first and merge with --no-ff. Never chain 'git checkout main && git commit': if HEAD is already on main the checkout is a no-op and the commit lands on production. Check 'git branch --show-current' before staging, not after committing.",
+  "outcome": "Pointer lesson. A direct non-merge commit on main fails the policy.",
+  "owner_words": "",
+  "enforcement": "POLICY 11 in scripts/policy_check.sh (section at :1114); merge door recognised by MERGE_HEAD in .githooks/pre-merge-commit:17-18",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/LESSONS.md:61"
+  ],
+  "id": "SA-040"
+ },
+ {
+  "instruction": "An uncommitted artifact is not evidence. Before merging a branch or removing a worktree, run 'git -C <worktree> status --short' and commit or rescue every modified or untracked file that is part of the deliverable (verdicts, ticked boxes, measurement files). 'git worktree remove --force' destroys unstaged work irrecoverably. Never assert an outcome in a merge message that the merged tree does not carry.",
+  "outcome": "Pointer lesson (owner: orchestrator). Earned by a merge that asserted CERTIFIED over a tree that did not carry the verdict.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/complete_branch.sh:47-50 (skips a worktree with M/??/A entries); scripts/verify/branch_health.sh refuses to stamp a dirty worktree",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/LESSONS.md:63,187-191"
+  ],
+  "id": "SA-041"
+ },
+ {
+  "instruction": "Stage EXPLICIT PATHS. Never 'git add -A <dir>' while other agents are writing there. If a sweep is unavoidable, run 'git status --short' first and account for every entry before staging.",
+  "outcome": "Happened twice on 2026-08-28 (Recurrences: 1). A half-written REQ-043 analysis was swept in and caught by POLICY 9c. REQ-064-design.md landed inside a commit titled for REQ-059, so it was invisible in history. The commit history lied.",
+  "owner_words": "",
+  "enforcement": "none (POLICY 9c caught one instance incidentally)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/LESSONS.md:64,179-195"
+  ],
+  "id": "SA-042"
+ },
+ {
+  "instruction": "The shell's working directory persists across tool calls. Never 'cd' into another worktree; address it with 'git -C <path>'. Print 'pwd' and 'git branch --show-current' in the same call before any checkout or commit. A destructive git operation from an unverified cwd damages a running agent's evidence silently.",
+  "outcome": "A persisted cd made 'git checkout -b ... main' switch a worktree off the branch while a Test Agent was certifying it. Results from that window would have certified the absence of the change. It was detected only because a later command failed loudly.",
+  "owner_words": "",
+  "enforcement": "none mechanised (owner: orchestrator)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/LESSONS.md:65,197-221"
+  ],
+  "id": "SA-043"
+ },
+ {
+  "instruction": "Never type multi-step merges inline from a cd'd shell or behind an output filter that can hide a no-op ('Already up to date'). Script them with 'git -C $ROOT' on every call, and re-check an independent count (e.g. log-entry count, main's sha moved) before committing.",
+  "outcome": "Recurrence 2: a cd'd merge chain merged a docs branch into itself, and 'grep CONFLICT' hid the no-op, so the branch looked merged while main had not moved. It was escalated as a process defect. The promised script (merge_three.sh) never landed, so the lesson stays live.",
+  "owner_words": "",
+  "enforcement": "none (promised mechanisation absent)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/LESSONS.md:231-243"
+  ],
+  "id": "SA-044"
+ },
+ {
+  "instruction": "A 'main has not moved' assertion is '... || exit 1', never '[ ... ] && echo OK', because a miss prints nothing. Before claiming 'no baseline moved', diff ratchet baseline KEY SETS against main.",
+  "outcome": "In REQ-021a the drift surfaced four commands later. A gate category that landed after the branch base made rc 0 'honest and wrong' on the composed tree.",
+  "owner_words": "",
+  "enforcement": "branch_health.sh baseline_widen_check.py flags LOOSER-THAN-MAIN; the '|| exit 1' half is still manual",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/LESSONS.md:74,95,490-495"
+  ],
+  "id": "SA-045"
+ },
+ {
+  "instruction": "Retire every merged branch: tag it completed/<branch>@<date>, remove its worktree and delete the branch. Refuse when the worktree has uncommitted files.",
+  "outcome": "Merged branches stop interfering with future work. The refusal comes from lesson L-11, which this step did not open.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/complete_branch.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:33"
+  ],
+  "id": "SA-046"
+ },
+ {
+  "instruction": "Agents USE credentials but never TYPE them: restore the saved session or use a gitignored, owner-supplied auto-login file. Never write a credential or PIN into a file or commit.",
+  "outcome": "Hands-free authenticated test legs with no secrets in the repo.",
+  "owner_words": "yes you have all my consent but always test on newer build , u can use login",
+  "enforcement": "scripts/verify/session_carry.sh; dev_autologin.json (gitignored); directives_check.sh point 44",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:55"
+  ],
+  "id": "SA-047"
+ },
+ {
+  "instruction": "Limit blanket test consent to disposable tenants or accounts. Never touch the live production tenant, and keep the newest-build rule in force.",
+  "outcome": "Keeps the blast radius on throwaway data.",
+  "owner_words": "",
+  "enforcement": "CLAUDE.md 'Rig consent'; product-pipeline SKILL 'Rig grant'",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:55"
+  ],
+  "id": "SA-048"
+ },
+ {
+  "instruction": "The owner performs all logins. Never handle or enter the owner's credentials.",
+  "outcome": "A standing constraint; later relaxed only to the session-carry and auto-login file (#44).",
+  "owner_words": "",
+  "enforcement": "standing constraint; CLAUDE.md rig consent",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:65-66"
+  ],
+  "id": "SA-049"
+ },
+ {
+  "instruction": "Treat production project and database identifiers as frozen.",
+  "outcome": "A standing constraint.",
+  "owner_words": "",
+  "enforcement": ".claude/rules/firebase-config.md; POLICY 7 (named in CLAUDE.md)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:66"
+  ],
+  "id": "SA-050"
+ },
+ {
+  "instruction": "Never commit or push directly to the production branch; branch every change.",
+  "outcome": "A standing constraint.",
+  "owner_words": "",
+  "enforcement": "POLICY 11 in scripts/policy_check.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:66-67"
+  ],
+  "id": "SA-051"
+ },
+ {
+  "instruction": "Gate destructive operations on tenant or production data on the owner: dry-run first, keep an audit log of the original bodies, and run in a quiet window.",
+  "outcome": "A standing constraint.",
+  "owner_words": "",
+  "enforcement": "CLAUDE.md sync rule 8 / .claude/rules/sync.md",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:67-68"
+  ],
+  "id": "SA-052"
+ },
+ {
+  "instruction": "Only the owner rotates third-party API keys.",
+  "outcome": "A standing constraint.",
+  "owner_words": "",
+  "enforcement": "none named",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:69"
+  ],
+  "id": "SA-053"
+ },
+ {
+  "instruction": "Never let session-restore records carry admin-password material.",
+  "outcome": "A standing constraint.",
+  "owner_words": "",
+  "enforcement": "none named",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:69-70"
+  ],
+  "id": "SA-054"
+ },
+ {
+  "instruction": "Relax no safety rule in outcome mode.",
+  "outcome": "Speed never trades away safety.",
+  "owner_words": "",
+  "enforcement": "judge.md",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:275"
+  ],
+  "id": "SA-055"
+ },
+ {
+  "instruction": "Leave the remote CI workflow files unchanged so they resume if restored, but let nothing wait for them.",
+  "outcome": "Reversible decision.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:346"
+  ],
+  "id": "SA-056"
+ },
+ {
+  "instruction": "Bump the version in ONE scripted step that updates every version file together. Run the batch gate on the bumped tree. Any commit after the gate re-runs every test that reads what it touched.",
+  "outcome": "Earned on the v20.4.0 merge train.",
+  "owner_words": "",
+  "enforcement": "scripts/bump_version.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/product-owner.md:154"
+  ],
+  "id": "SA-057"
+ },
+ {
+  "instruction": "Before any check relative to the main branch, fetch origin, count how far HEAD is behind, compute against origin/main and report a non-zero count. If a trial merge-tree is clean, bring the base current.",
+  "outcome": "Earned in D-PROC-3: checks against a stale local main gave wrong answers.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/product-owner.md:161"
+  ],
+  "id": "SA-058"
+ },
+ {
+  "instruction": "Before backing up or naming any captured environment or session archive, read which tenant or account it belongs to and refuse a non-disposable one.",
+  "outcome": "Earned when a session carry was taken from the live tenant.",
+  "owner_words": "",
+  "enforcement": "none (inline tar/grep check)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/product-owner.md:173"
+  ],
+  "id": "SA-059"
+ },
+ {
+  "instruction": "A rework running at the same time as a verifier gets its own worktree. The dispatch names that worktree and marks the verifier's tree off-limits.",
+  "outcome": "Earned in REQ-023c, where a rework ran concurrently with certification.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/product-owner.md:180"
+  ],
+  "id": "SA-060"
+ },
+ {
+  "instruction": "Commit every artifact a later agent must read (judge reviews, plans) on the branch. Keep scratch inside the repo's ignored scratch folder, never system /tmp. Scratch holds only trial trees and transient probes, never a successor's source of record.",
+  "outcome": "Per CLAUDE.md #32, a session resume recreated the /tmp scratchpad EMPTY, losing every judge review, the rig plan, a pulled APK and the merge resolver.",
+  "owner_words": "Save the scratch pad and memory next time so that nothing is lost if there is interruption; only successful completion of a task removes all resources associated with it.",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/product-owner.md:181"
+  ],
+  "id": "SA-061"
+ },
+ {
+  "instruction": "Merge in TRAINS: compose the branches with merge-tree, run one full gate per train, merge in order and retire each branch. A code train needs one go per train. Certify a debug-only code diff as INSTRUMENT-ONLY.",
+  "outcome": "Per CLAUDE.md #45, the full suite once ran five times in one day for changes that never interacted.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/product-owner.md:194"
+  ],
+  "id": "SA-062"
+ },
+ {
+  "instruction": "Clear a script as 'read-only' by its writes per DESTINATION (production data, device, repo), never by its call syntax; a script that reads back its own effect is a WRITER. Never override a disposition your own card reserved for the owner.",
+  "outcome": "Earned in rig hygiene.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/product-owner.md:204"
+  ],
+  "id": "SA-063"
+ },
+ {
+  "instruction": "Never run generator scripts that write a repo-global 'current feature' pointer. Write the per-requirement specs directory directly.",
+  "outcome": "The scripts wrote a global pointer that every agent's feature directory resolves through. Concurrent agents clobbered each other (cf. lesson L-13).",
+  "owner_words": "",
+  "enforcement": "none (charter text)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/solution-architect.md:160; .claude/agents/developer.md:129"
+  ],
+  "id": "SA-064"
+ },
+ {
+  "instruction": "Never checkout, switch, commit or merge in the main checkout; it stays on the default branch. Give your branch its own worktree and make every git call 'git -C <worktree>'.",
+  "outcome": "REQ-025: a Developer's 'checkout -b' in the main checkout switched the shared tree off main and redirected the PO's next merge into the feature branch.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh ([B-7])",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/developer.md:147,195; .claude/agents/developer.card.md:20; docs/process/history/agent-developer.md:361-362"
+  ],
+  "id": "SA-065"
+ },
+ {
+  "instruction": "Never apply a mutant by hand to a file in a tree others read or commit. Every mutant runs through the mutation-battery script, which mutates a scratch worktree; if a mutant cannot yet be expressed as a battery row, write the row first.",
+  "outcome": "REQ-322: a hand-applied mutant of a test helper was committed and pushed by a concurrent checkpoint.",
+  "owner_words": "",
+  "enforcement": "scripts/verify/mutation_battery.sh --from-worktree",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/developer.md:154"
+  ],
+  "id": "SA-066"
+ },
+ {
+  "instruction": "A ref in a committed file must resolve wherever the reader is. Prefer a 40-character SHA that is an ancestor of the remote default branch; a local tag is not a pin. Check any durability a tool promises inside the tool itself.",
+  "outcome": "D1b section 7.",
+  "owner_words": "",
+  "enforcement": "none (charter text)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/developer.md:175"
+  ],
+  "id": "SA-067"
+ },
+ {
+  "instruction": "A conflict claim is pasted merge-tree output, never inferred. A conflicting ratchet baseline is recomputed with --update on the composed tree, never by taking a side; re-check the totals and state the recomputed value.",
+  "outcome": "REQ-086 and REQ-068.",
+  "owner_words": "",
+  "enforcement": "none (charter text)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/developer.md:205"
+  ],
+  "id": "SA-068"
+ },
+ {
+  "instruction": "Never run scaffolding scripts that write repo-global state (e.g. a shared feature.json). Write the per-requirement spec directory directly.",
+  "outcome": "The repo-global .specify/feature.json clobbers other agents working in parallel.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/test-agent.md:126"
+  ],
+  "id": "SA-069"
+ },
+ {
+  "instruction": "Do trial merges in a detached scratch worktree (worktree add --detach main, then merge --no-commit). The branch tip, main and compositions get NO suite: cite main's numbers from the dispatch. Check siblings with 'merge-tree --write-tree --name-only' to a file.",
+  "outcome": "#28 audit: a certifier's trial merge landed on main as a real commit and it carried on for 20 commands. Another certifier ran both roots on four trees (history agent-test-agent.md:373-386).",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/test-agent.md:131,192"
+  ],
+  "id": "SA-070"
+ },
+ {
+  "instruction": "Assert main's sha is unchanged before and after every battery or trial-merge command. If main moved, stop and escalate in the same turn.",
+  "outcome": "Same #28 incident: a trial merge landed on main unnoticed.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/test-agent.md:132"
+  ],
+  "id": "SA-071"
+ },
+ {
+  "instruction": "Never accept a code, password or credential LITERAL from a dispatch, and never write one into a file or commit. Treat any credential-shaped literal in a dispatch as a hint to verify.",
+  "outcome": "BINDING [B-4]. Earned by P4-3, where a stale dispatched code nearly locked the till.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/test-agent.md:158,175"
+  ],
+  "id": "SA-072"
+ },
+ {
+  "instruction": "The device grant covers disposable test tenants only. The live production tenant is never installed over, written to or signed into, whatever consent says.",
+  "outcome": "BINDING [B-5] (#44). Dev and prod share production data.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/test-agent.md:159"
+  ],
+  "id": "SA-073"
+ },
+ {
+  "instruction": "The device-test token is GRANTED by the dispatch, never taken. An ungranted leg is NOT-RUN. A device that is logged in or in the foreground belongs to the owner and is read-only (screencap, logs, dumpsys) unless the dispatch names it as the rig.",
+  "outcome": "REQ-110: a wipe smoke ran on the owner's emulator under a self-taken lock while the owner was using it (history agent-test-agent.md:368-372).",
+  "owner_words": "",
+  "enforcement": "scripts/verify/rig_lock.sh (per CLAUDE.md)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/test-agent.md:191"
+  ],
+  "id": "SA-074"
+ },
+ {
+  "instruction": "As coordinator, stay read-only on the repo except the ledger, the context files and your own plan/verify records. Never commit product files.",
+  "outcome": "Rules that bind the orchestrator. Unmeasured.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/orchestrator.md:104-105"
+  ],
+  "id": "SA-075"
+ },
+ {
+  "instruction": "Never type a credential or access code, and never register a tenant or account.",
+  "outcome": "Rules that bind the orchestrator. Unmeasured.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/orchestrator.md:105"
+  ],
+  "id": "SA-076"
+ },
+ {
+  "instruction": "Never kill an emulator, the device bridge, or any process younger than ten minutes.",
+  "outcome": "The watchdog only kills waiters older than 10 minutes (watchdog.sh:109). Protects the user's running devices.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/watchdog.sh:109-113",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/orchestrator.md:105-106"
+  ],
+  "id": "SA-077"
+ },
+ {
+  "instruction": "Never push an agent's commit while that agent is still running. An agent's branch is its own until it hands back.",
+  "outcome": "Cloud-onboarding session: the agent amended after the push, the branch diverged, and recovery cost a force-push.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/orchestrator.md:110-113"
+  ],
+  "id": "SA-078"
+ },
+ {
+  "instruction": "Never run two WRITING agents in one worktree: one worktree, one writer. Read-only stages may share.",
+  "outcome": "A ratchet measured under a concurrent agent was contaminated, and a shared activity-log file got swept into the wrong commit.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/orchestrator.md:114-117"
+  ],
+  "id": "SA-079"
+ },
+ {
+  "instruction": "Before resolving a commit from paths (git log -1 -- <paths>), drop non-exclusive paths (the shared activity log, files other swarms edit), or have the committer record the sha.",
+  "outcome": "D61: D53's resolver included shared files, so it would have scored the requirement's own mutation survivors as pre-existing.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/judge.md:82"
+  ],
+  "id": "SA-080"
+ },
+ {
+  "instruction": "Order file operations only inside the repo; stray files outside go on the owner-only list. Size a citation repair by listing every file:line the test guards, with its expected text, in one script run.",
+  "outcome": "D142 ordered a deletion at the filesystem root. The harness refused it, so the bar was unreachable and the lane rightly stopped.",
+  "owner_words": "",
+  "enforcement": "harness permission system",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/agents/judge.md:91"
+  ],
+  "id": "SA-081"
+ },
+ {
+  "instruction": "Never chain a check into the commit with &&. Make it an explicit gate that exits non-zero BEFORE the commit.",
+  "outcome": "The commit ran regardless of the check.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/instrument-check/SKILL.md:103"
+  ],
+  "id": "SA-082"
+ },
+ {
+  "instruction": "Prompt hygiene: no credential, PIN or password in any prompt; no agent registers accounts or logs in with a password; no --no-verify; no rm -rf; every prompt carries the machine rule.",
+  "outcome": "The skill says the launcher refuses otherwise. Note: product-pipeline:603 lets the PO pass a device admin PIN in a dispatch prompt, which conflicts.",
+  "owner_words": "",
+  "enforcement": "workflow launcher refusal (stated)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:76-80,177,318"
+  ],
+  "id": "SA-083"
+ },
+ {
+  "instruction": "While a workflow's train may merge in the main checkout, do not switch that checkout to another branch.",
+  "outcome": "The train merges there.",
+  "owner_words": "",
+  "enforcement": "train prompt checks symbolic-ref is main",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:88-89"
+  ],
+  "id": "SA-084"
+ },
+ {
+  "instruction": "After a merge: retire the branch with the lifecycle script, regenerate the board, and make the ledger line the record.",
+  "outcome": "No measurement given.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/complete_branch.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:111-112"
+  ],
+  "id": "SA-085"
+ },
+ {
+  "instruction": "A step that touches git commits its own outputs with hooks active.",
+  "outcome": "No measurement given.",
+  "owner_words": "",
+  "enforcement": "pre-commit hooks",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:139"
+  ],
+  "id": "SA-086"
+ },
+ {
+  "instruction": "Append a dated section to the requirement's test report and commit it on the branch. Move the branch ref only if the tip is unchanged; otherwise rebase your commit.",
+  "outcome": "No measurement given.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:248,338"
+  ],
+  "id": "SA-087"
+ },
+ {
+  "instruction": "Take the merge-train lock with an atomic mkdir and write the requirement and agent identity into it, never a pid. Wait in separate steps while another train holds it.",
+  "outcome": "Near-miss 2026-09-08: a dead pid read as an orphaned lock, inviting a break of a live train's lock.",
+  "owner_words": "",
+  "enforcement": "train prompt",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:252,346"
+  ],
+  "id": "SA-088"
+ },
+ {
+  "instruction": "The train composes at main's tip in a scratch tree, runs the full gate once (analyzer, both test roots, all gates, policy check, battery) and a visual check for UI changes. It merges no-ff with gate results in the message, retires the branch, records state, then removes tree and lock. No version bump or build.",
+  "outcome": "No measurement given.",
+  "owner_words": "",
+  "enforcement": "train prompt; complete_branch.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:252,346"
+  ],
+  "id": "SA-089"
+ },
+ {
+  "instruction": "Before syncing a worktree to a branch a reviewer moved, 'git status --short' must be EMPTY; then reset --hard to the tip. Otherwise stop and report.",
+  "outcome": "Protects uncommitted work.",
+  "owner_words": "",
+  "enforcement": "PRE rules text",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:318"
+  ],
+  "id": "SA-090"
+ },
+ {
+  "instruction": "The only permitted --force is 'git worktree remove --force' on a scratch tree you own.",
+  "outcome": "No measurement given.",
+  "owner_words": "",
+  "enforcement": "PRE rules text",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:318"
+  ],
+  "id": "SA-091"
+ },
+ {
+  "instruction": "Commit spec, code and the activity-log entry together. Tick device-verification boxes only on evidence.",
+  "outcome": "No measurement given.",
+  "owner_words": "",
+  "enforcement": ".githooks/pre-commit (activity-log and unticked-box checks, per CLAUDE.md)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:34-35"
+  ],
+  "id": "SA-092"
+ },
+ {
+  "instruction": "Serialise merges through the orchestrator and re-run the gate on the merged tree. Green on two branches separately is not green on their union.",
+  "outcome": "No measurement given.",
+  "owner_words": "",
+  "enforcement": "POLICY 11 blocks direct commits to main",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:174-177"
+  ],
+  "id": "SA-093"
+ },
+ {
+  "instruction": "Trip a run in the same turn on any of: a second suite on a non-main tree; any merge whose target is not the agent's own scratch tree; main moved; worktrees added minus removed > 2; turns > 0.8 x budget.",
+  "outcome": "2026-09-04: a certifier's trial merge landed on main and was pushed under the next docs merge (reverted with the full gate), and 60 scratch worktrees (18 GB) were live with zero removals.",
+  "owner_words": "",
+  "enforcement": "agent_efficiency.py --trip; orchestrator watch",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:386-393"
+  ],
+  "id": "SA-094"
+ },
+ {
+  "instruction": "A worktree sees only committed files. Contract dirs must show empty 'git status --porcelain' before 'git worktree add'; afterwards, ls the inputs inside the worktree. A missing input is a failed dispatch the orchestrator fixes.",
+  "outcome": "Three REQ-030 input docs were untracked while the worktree was live.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:497-505,527-529"
+  ],
+  "id": "SA-095"
+ },
+ {
+  "instruction": "Two agents never share a worktree, and no spawned agent writes in the main tree.",
+  "outcome": "See the resource-deadlock item (SQLite fixture clobber).",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:505-506"
+  ],
+  "id": "SA-096"
+ },
+ {
+  "instruction": "Remove a worktree in the same step as its merge, and audit worktrees against merged branches at every heartbeat.",
+  "outcome": "A worktree was found still on a merged branch, an unowned residual.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/complete_branch.sh (per CLAUDE.md)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:506-509,529-530"
+  ],
+  "id": "SA-097"
+ },
+ {
+  "instruction": "A test-only device PIN may be passed in the dispatch prompt but never written to a committed file. Account logins stay the owner's.",
+  "outcome": "Owner directive #38. Conflicts with req-ladder:76-77 ('no credential, PIN or password value in any prompt').",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:603"
+  ],
+  "id": "SA-098"
+ },
+ {
+  "instruction": "Have agents work in a checkout passed in explicitly, normally a fresh worktree cut from the up-to-date main branch. The default checkout may sit on a superseded branch, and several work items cannot share one tree.",
+  "outcome": "Earned by REQ-327 (2026-10-13): the default checkout sat on a superseded branch.",
+  "owner_words": "",
+  "enforcement": "outcome-first.js:15 args.root",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/workflows/outcome-first.js:13-15"
+  ],
+  "id": "SA-099"
+ },
+ {
+  "instruction": "Tell every worker agent it must never switch branch, commit or push. Only the orchestrator, or a dedicated mechanical checkpoint step, touches git history.",
+  "outcome": "Keeps parallel agents from colliding on git state. Concurrent commits are serialized separately (task-by-task.js:34).",
+  "owner_words": "",
+  "enforcement": "prompt text in BASE/PRE (not mechanically checked here)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/workflows/outcome-first.js:20; .claude/workflows/judged-swarm.js:42; .claude/workflows/task-by-task.js:30"
+  ],
+  "id": "SA-100"
+ },
+ {
+  "instruction": "Run mechanical tick-and-checkpoint steps one at a time through a serialized queue (two concurrent git commits would collide), and drain the queue before the run returns.",
+  "outcome": "Prevents commit collisions between parallel lanes.",
+  "owner_words": "",
+  "enforcement": "task-by-task.js:35-36 promise chain",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/workflows/task-by-task.js:34-36,105"
+  ],
+  "id": "SA-101"
+ },
+ {
+  "instruction": "Checkpoint a long-running swarm's progress as WIP commits on the current branch (fast-forward only, tests and specs before the code they cover) so an interruption loses nothing.",
+  "outcome": "A swarm writes files for hours, and container restarts or usage limits must lose nothing (#32).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/checkpoint.sh (policy_check runs inside it)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   ".claude/workflows/task-by-task.js:36; scripts/pipeline/checkpoint.sh:1-14"
+  ],
+  "id": "SA-102"
+ },
+ {
+  "instruction": "Merge certified work as ONE train once the re-gate on the recomposed tip is green. Do not split ahead of time, because splitting only buys a second full gate.",
+  "outcome": "Cited as the measured 'one gate per batch' rule (directive #45). Holding certified work off main reproduces the 53-stranded-branch class.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/dispatch_check.sh (CLAUDE.md #45)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:21-29"
+  ],
+  "id": "SA-103"
+ },
+ {
+  "instruction": "Block a dangerous release state with a script that refuses (non-zero exit, one line naming what is missing), never with a rule in prose. Ship the refusal with a RED fixture and a GREEN control.",
+  "outcome": "The store build passed no defines, so it would have shipped a refusing sign-in card. The build script now refuses unless the key file is present.",
+  "owner_words": "",
+  "enforcement": "scripts/build_prod.sh check plus two fixtures",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:86-102"
+  ],
+  "id": "SA-104"
+ },
+ {
+  "instruction": "When merging decision and activity logs from parallel branches, take the union and never drop an entry. Never renumber an id that is already cited. Renumber a lane-allocated collision only at the train and leave an id note.",
+  "outcome": "Two D165s were kept and told apart by title. D373 allocated in a worktree became D375 at the train, with a note.",
+  "owner_words": "",
+  "enforcement": "proof: every '## ' header from both parents is in the result (comm -23 empty both ways)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:2597, :6000"
+  ],
+  "id": "SA-105"
+ },
+ {
+  "instruction": "A recorded decision judge GO is a legitimate merge go. Where nothing on the host enforces checks, the merger reads the check runs itself and merges exactly the named head with a merge commit, never a force-push. Fix contradictory lines in the instruction file in the same PR.",
+  "outcome": "main had no protection and no required checks. CLAUDE.md lines 148-149 contradicted the new merge-gate item 6.",
+  "owner_words": "give his go",
+  "enforcement": "merge-gate item 6; decide workflow",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:1962-1966"
+  ],
+  "id": "SA-106"
+ },
+ {
+  "instruction": "Off-path work started after the strict outcome rule is cut out of the merge tree hunk by hunk: not shipped red, not skipped, not waived. It stays on the working branch as a backlog probe.",
+  "outcome": "An S5#3 test started after D315 was red on a fixture gap and was removed from the cut.",
+  "owner_words": "",
+  "enforcement": "hunk_split.py; merge-gate item 2",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:2869"
+  ],
+  "id": "SA-107"
+ },
+ {
+  "instruction": "An owner's conditional GO is executed only when every condition holds on ONE tree sha: suite and second test root green, analyzer no worse, gates at 0, diff coverage, batteries with 0 unexplained survivors, final judge PASS per outcome, local CI green. Route it through a PR, never a direct push. The version bump and tag go in a separate commit.",
+  "outcome": "REQ-306 merged by this route (D337 merge GO on PR #55).",
+  "owner_words": "Once every thing as discussed above is fixed merge to main",
+  "enforcement": "merge gate; scripts/ci_local.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:3248-3250, :3260-3270"
+  ],
+  "id": "SA-108"
+ },
+ {
+  "instruction": "Merge-gate 'suite green' is a property of the tree that lands on main. Cut a requirement-only tree from main carrying only its own paths. A red that is identically red on main is not attributable to the change, and another lane's red tests or residue never land.",
+  "outcome": "The candidate PR would have landed other lanes' red tests and 160 tracked failure images on main.",
+  "owner_words": "",
+  "enforcement": "decision judge merge conditions",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:2565-2570"
+  ],
+  "id": "SA-109"
+ },
+ {
+  "instruction": "Land parallel sessions in sequence: one shared process-and-tooling PR touching only scripts, config, instruction and doc files, then one fresh-cut PR per requirement carrying only its own paths, ported blob-wise. A sync-risk requirement never shares a train, so a regression bisects to one merge. Run the branch-overlap check before each cut.",
+  "outcome": "Four PRs (169, 91, 77 and 7 commits ahead) were each unmergeable as-is.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/branch_overlap.py",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:2588-2592"
+  ],
+  "id": "SA-110"
+ },
+ {
+  "instruction": "Conflict rules for later merges: a stale copy of an already-landed file takes main's side wholesale, logs take the union, and any other file changed on both sides keeps the earlier landing's hunks and adds only its own.",
+  "outcome": "Taking stale blobs would have reverted landed fixes.",
+  "owner_words": "",
+  "enforcement": "proof by blob equality per path",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:2594-2598"
+  ],
+  "id": "SA-111"
+ },
+ {
+  "instruction": "Compose ready cards into ONE train: one merge commit per card (bisectable and revertable), a policy check per merge, one gate on the frozen head, one PR, one version bump. Prove conflict resolution by counts (e.g. heading counts before and after). Re-run batteries only where a merge touched a shared file and cite the rest from lane shas. A failing card is reverted, not the whole gate re-run.",
+  "outcome": "A gate costs about 17 min of baseline alone. A second gate would double wall clock and the bump for no added safety.",
+  "owner_words": "",
+  "enforcement": "scripts/ci_local.sh; policy_check.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:4723-4734"
+  ],
+  "id": "SA-112"
+ },
+ {
+  "instruction": "Resetting test data uses a script that asserts the target id, refuses the production tenant, dry-runs first and audit-logs the original records.",
+  "outcome": "Ordered before a store re-capture on a disposable tenant.",
+  "owner_words": "",
+  "enforcement": "reset script (named, not opened here)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:9686"
+  ],
+  "id": "SA-113"
+ },
+ {
+  "instruction": "The merge itself happens in the main session, never from a child session. Owner-only physical acts (signing, store upload, hardware legs) are named and batched, never faked.",
+  "outcome": "Owner ruling recorded in REQ-322 merge decisions.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:2570, :2582"
+  ],
+  "id": "SA-114"
+ },
+ {
+  "instruction": "Report 'merged' by both ancestry and patch content (cherry-pick/squash aware), note which refs contain which so a stack merges once at its top, and predict conflicts with merge-tree.",
+  "outcome": "A branch can be unmerged by ancestry yet empty by content, or the reverse after a revert; guesses lost changes.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/unmerged_inventory.py",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/unmerged_inventory.py:1-7"
+  ],
+  "id": "SA-115"
+ },
+ {
+  "instruction": "When a new door lands, backfill honest events for pre-existing branches using only the branch itself as evidence; never mark anything merged, certified or passing.",
+  "outcome": "44 of 53 unmerged branches predated the ledger door and failed on a missing event though merge-tree showed zero conflicts.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/ledger_branch_backfill.py",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/ledger_branch_backfill.py:1-22"
+  ],
+  "id": "SA-116"
+ },
+ {
+  "instruction": "Checkpoint a running swarm as fast-forward-only WIP commits; commit tests, specs and docs before the code they cover; when bypassing hooks, run the policy check on the whole tree instead.",
+  "outcome": "Interruptions (container restart, usage limit) must lose nothing (#32); history never shows code ahead of its RED tests (J18).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/checkpoint.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/checkpoint.sh:1-10"
+  ],
+  "id": "SA-117"
+ },
+ {
+  "instruction": "Retire merged branches mechanically: tag completed/<branch>@<date>, remove the worktree, delete the branch, and refuse anything not proven merged and clean.",
+  "outcome": "A certified verdict was destroyed irrecoverably by a forced worktree removal (L-11).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/complete_branch.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/complete_branch.sh:1-15"
+  ],
+  "id": "SA-118"
+ },
+ {
+  "instruction": "Prove 'merged' against origin/main after a fetch, never against the local main.",
+  "outcome": "REQ-327: local main differed from origin.",
+  "owner_words": "",
+  "enforcement": "close_all.sh phase 1",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/close_all.sh:7"
+  ],
+  "id": "SA-119"
+ },
+ {
+  "instruction": "Close an unmergeable branch without closing the defect: record a PARKED event naming the blocker and recovery tag, open a successor card for the remaining gap, then retire; refuse to park anything mergeable.",
+  "outcome": "Silent retirement would drop real defects from the board; leaving branches open forever is the mess the rule bans.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/park_branch.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/park_branch.sh:1-14"
+  ],
+  "id": "SA-120"
+ },
+ {
+  "instruction": "Resolve bookkeeping merge conflicts deterministically (derived dashboards take main's; generated ratchet baselines are recomputed from the merged tree) and abort on any product conflict.",
+  "outcome": "Of 52 unmerged branches, 15 collided only on hand-edited dashboards and 12 on a generated baseline; hand-picking a baseline side can describe neither tree.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/merge_bookkeeping.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/merge_bookkeeping.sh:1-20"
+  ],
+  "id": "SA-121"
+ },
+ {
+  "instruction": "Refuse a recomputed ratchet baseline that is looser than both parents at any path; a merge may inherit looseness, never invent it.",
+  "outcome": "Unconditional --update would silently raise a floor to accommodate a semantic conflict introduced by the merge.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/baseline_widen_check.py",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/baseline_widen_check.py:1-13"
+  ],
+  "id": "SA-122"
+ },
+ {
+  "instruction": "Check every mktemp result before use; ratchet the hazard by a set of file::var keys, not a total.",
+  "outcome": "An empty mktemp result made git -C '' operate on the real checkout: a harness staged the whole working tree and moved HEAD to an uncreated branch.",
+  "owner_words": "",
+  "enforcement": "scripts/verify/mktemp_guard_check.py",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/verify/mktemp_guard_check.py:1-14"
+  ],
+  "id": "SA-123"
+ },
+ {
+  "instruction": "Fail closed on any driver that can write production data; refusing costs a human one environment variable.",
+  "outcome": "Nine drivers bypassed the smoke and lock; four tendered real bills on a live production tenant.",
+  "owner_words": "",
+  "enforcement": "scripts/verify/rig_guard.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/verify/rig_guard.sh:1-17"
+  ],
+  "id": "SA-124"
+ },
+ {
+  "instruction": "Automation must structurally exclude the owner's live devices/environments (excluded by port, kill only marked clones).",
+  "outcome": "Protects the owner's running tills (never disturb devices in use).",
+  "owner_words": "",
+  "enforcement": "headless_rig.sh port exclusion; rig_boot.sh exit 2 refusal",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/verify/headless_rig.sh:1-11; scripts/verify/rig_boot.sh:10-12"
+  ],
+  "id": "SA-125"
+ },
+ {
+  "instruction": "Never move a release tag and never tag a guessed branch tip; create only tags absent from origin, push each by name, confirm with ls-remote, dry-run by default.",
+  "outcome": "Cloud sessions are refused tag pushes (HTTP 403); a tag invented for an unpinned tip manufactures history (D25).",
+  "owner_words": "",
+  "enforcement": "push_tags.sh --apply; retirement_evidence.py --plan",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "scripts/pipeline/push_tags.sh:1-20; scripts/pipeline/retirement_evidence.py:1-17"
+  ],
+  "id": "SA-126"
+ },
+ {
+  "instruction": "A ref written into a committed file must resolve from origin; a local tag is not a pin; prefer a 40-char SHA reachable from origin/main.",
+  "outcome": "A script rewrote pins to local-only tags; 257 such tags existed in one clone and four batteries were red in every other clone and in CI.",
+  "owner_words": "",
+  "enforcement": "charter upgrade (Developer)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/agent-developer.md:770-778"
+  ],
+  "id": "SA-127"
+ },
+ {
+  "instruction": "Never checkout/commit/merge in the main checkout; each branch gets its own worktree and every git call uses git -C <worktree>.",
+  "outcome": "Shared-checkout git operations collided across agents.",
+  "owner_words": "",
+  "enforcement": "card_check.sh (developer B-7)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/agent-developer.md:717"
+  ],
+  "id": "SA-128"
+ },
+ {
+  "instruction": "Never accept a secret literal (PIN, password, code) from a dispatch and never write one into a file or commit.",
+  "outcome": "Test Agent BINDING.",
+  "owner_words": "",
+  "enforcement": "card_check.sh (test-agent B-4)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/agent-test-agent.md:498"
+  ],
+  "id": "SA-129"
+ },
+ {
+  "instruction": "Destructive tests run only on disposable tenants/accounts; the live tenant is never installed over, written to or signed into.",
+  "outcome": "Dev and prod share production data.",
+  "owner_words": "",
+  "enforcement": "card_check.sh (test-agent B-5); rig_guard.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "git-safety",
+  "sources": [
+   "docs/process/history/agent-test-agent.md:499"
+  ],
+  "id": "SA-130"
+ }
+]

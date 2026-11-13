@@ -1,0 +1,7 @@
+{
+  "id": "t07-cache-staleness",
+  "size": "medium",
+  "kind": "trap",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done"
+}

@@ -1,0 +1,129 @@
+{
+ "subject": "Coding-agent capability trends (2019 to late 2026) and what they imply for a process toolkit layered on top of a model",
+ "what_it_is": "Not a product: a research synthesis of primary sources on where coding-agent capability is heading and which toolkit scaffolding survives it.\n\n1. Capability trend (METR). METR measures a \"time horizon\": the human-expert task length a model completes with x% probability. The March 2025 paper reported the 50% horizon \"doubling approximately every 7 months for the last 6 years\". METR's current data file (Time Horizon 1.1) gives a doubling time of 187.8 days all-time and 128.7 days (CI 104 to 158) from 2023 on. Its 50% horizons run from about 4 minutes (GPT-4, March 2023) to about 1 hour (Claude 3.7 Sonnet, Feb 2025), about 4.9 hours (Claude Opus 4.5, Nov 2025), about 12 hours (Claude Opus 4.6, Feb 2026) and about 17 hours (an early Claude Mythos Preview, April 2026). The 80% horizons are far shorter: about 49 minutes, 70 minutes and 3.1 hours for those last three. METR states that \"measurements above 16 hrs are unreliable with our current task suite\", and the page is no longer actively updated (last update 8 Sept 2026).\n\n2. Vendor guidance (Anthropic). Each generation's guidance removes more scaffolding:\n- Aggressive emphasis (\"CRITICAL: You MUST\") now causes over-triggering; use plain wording.\n- \"Prefer general instructions over prescriptive steps. ... Claude's reasoning frequently exceeds what a human would prescribe.\"\n- Verification instructions carried over from older prompts cause over-verification on Opus 5.\n- For Fable 5.2: review standing delegate-to-subagent lines, prompt-written token budgets, think-less lines, hard style limits and accumulated cautions. Some \"raised cost, caused side effects, or no longer had an effect\".\n- Claude Code best practices list as outdated: managing the context window aggressively, adding IMPORTANT/ALL CAPS, using subagents to protect context, and delegating to get a better answer.\n\n3. What the same sources say to keep:\n- Ground truth from the environment: tests in a structured file that the agent may not edit, git as state, progress notes, setup scripts, verification tools.\n- Deterministic enforcement (hooks, deny rules, Stop hooks, CI) for rules with no exceptions, kept to a small set.\n- A fresh-context independent reviewer.\n- Human confirmation for risky or irreversible actions.\n\n4. Bitter lesson applied to harnesses. Sutton: \"general methods that leverage computation are ultimately the most effective\"; building in \"how we think we think does not work in the long run\". Anthropic's harness-design post puts it operationally: \"every component in a harness encodes an assumption about what the model can't do on its own\". That post removed context resets on moving to Opus 4.5 and the sprint construct on moving to Opus 4.6, and kept the planner and evaluator.",
+ "core_principles": [
+  "Capability on long tasks is rising exponentially, but reliability lags: the 80% horizon is roughly 6 to 10 times shorter than the 50% horizon in METR's data. A toolkit's lasting job is closing that reliability gap, not decomposing work the model can already do.",
+  "Every harness component encodes an assumption about what the model cannot do. Those assumptions go stale, so each component needs a named assumption and a re-test at every model upgrade (Anthropic harness-design post).",
+  "Bitter lesson: structure that encodes how the human thinks the work should be done helps in the short term, then plateaus and inhibits. Structure that supplies facts the model cannot derive, such as goals, constraints, ground truth and authority, does not age the same way.",
+  "Deterministic versus non-deterministic instruction: prompts, CLAUDE.md and skills are guidance the model may decide does not apply. Hooks, deny rules, Stop hooks and CI are enforced by the harness. \"If something has to happen every time, make it a hook\" (Claude Code best practices).",
+  "Keep the enforced set small: \"Every hook and deny rule will occasionally fire when it shouldn't, and someone has to maintain each one. If you ever find yourself at forty of them, most are probably preferences that Claude could have weighed on its own.\"",
+  "Tell the model what it cannot see (goals, motivation, project rules, who owns the code, what counts as done) and give it a check to run. Do not tell it how to think step by step.",
+  "External ground truth is the durable scaffold: tests the agent may not edit, a structured pass/fail feature list, git history, progress files, real-system verification such as browser or device automation.",
+  "Context is still a finite attention budget (\"context rot\" applies to all models), but with 1M-token windows and automatic compaction, running out is rare. The durable reason for small context is focus and cost, not survival.",
+  "Independent review by a fresh context helps; delegating the same task to a subagent does not make the answer better. Subagents cost tokens and sometimes time.",
+  "Cautions accumulate: \"never\" rules, notes and memories pile up and newer models follow them more literally, causing held-back work. Rules need a stated scope, reason and deletion path.",
+  "Human-owned decisions stay human-owned: confirmation for risky or irreversible actions is retained in every generation of guidance, even as autonomy rises."
+ ],
+ "enforcement": "This is a research topic, so the question becomes what the sources say about enforcement.\n\n- Anthropic's Claude Code guidance draws an explicit line. Model-read text (prompt, CLAUDE.md, skills) is advisory: it \"works most of the time, not every time\". Hooks, deny rules, managed settings, Stop hooks (exit code 2 sends the model back to work) and CI are real enforcement.\n- A `prompt` or `agent` hook is itself a model judgment and \"isn't deterministic either\". Real enforcement needs a `command` or `http` hook, with `onFailure: \"block\"` if a crashed hook should also block.\n- Tool restrictions on a subagent (for example `tools: Read, Grep, Glob`) are enforced by the harness, not requested in a prompt.\n- The same source warns against over-enforcement: keep the enforced set small, and delete hooks that only express preferences.\n- The long-running-agent harness posts enforce through data: a JSON feature list where the agent may change only the `passes` field, plus git commits and end-to-end browser tests.",
+ "strengths": [
+  "The trend is measured, not asserted: METR publishes per-model 50% and 80% horizons and a doubling time with confidence intervals, and states its own limits.",
+  "Vendor guidance is unusually concrete about what to delete: emphasis words, prescriptive thinking steps, standing delegation lines, prompt-written token budgets, think-less lines, hard style limits, context-protection subagents.",
+  "The same guidance is consistent across four years of posts on what to keep: tests, structured state on disk, git, verification tools, fresh-context review, human confirmation of irreversible actions. That consistency is the best available evidence of durability.",
+  "The harness-design post gives a real before-and-after: components were removed model by model (context resets, then sprints) while planner and evaluator stayed, with cost and time figures.",
+  "The deterministic versus non-deterministic split gives a clean test for any toolkit rule: can it have exceptions? If not, it is a hook; if so, it is a sentence."
+ ],
+ "weaknesses": [
+  "METR's horizon is not a reliability guarantee. A 50% horizon means half of tasks of that length fail, the 80% horizon is many times shorter, values above 16 hours are flagged unreliable, and there are no bootstrapped confidence intervals on the current page. Tasks are benchmark tasks, not messy production work.",
+  "Real-world productivity evidence is weak and mixed. METR's early-2025 trial found experienced developers took 19% longer with AI while believing they were 20% faster. The late-2025 follow-up estimated an 18% speedup for returning developers (CI from 38% faster to 9% slower) and 4% for new ones, and METR calls its evidence \"very weak\" and the estimate \"likely a bad proxy\" because of selection effects.",
+  "The bitter-lesson-for-harnesses argument is mostly practitioner essays with no measurements. The Traversal post presents no metrics. Sutton's essay is about research methods over decades, not about product scaffolding over months, so applying it to toolkits is an analogy.",
+  "Anthropic's guidance is vendor guidance about its own models, much of it from internal testing that cannot be independently reproduced. It also changes per model: an instruction that helps one model, such as explicit self-check, harms another (Opus 5 over-verifies).",
+  "Role prompting is not declared obsolete: the current Anthropic prompting page still says setting a role \"focuses Claude's behavior and tone\". The evidence supports dropping elaborate persona theatre, not all role or scope statements.",
+  "The harness-design post also shows that scaffolding costs: the full harness was over 20 times more expensive than a solo run ($200 and 6 hours versus $9 and 20 minutes), and the author says the evaluator is worth it only \"when the task sits beyond what the current model does reliably solo\".",
+  "Practitioner counter-view exists: several essays argue the harness, sensors and eval set are the durable advantage, so \"less scaffolding\" is not consensus. It is \"different scaffolding\"."
+ ],
+ "evidence_of_effectiveness": "Measured results found:\n\n- METR Time Horizon 1.1 data file: doubling time 187.8 days all-time, 128.7 days from 2023 on (CI 104.4 to 158.0). The 50% horizons, with 80% horizons in brackets: GPT-4 about 4 min (0.9 min); Claude 3.7 Sonnet about 60 min (12 min); Claude Opus 4.5 about 293 min (49 min); GPT-5.2 about 352 min (66 min); Claude Opus 4.6 about 719 min (70 min); Gemini 3.1 Pro about 384 min (90 min); GPT-5.4 about 342 min (54 min); Claude Mythos Preview (early) about 1,045 min (186 min). Units are inferred as minutes; the file does not label them.\n- METR March 2025 post: near 100% success on tasks under 4 human-minutes, under 10% on tasks over about 4 hours, for models of that date.\n- METR productivity trials: 19% slower in early 2025 (16 developers, 246 issues, CI +2% to +39%); late 2025 inconclusive (57 developers, 800+ tasks).\n- Anthropic harness-design post: solo run 20 min and $9; full harness on Opus 4.5 6 hours and $200; simplified harness on Opus 4.6 about 3 h 50 min and $124.70. Context resets and sprints were removed with no stated loss.\n- Anthropic Fable 5.2 testing (internal, not reproducible):\n  - A \"finish the whole task\" text halved sessions ending with doable work left, at about 30% more output tokens.\n  - Removing a large prompt-written token budget lowered cost with equivalent performance.\n  - A cost-first subagent tool description cut delegation by about a third with the same task success.\n  - One stale \"never retry\" note among a dozen cut retries from nearly all tries to about four in ten.\n  - A code-ownership sentence raised merging of duplicated code from under a tenth to about half of tries, at 1.5 times the output tokens.\n\nNone found: no controlled study comparing a process toolkit against a bare agent across model generations, and no measurement behind the bitter-lesson harness essays.",
+ "lessons_for_odd": [
+  "RULE 1, classify every rule by durability. Keep four kinds: (a) facts the model cannot see (the outcome sentence, constraints, who owns decisions); (b) external ground truth (tests, proofs, gates, ledgers); (c) deterministic enforcement of no-exception rules; (d) human-owned decisions. Treat everything else as a model-weakness workaround with an expiry.",
+  "RULE 2, each component names the assumption it encodes and the check that would retire it. At every model upgrade, re-run the same work with the component off; if the outcome and cost hold, delete it. Anthropic did exactly this with context resets and sprints.",
+  "RULE 3, outcome-first is the durable core. A single owner-visible outcome sentence plus one end-to-end proof on the real system matches the vendor guidance (clear goal, a check to run) and does not depend on model weakness. Copy this; it is the part most likely to add value on every future model.",
+  "RULE 4, proof must be external and tamper-resistant. Use a structured pass/fail list the agent can only flip, tests it may not edit or delete, mutation rows that prove a test can fail, and a tree sha on every cited result. This is the scaffold all sources agree stays valuable as horizons grow.",
+  "RULE 5, enforce few things, and enforce them in code. Hooks and gates for rules with no exceptions (never commit to main, never delete tests, never touch the live tenant, gate before merge). Anthropic's warning is direct: at around forty hooks most are preferences. A toolkit with dozens of guard classes and numbered policies should audit which are true invariants.",
+  "RULE 6, drop step micro-management as models improve. Fixed three-minute steps, 30-tool-call caps, 200-line read windows and \"never read a big file whole\" encode weak context handling and short horizons. Models now have 80% horizons of one to three hours and 1M-token windows. Make these budgets configurable, default them off or loose, and re-measure per model. Keep the cost reporting, drop the hard caps unless measurement shows they pay.",
+  "RULE 7, avoid a fixed role relay as architecture. A pipeline of named personas (analyst, architect, developer, tester) hard-codes a sequence and taxonomy, which the bitter-lesson essays identify as the structure that ages worst. Keep exactly one role distinction that has evidence: an independent fresh-context evaluator that did not write the work.",
+  "RULE 8, judge sparingly and against ground truth. An LLM judge is itself non-deterministic and expensive (the evaluator harness cost over 20 times a solo run). Run scripts first, call a judge only for what scripts cannot decide, and only where the task is beyond what the model does reliably alone.",
+  "RULE 9, write instructions plainly with scope and reason. Remove ALL CAPS, NEVER and CRITICAL emphasis; newer models over-apply it. Each absolute rule carries its scope, its reason and its exception path inside the rule itself, since a separate approval line did not work in Anthropic's testing.",
+  "RULE 10, build in deletion. Cautions, lessons, charter upgrades and memory accumulate and newer models follow them literally, causing unneeded stops. Give every learned rule a date, a triggering incident and a review-or-expire step, and keep the standing instruction file short enough that no line gets lost.",
+  "RULE 11, self-healing means working through ordinary obstacles and stopping at deliberate ones. Copy the vendor distinction: errors, timeouts and locked files get diagnosed and retried; withheld access, protected files and safety rules get reported, not worked around.",
+  "RULE 12, do not prescribe delegation or prompt-written token budgets. Standing \"use a subagent\" lines and budget text raise cost on current models. Measure token cost outside the prompt (a ledger or usage report) and let the model choose when to delegate, with the cost stated in the tool description.",
+  "RULE 13, keep state on disk in forms the next session can discover without the toolkit: git, a progress file, a structured results file, a setup script. This survives model changes and also survives the toolkit itself being removed.",
+  "RULE 14, ship measurement with the method. Record tool calls, tokens, wall clock and defects escaped per outcome, with the toolkit on and off. No competing framework found in this research publishes such a comparison, so this is where a toolkit can beat them.",
+  "RULE 15, human decisions are a permanent boundary, but make them few and explicit. Name the exact actions that need the owner (credentials, billing, deploys, destructive acts). A judge acting for the owner on everything else is compatible with the guidance only if irreversible actions still reach a human."
+ ],
+ "sources": [
+  {
+   "title": "Anthropic: Prompting best practices (current Claude models)",
+   "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices"
+  },
+  {
+   "title": "Anthropic: Prompting Claude Fable 5.2",
+   "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2"
+  },
+  {
+   "title": "Anthropic: Best practices for Claude Code",
+   "url": "https://code.claude.com/docs/en/best-practices"
+  },
+  {
+   "title": "Anthropic: Building effective agents",
+   "url": "https://www.anthropic.com/engineering/building-effective-agents"
+  },
+  {
+   "title": "Anthropic: Effective context engineering for AI agents",
+   "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+  },
+  {
+   "title": "Anthropic: Harness design for long-running application development",
+   "url": "https://www.anthropic.com/engineering/harness-design-long-running-apps"
+  },
+  {
+   "title": "Anthropic: Effective harnesses for long-running agents",
+   "url": "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents"
+  },
+  {
+   "title": "METR: Measuring AI Ability to Complete Long Tasks (March 2025)",
+   "url": "https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/"
+  },
+  {
+   "title": "METR: Time horizons page (TH 1.1)",
+   "url": "https://metr.org/time-horizons/"
+  },
+  {
+   "title": "METR: benchmark results data file (TH 1.1)",
+   "url": "https://metr.org/assets/benchmark_results_1_1.yaml"
+  },
+  {
+   "title": "METR: Early-2025 AI and experienced open-source developer productivity",
+   "url": "https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/"
+  },
+  {
+   "title": "METR: Uplift update (Feb 2026)",
+   "url": "https://metr.org/blog/2026-02-24-uplift-update/"
+  },
+  {
+   "title": "Rich Sutton: The Bitter Lesson",
+   "url": "http://www.incompleteideas.net/IncIdeas/BitterLesson.html"
+  },
+  {
+   "title": "Wikipedia: Bitter lesson (criticism and restatements)",
+   "url": "https://en.wikipedia.org/wiki/Bitter_lesson"
+  },
+  {
+   "title": "Daniyel Bilar: The bitter lesson for harness builders",
+   "url": "https://dyb.mataroa.blog/blog/the-bitter-lesson-for-harness-builders-why-i-am-destroying-my-beautiful-machine/"
+  },
+  {
+   "title": "Traversal: The Bitter Lesson for Agent Harnesses",
+   "url": "https://www.traversal.com/blog/ai-agent-architecture-mistakes"
+  }
+ ],
+ "unverified": [
+  "METR data-file units: the YAML does not label units. I read the horizons as minutes because that matches the published figures (Claude 3.7 Sonnet about 1 hour). The per-model numbers were extracted by a summarising fetch, not read line by line.",
+  "The Claude Mythos Preview 50% horizon (about 17 hours) exceeds METR's own 16-hour reliability bound and is for an early preview. No METR measurement was found for models released after April 2026, so the trend past that date is extrapolation.",
+  "Anthropic's quantitative claims (halved early stops, a third less delegation, 1.5 times tokens with the ownership sentence, cost drop from removing token budgets) come from Anthropic's internal testing and could not be independently checked.",
+  "The harness-design post was read through a summarising fetch; quotes such as \"every component in a harness encodes an assumption about what the model can't do on its own\" are as returned by that fetch, and I did not read the full text.",
+  "Search-result claims I did not open and therefore do not rely on: that a model topped Terminal-Bench with no purpose-built harness, and that stripping a harness to bash access gave 100% success and 3.5 times speed.",
+  "Whether fixed short steps, tool-call caps or persona charters help or hurt on current models for this project is not established by any source. The sources imply they are likely obsolete, but only an on/off measurement on real work would settle it.",
+  "No controlled comparison of any process toolkit (spec-driven, role-based or skills-based) against a bare agent across model versions was found.",
+  "Anthropic's guidance on context awareness names specific Sonnet and Haiku models; I did not confirm whether it applies to the newest models.",
+  "The claim that 80% horizons are 6 to 10 times shorter than 50% horizons is my arithmetic from the extracted figures (ratios range from about 4 to 10 across the listed models), not a METR statement."
+ ]
+}

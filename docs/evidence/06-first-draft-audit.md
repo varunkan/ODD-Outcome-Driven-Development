@@ -1,0 +1,105 @@
+# Audit of the first draft toolkit
+
+*Produced 2026-11-11 by a read-only review agent (Claude Fable 5.2) against the draft at commit 23069f8b6 (engine, hooks, entry skill, templates); rendered from `data/research/audit.json`. It is kept because it is the reason the design changes: the next version is judged against this list.*
+
+## Verdict
+
+INCOMPLETE as a product, sound as a core. Both suites pass (38/38 and 25/25), but the draft is neither lean nor safe to ship yet.
+
+The valuable part is about 400 lines: the outcome block, the RED-then-GREEN ledger tied to the tree, the write guard, and the gate with park. That is a real advance over spec-first toolkits, because "done" is an exit code rather than a document.
+
+Around it sit roughly 2,500 lines and about 60 concepts of pipeline, scoring, traceability and self-heal machinery. Those make a one-line fix cost six files, and they can be defeated in under a minute through Bash writes, forged ledger lines, `red: n/a` or a proof like `test 1 = 1`. The enforcement constrains an honest agent heavily and a careless one barely.
+
+Three defects block any outside use and should be fixed first:
+1. hooks.json references a tool_guard.py that is not in the package, and the skill references eleven sub-skills that do not exist.
+2. A plain `git commit` turns every proof STALE, so the Stop hook blocks the normal end of a task.
+3. Control files under odd/ are agent-writable, so the gate can be turned green without running anything.
+
+To reach "lean, simple and powerful": cut to one outcome block with three fields and one fast lane, replace the sentence score with a mutation check on the proof, scope staleness to the boundary, key state by session, and make the full pipeline, research crawl, retro and learning optional. The frugality guard should ship separately.
+
+Not done in this step: I did not install it as a real plugin in a live session, did not exercise crawl.py or learn.py beyond what the e2e suite covers, did not read cli.py, check.py or learn.py in full, and did not compare against Spec Kit, BMAD or Superpowers. The numbers above are from wc -l and the probes listed under test results.
+
+## Test results
+
+DONE. Both suites pass on the current tree (HEAD 23069f8b6, "stage skills pending"). `bash tests/test_odd_e2e.sh`: passed=38 failed=0, exit 0. `bash tests/test_install.sh`: passed=25 failed=0, exit 0. No files were edited; the test runs left git-ignored `__pycache__` directories under hooks/ and lib/oddlib/, and `git status --short` is clean.
+
+The suites are green but do not exercise the weaknesses below. I ran four extra probes in a throwaway copy of the e2e project (deleted afterwards):
+- **Commit makes everything stale:** `odd gate` returned 0, then after a `git commit` with no content change it returned 1 with every outcome STALE.
+- **Ledger can be forged:** appending `{"kind":"prove","rc":0,"tree":<current>}` lines to `odd/<slug>/ledger.jsonl` turned that failing gate back to 0 without running a proof.
+- **Guard allows control-file writes:** `odd_guard.py` allowed Write to `odd/calc-add/ledger.jsonl` and `odd/config.json`, and denied `other.py` as out of boundary.
+- **Trivial proofs accepted:** `test 1 = 1`, `true && true`, `python3 -c pass`, `[ 1 ]` and `git status` all pass the TRIVIAL filter; only `echo hi` was caught.
+
+## Size
+
+About 2,950 authored lines in the package (wc -l over skill, agents, hooks, lib, bin, install.sh, templates/odd, tests, README, PRINCIPLES, principles.md). The engine itself is 1,737 lines of Python (lib/oddlib/*.py, hooks/*.py, bin/*).
+
+Largest files: cli.py 325, PRINCIPLES.md 275, check.py 215, tests/test_odd_e2e.sh 213, learn.py 208, crawl.py 171, core.py 164, outcomes.py 158, ledger.py 150. SKILL.md is 70 lines, hooks 173, templates/odd 252 (library.json is 97 of that).
+
+The count understates the real size. EXPORTS pulls five more files from the host repo that are not in the package: hooks/tool_guard.py, bin/jobs_wait.sh, bin/tasks_dag.py, bin/decision_add.py and agents/step.md.
+
+A new user must learn roughly 60 named things before the first line of code:
+- 6 required outcome fields (id, outcome, observable, proof, boundary, traces) plus 4 optional (evidence, red, scope, priority)
+- 9 pipeline stages and 6 numbered stage files
+- 7 id prefixes with a one-level-up trace rule (O-RUN, O-F, O-R, O-S, O-P, O-T, and stage ids)
+- 4 proof states (GREEN, STALE, RED, PENDING) and 3 park states
+- 12 checker error codes (E-MISSING, E-FIRST, E-ID, E-FIELD, E-SCORE, E-PROOF, E-JUDGE, E-TRACE, E-COVER, E-EVIDENCE, E-DAG, E-DETECT)
+- 18 CLI subcommands plus 4 `learn` kinds
+- 7 config switches
+- 4 hooks and 2 agents
+- 9 sub-skills that SKILL.md names (odd-outcome, odd-research, odd-requirements, odd-spec, odd-plan, odd-tasks, odd-implement, odd-verify, odd-self-heal, plus odd-fix and odd-decide) but that do not exist; skills/ contains only `odd`
+- the learning layer: detectors, lessons, vague words, example library, retro metrics, project vs account scope
+
+For comparison, the one idea that matters fits in SKILL.md's first paragraph (lines 9-12).
+
+## Essential
+
+- The outcome block reduced to three load-bearing fields: one outcome sentence, one proof command, one boundary (lib/oddlib/outcomes.py:1-16). It is the only genuinely new idea, and it is good.
+- RED before code, GREEN after, recorded with the tree it ran on (lib/oddlib/ledger.py:59-71, red_first at :101-126). This is the real differentiator against spec-first toolkits, which do not mechanically check that a proof failed first.
+- The PreToolUse guard refusing code with no active node and no RED (hooks/odd_guard.py:55-66), and failing open on its own errors (:79).
+- `odd gate` as a single exit-code answer to 'is it done' (ledger.py:129-141), and `odd park` with a mandatory reason as the honest way to stop (:144-151).
+- The filter for proofs that cannot fail and for unfilled template placeholders (outcomes.py:23-24, check.py:147-157). Right idea, currently too weak.
+- The Stop hook's `stop_hook_active` pass-through, so it can never loop (hooks/odd_stop.py:25-26).
+- Plain files committed with the work (odd/<slug>/...), no service and no database (core.py:3-8).
+
+## Over-engineered
+
+- Six mandatory stage files before any code (core.py:18-25), enforced by the guard through the tasks stage (odd_guard.py:49-53). A one-line fix must produce request, research, requirements, spec, plan and DAG, each with outcome blocks. There is no small-change lane.
+- Mandatory crawled research: every requirement must cite an S-id that was crawled (check.py:169-172, crawl.py 171 lines). A bug fix in your own code has no web source to cite.
+- The 0-100 outcome score (outcomes.py:120-158). It is keyword regexes: 'Every user always sees 100 things on the screen.' scores 100, and 'Refactor order_service.dart so the test passes with exit 0.' scores 90. It gives false confidence while the 40-word vague list (which includes 'support', 'handle', 'some', 'best') will reject legitimate sentences.
+- The self-heal layer: learn.py (208 lines), retro template, detectors.json, lessons with recurrence counts, vague.json, a 97-line library.json, project and account scopes, and a second Stop block until the retro is done (odd_stop.py:39-43, `require_retro` defaults true at core.py:35). Learning that is forced every run becomes boilerplate.
+- The strict five-level trace and coverage chain (O-T to O-P to O-S to O-R to O-RUN; check.py:196-209). Five places must be edited to add one behaviour.
+- `judge_share_max` 25% (core.py:34, check.py:160-162) and judge gates at four stages. That is a tuning knob for a problem most users never reach.
+- Bundling tool_guard (WAIT/RANGE/READ rules), jobs_wait.sh, the 30-tool-call step cap and the 3-minute step into the same package (hooks.json:25-33, SKILL.md:53-62). These are a separate frugality product and double the surface.
+- Three overlapping principle documents (PRINCIPLES.md 275, claude-home/principles.md 92, README 84) beside a 70-line skill; the task itself flags README and PRINCIPLES as possibly stale.
+- Nodes capped at 30 seconds, each with its own outcome block and proof (SKILL.md:35). At that grain the bookkeeping outweighs the code.
+
+## Failure modes in real use
+
+- **The package is not self-contained and would break as a plugin.** hooks/hooks.json:28 runs `${CLAUDE_PLUGIN_ROOT}/hooks/tool_guard.py`, but hooks/ contains only _odd.py, odd_guard.py, odd_session.py and odd_stop.py; EXPORTS maps the file to the host repo's scripts/pipeline/tool_guard.py. `python3 <missing file>` exits 2 (measured), which is the blocking exit code for a PreToolUse hook, and the matcher covers Bash, Read, Grep, Glob, Edit and Write. Only the install.sh path resolves EXPORTS (install.sh:40-45), and only from inside this repo. I did not run it as a real plugin.
+- **SKILL.md points at skills that do not exist.** It names eleven sub-skills (odd-outcome through odd-decide) and the retro block tells the agent to run 'the odd-self-heal skill' (odd_stop.py:43). The commit message says 'stage skills pending'. The agent would be told to follow instructions it cannot load.
+- **A commit invalidates every proof (measured).** `tree_id` is HEAD plus a diff hash (core.py:140-164), so committing unchanged content flips every outcome to STALE and the Stop hook blocks until everything is re-proven. Committing is the normal last act of a task.
+- **Re-proving is quadratic.** Any code change stales every outcome in the run, including research and requirements outcomes, not just those whose boundary was touched. With N nodes that is N re-runs of all proofs, each allowed up to 900 seconds (core.py:33). Outside git the tree id is the constant 'nogit', so nothing ever goes stale.
+- **The ledger and switches are writable by the agent (measured).** Writes under odd/ always pass the guard (odd_guard.py:46-47), which includes ledger.jsonl, config.json (`enforce: false`), ACTIVE and STATE. Forged ledger lines turned a failing gate green. There is no hash chain or separation between outcome files and control files.
+- **Bash writes bypass the guard entirely.** The matcher is Write|Edit|MultiEdit|NotebookEdit (hooks.json:16) and the docstring admits it (odd_guard.py:11). `sed -i`, heredocs, `tee`, `git apply` and code generators are unseen. An agent under pressure will take that route, so the guard catches the honest path only.
+- **The RED requirement has a free exit.** `red: n/a - ` plus any text over 8 characters skips it (odd_guard.py:61-63, ledger.py:108-110), with no limit on how many nodes use it.
+- **Trivially passing proofs are accepted (measured).** The filter is a short deny list (outcomes.py:24). RED-then-GREEN is also gameable with `test -f x` followed by `touch x`. Nothing checks that the proof exercises the outcome; the planned mutation check is not in this package.
+- **Stop hook nags on conversational turns.** With an active unparked run, every turn end is blocked once regardless of what the turn was about (odd_stop.py:31-38): a question, a status request, a discussion. Each costs one forced continuation, and each call appends a gate line to the ledger (9 of 54 ledger lines in the e2e run were gate entries). The likely response is to park by reflex, which empties the gate of meaning.
+- **ACTIVE is one file per project, not per session (core.py:86-94).** Two sessions, or a parent and its subagents, share one active run and node. An unrelated session in the same repo has its writes refused, and parallel lanes cannot each hold a node. There is no SubagentStop hook.
+- **boundary_strict is both too strict and too loose.** Strict: defaults to true (core.py:31), so a node that needs a test file, an import fix, a generated file or a lockfile is refused unless each is named in advance, and renames fail. Loose: the test is substring matching on the DAG line and boundary text, with a basename fallback (odd_guard.py:71), so `a.py` passes if `data.py` is named, and any file sharing a basename in another directory passes.
+- **Fail-open is silent.** Every hook exits 0 on any exception (odd_guard.py:79, odd_stop.py:52). That is right for safety, but a broken install enforces nothing and tells nobody.
+- **Proof commands run with `shell=True` in the project root (ledger.py:44).** That includes proofs written after reading crawled web pages, and the Stop path encourages `odd heal --apply`, which re-runs them all. Crawled text can reach a shell through an agent-written proof.
+- **Field values must be single lines and a blank line closes a block (outcomes.py:16, :95).** A wrapped outcome sentence is silently truncated, and the error will read as a missing field.
+
+## Missing
+
+- **A small-change lane.** One outcome block with outcome, proof and boundary, RED, code, GREEN, done, in one file. The six-stage pipeline should be opt-in for work that needs research and a spec. Without this it will be switched off for most real work.
+- **Proof strength, not proof form.** A mutation step: revert or break the change and require the proof to go RED. This is what stops trivially passing proofs, and it would replace the sentence score as the quality signal. The host repo already has this idea (mutation rows); the package does not carry it.
+- **Scoped staleness.** Stale an outcome only when a file inside its boundary changes, and key the tree id on content (the tree hash) so a commit does not invalidate anything.
+- **Tamper resistance.** Split outcome files (agent-writable) from control files (ledger, config, ACTIVE, STATE), let only the `odd` CLI write the latter, and hash-chain ledger entries. Guard Bash writes too, or detect after the fact by diffing changed files against the active node's boundary at gate time, which covers every write route.
+- **Per-session state.** Key the active run and node by session id (the hook event already carries it) so parallel sessions and subagents work, and so the Stop hook blocks only a session that actually wrote code this turn.
+- **A truly standalone package.** Ship the five EXPORTS files or drop the dependency, write the eleven sub-skills or remove the references, and add a test that loads hooks.json as a plugin and asserts every referenced file exists.
+- **Real boundary matching.** Path globs with exact matching, a default allowance for the proof's own test file, and a one-command way to widen a boundary that records the reason.
+- **Measurement of its own claim.** Nothing in the package measures tokens, tool calls, wall clock or defects escaped per outcome, so 'frugal' and '100x' are unmeasured. The retro records score and heal-loop trends only. A comparison against Spec Kit, BMAD and Superpowers needs the same task run through each with cost and escaped defects recorded.
+- **A proof on the real system.** Every proof is a local shell command. There is no notion of an outcome proven against a real device or service versus a host simulation, which was the central rule in the method this package was extracted from.
+- **A two-minute start.** One page, one example run a user can copy, and a `odd doctor` that says whether hooks are live. Fail-open without a health check means users cannot tell enforcement from its absence.
+- **Brownfield support.** No way to adopt outcomes for existing code or to state an outcome for a defect without inventing requirements and research around it.

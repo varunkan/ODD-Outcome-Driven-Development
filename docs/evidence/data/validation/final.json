@@ -1,0 +1,100 @@
+{
+ "decision": "build-lean",
+ "confidence": 0.72,
+ "validation_summary": "The validation ruled on all 224 clusters across the six areas with none left unruled: 93 keep, 52 refine, 48 merge, 31 drop, and 78 earlier rulings overturned. The result is 18 principles, 17 rated durable and one (P18) rated a model workaround.\n\nThe evidence under those principles is thin in a specific way:\n- **Real before/after figures exist for only a few rules.** Outcome-first reached a host proof in about 2 hours against 14 hours, 81 agents and 23 REVISEs of 30 verdicts. One script answered in about 4 minutes what 106 killed agents did not. Eight integration tests took about 8 tool calls and 128 s against about 450 tool calls and 830k tokens for about 40 hand-driven legs. Invariant batching cost about 200k tokens against about 3.4M (17x). Each is a single self-measured instance.\n- **Most other principles count waste before a rule, not a saving after it.** P5, P6, P8, P10, P14 and P15 say so in their own caveats, and directives #61, #62, #64 and #66 have no after-figure.\n- **The source project is its own counter-example.** 53% of commits touched no product or test code, with 68 directives and 204 governance scripts; no successful real install-to-first-order is recorded, and the one real-backend run stopped on a 403 no fake produced.\n- **The draft toolkit is not shippable.** I read audit.json in this step: both suites pass (38/38 and 25/25) while forged ledger lines turn a failing gate green, Bash writes bypass the guard, a plain commit stales every proof, hooks.json points at a file not in the package, and trivially passing proofs are accepted. The audit puts the valuable part at about 400 of about 2,950 authored lines.\n- **No same-task comparison exists** against Claude Code alone, Spec Kit, BMAD or Superpowers. The only controlled data cited (the Uvik vendor benchmark) has the no-process control cheapest and fastest, and equal to BMAD on small tickets.\n\nOnly audit.json was re-read here; every other figure is quoted from the supplied method, comparison and critique text and was not re-checked against pos.json, practices.json or models.json.",
+ "why": "Build it, but only as the roughly 400-line kernel the audit identified, with its measured holes closed, and with no comparative claim until a same-task run exists.\n\nAll three critiques return \"conditional\" at 0.72, so there is no majority to weigh; they agree on the evidence, and I weighed that.\n\n**Why not do-not-build.** Three things are absent from Spec Kit, BMAD, Superpowers and plain Claude Code, and each has evidence behind it:\n- **Prose rules failed, measured.** Over 294 swarm agents every rule was already written and still broken. External work agrees: telling a model not to cheat moved nothing (80% to 80%) while structural controls drove cheating near zero.\n- **Done as an exit code on content, not a model's claim.** The other three frameworks enforce by prompt text; none has a tamper control, a mutation step or a script-written done.\n- **An honest abort exit is cheap and evidence-backed.** An explicit \"this is impossible\" option cut cheating from 54% to 9% on an ImpossibleBench variant.\n\nThese concern ground truth and tamper resistance, which matter more as models produce more unreviewed change per hour. That is the synergy with future models.\n\n**Why not a full build.** The 18-principle package would mostly restate vendor guidance (P2, P4, P6, P13) and the other frameworks, and would carry the source project's scar tissue:\n- The two largest recorded wastes were the owner's own rules: the judged swarm, and the step cap at about 90M tokens per outcome.\n- The draft's bundled frugality guard, forced retro layer, crawled research, keyword score and six stage files are the parts the audit calls over-engineered.\n- Adoption cost is the highest of the five options and it is Claude Code only.\n\n**What \"100 times powerful\" can honestly mean.** Not a multiplier; that is unmeasured and must not be claimed. The power is that one small mechanism (outcome, proof seen red, protected proof, script-written done on a content hash) holds at any model capability, and every other component carries an off-switch and is deleted when an on/off run shows it no longer pays.\n\nThe decision turns to do-not-build if the kernel cannot be made tamper-resistant, or if the on/off run against a no-process control shows no gain in escaped defects or rework at acceptable cost.",
+ "lean_design": {
+  "one_line": "A small-change lane by default: one outcome block (outcome, proof command, boundary), proof seen red then green and red again when the change is broken, recorded on a content hash in a ledger only the tool writes, one gate exit code, and an honest park or cannot-be-done exit; everything else is opt-in and carries an off-switch.",
+  "skills": [
+   {
+    "name": "odd",
+    "purpose": "The one-page method and entry point. First branch: if the change is trivial (about one session or roughly 500 changed lines is the borrowed unit size; small low-risk edits go to plain Claude Code), do not use the toolkit. Otherwise write one outcome block in one file, run red, code, green, gate. States that user and project instructions outrank the skill, and teaches the cautionary half (swarm, step cap, 733 rulings in 44 days) with the wins."
+   },
+   {
+    "name": "odd-clarify",
+    "purpose": "Front end for a vague ask: mark ambiguity explicitly ('do not guess'), ask at most five questions, and produce the outcome sentence, an observable acceptance check and the boundary. Covers the brownfield case: an outcome for a defect in existing code with no invented requirements or research."
+   },
+   {
+    "name": "odd-review",
+    "purpose": "Opt-in, for the project's high-risk classes only. One fresh-context, read-only reviewer spawned after the mechanical checks pass, working from a base-to-head diff. It verifies each finding at its named location, may return 'unknown', sends work back only for a reproduced product defect, and reworks at most a fixed number of rounds before parking."
+   },
+   {
+    "name": "odd-unattended",
+    "purpose": "Opt-in reference text for parallel and unattended work (P5, P13, P14, P15): round limit, no model turns spent waiting on a machine, one writer per worktree, state committed to the repo. Text and thin adapters over harness features, no owned orchestration scripts."
+   }
+  ],
+  "engine": [
+   "Outcome block parser: three load-bearing fields (outcome sentence, proof command, boundary as exact path globs), multi-line values allowed, and the proof's own test file allowed by default.",
+   "`odd red` and `odd green`: run the proof on the unfixed tree, then on the fixed tree, and record both with the content hash of the files inside the boundary (not the commit id), so a commit or unrelated edit stales nothing.",
+   "`odd break`: revert or break the change and require the proof to go red again. This replaces the 0-100 sentence score as the quality signal; any 'red: n/a' use needs a recorded reason, is counted, and is listed at the gate.",
+   "Ledger written only by the CLI, hash-chained, kept apart from agent-writable outcome files; config and the active pointer are control files too.",
+   "`odd gate`: one exit code. It verifies the ledger chain, requires red, green and break on the current boundary hash, diffs every changed file against the boundary (which covers shell write routes), flags any edit to proof or gate paths, and has three results: pass, fail, could not run.",
+   "Proof label on every record: real system or simulated. An outcome is reported 'proven' only with a real-system record; simulated green may gate a merge.",
+   "`odd park <reason>` and `odd abort <reason>` ('cannot be done as specified'), both recorded as valid results.",
+   "`odd widen <glob> <reason>`: one command to widen a boundary, with the reason recorded.",
+   "Run state keyed by session id, so parallel sessions and subagents do not share one active pointer.",
+   "`odd doctor`: reports whether each hook is installed and live and whether every file named in the hook config exists; run at session start.",
+   "`odd cost`: sums context tokens read, tool calls and wall clock per outcome and for the project from transcripts.",
+   "`odd measure`: on/off harness that runs the same outcome with a named component disabled and writes the comparison."
+  ],
+  "hooks": [
+   "PreToolUse on write tools: refuse product-code writes with no active outcome and no recorded red, and refuse writes to the ledger, config, gate and proof paths. Fails open on its own errors, with a logged override.",
+   "Stop: block only a session that wrote code this turn and has an ungated, unparked outcome; pass through when the stop hook is already active so it cannot loop.",
+   "SessionStart on startup, clear and compact: re-inject the one-page method and run the doctor check, printing a visible warning when enforcement is absent.",
+   "A hard ceiling of about ten hooks in the package, each with fixture tests (a planted violation goes red, a known-good input stays green) and a packaging test that loads the hook config and asserts every referenced file exists."
+  ],
+  "cut_from_draft": [
+   "Six mandatory stage files (request, research, requirements, spec, plan, DAG) and the guard that enforces them through the tasks stage.",
+   "Mandatory crawled research with cited source ids, and crawl.py.",
+   "The 0-100 keyword outcome score and the 40-word vague list.",
+   "The self-heal layer: learn.py, the retro template, detectors, lessons with recurrence counts, the library file, and the second Stop block until the retro is done.",
+   "The five-level trace and coverage chain.",
+   "The bundled frugality guard: tool_guard wait, range and read rules, jobs_wait.sh, the 30-call step cap, 3-minute steps and 30-second nodes. P18 ships at most as a settings file that is off by default, each setting with a retirement test.",
+   "judge_share_max and judge gates at four stages.",
+   "Two of the three principle documents; keep one page plus one copyable example run.",
+   "The eleven referenced sub-skills that do not exist.",
+   "From the method as packaged: P3's tier-from-diff, batch-gate and red-attribution scripts, P5's agent-cap and health machinery, P14's lease and lock scripts and P15's derived boards. They stay as opt-in reference text, since their figures measure waste one swarm created and no after-figure shows them saving a run.",
+   "Diff-derived mutation batteries from the default path (about 600k tokens with no speedup); the single break-the-change check stays.",
+   "The 18-principle count as taught: teach about seven (outcome and proof; script over agent; proof seen red and red again when broken; proof and done record out of the implementer's reach on a content hash; real-system proof before 'proven'; few rules enforced in code and deleted when covered; owner-only acts). The rest is reference.",
+   "Every comparative or multiplier claim ('100x', 'frugal') and every unverified figure: the 18 judge rounds and about 12M tokens, the 22.2M-versus-26.6k projection, the pinned-model incident, the 6.3M-token audit figure, and the conflicting 95 KB and 101 KB instruction-file sizes."
+  ],
+  "fix_in_draft": [
+   "hooks.json runs a tool_guard.py that is not in the package; a missing file exits 2 and blocks every matched tool call. Remove the dependency and add the packaging test.",
+   "Writes under odd/ always pass the guard, so the agent can forge ledger lines and set enforce to false; forged lines turned a failing gate green. Split control files from outcome files and hash-chain the ledger.",
+   "Bash writes (sed -i, heredocs, tee, git apply) bypass the write guard. Detect by diffing changed files against the boundary at gate time.",
+   "tree_id is HEAD plus a diff hash, so a plain commit stales every proof and re-proving is quadratic; outside git it is a constant and nothing ever goes stale. Key on the content hash of boundary files.",
+   "Trivially passing proofs are accepted and red-then-green is gameable with `test -f x` then `touch x`. Add the break step.",
+   "'red: n/a' plus any text skips the red requirement with no limit. Count it, require a reason, and show it at the gate.",
+   "The Stop hook blocks every turn end, including questions, and appends a gate line each time (9 of 54 ledger lines in the e2e run). Block only sessions that wrote code this turn.",
+   "ACTIVE is one file per project, so an unrelated session has its writes refused. Key it by session id.",
+   "Boundary matching is a substring test with a basename fallback (a.py passes if data.py is named) and strict mode refuses a needed test file, lockfile or rename. Use exact globs, the default test-file allowance and the widen command.",
+   "Hooks fail open silently, so a broken install enforces nothing and tells nobody. Add doctor and the session-start warning.",
+   "Proof commands run with shell=True in the project root, including proofs written after reading crawled pages. Removing crawl closes that route; show the proof command to the user when it is first registered.",
+   "Field values must be single lines and a blank line closes a block, so a wrapped outcome sentence is silently truncated. Parse multi-line values or reject loudly.",
+   "The existing suites (38/38 and 25/25) pass while all of the above is true. Add one fixture per hole that fails on the current draft before the fix."
+  ],
+  "measurement_plan": "The toolkit ships with no claim until these numbers exist, and it states the number each component should move before the run.\n\n**Per outcome, by script from transcripts:** context tokens read (not output), tool calls, wall clock, rework rounds, escaped defects (defects found after the gate passed), and whether the proof was real or simulated. A project total is summed from the same records.\n\n**On versus off, same tasks:** run a fixed task set with the toolkit on, with each component disabled in turn, and with a no-process control (plain Claude Code). Use three runs per case and a no-partial-credit grader, the form borrowed from BMAD's baseline mode. Report merge rate, cost per merged item, median time, review defects and rework rounds, with blind review of the diffs.\n\n**Noise band:** the only stated band in the inputs is the Uvik benchmark's plus or minus 10 points. Until the toolkit's own run-to-run spread is measured from the three repeats, treat any difference inside that band as no difference. The owner's band is an open question.\n\n**Keep or delete rule:** a component stays only if switching it off worsens escaped defects or rework beyond the band at a cost the owner accepts. Repeat at every model upgrade; a component whose off-run holds is deleted.\n\n**Kernel integrity, as tests rather than opinion:** the measured attacks from the audit (forged ledger line, shell write outside the boundary, trivially true proof, plain commit, missing hook file) each have a fixture that must fail the gate.\n\n**Before any comparative claim:** the same tickets through Spec Kit, BMAD and Superpowers with the same figures. The known bar is that Spec Kit cost about a third more and about 50% more time than no-spec for a modest defect gain.\n\n**Real-system calibration:** a periodic run with the shipping artifact on the real system, with each escaped defect recorded as the simulation's error rate. The source project's first successful real install-to-first-order is the first entry owed.",
+  "future_model_rules": [
+   "Every component has an off-switch and a recorded on/off comparison; re-run it at each model upgrade and delete what no longer pays.",
+   "Quality is proof strength (red on the unfixed tree, red when the change is broken, real-system pass), not process steps completed. That signal holds at any capability level.",
+   "The implementer cannot edit the proof, the gate or the done record; only a script writes done, on a content hash.",
+   "No pinned model ids in any step; inherit or use a tier alias.",
+   "No hard-coded minute budgets, call caps, step shapes or read windows. Where a limit helps today it is a setting, off by default, with a retirement test.",
+   "Rules are plain sentences with scope and reason, no capitals or absolute emphasis, since newer models follow accumulated cautions more literally.",
+   "Each learned rule carries a date, its triggering incident and a review-or-expire step; an escaped defect adds a check, not a prose rule.",
+   "The enforced set stays small (about ten hooks); when a prose rule is broken twice it is enforced, rewritten or deleted, never restated.",
+   "Run caps, worktree isolation, session state and fresh-context review are thin adapters over harness features, removed when the harness provides them.",
+   "Owner-only acts (credentials, billing, consoles, deploys, release, production data deletion, irreversible changes, relaxing a check) stay with the human in every version.",
+   "Anything load-bearing lives in a hook or script, and skill descriptions are checked against the harness's description budget so they do not drop out silently."
+  ]
+ },
+ "open_questions_for_owner": [
+  "Will you fund the comparison run before publishing any claim: a fixed ticket set through plain Claude Code, the lean kernel, Spec Kit, BMAD and Superpowers, with blind review? Without it the toolkit can be published only as 'one project, self-measured'.",
+  "What task set and noise band do you accept for the on/off runs? The only band in the evidence is the Uvik benchmark's plus or minus 10 points; the toolkit's own spread is unmeasured.",
+  "The source project has no successful real install-to-first-order on record. Should the toolkit wait for that run before teaching real-system proof (P12) as practice, or publish with the gap stated?",
+  "Is Claude Code-only acceptable for the first release? The hooks and deny rules do not port, while the three compared frameworks run on many harnesses.",
+  "Do you agree to publish the waste ledger (the judged swarm, the step cap, 733 rulings in 44 days, 53% of commits touching no product code) alongside the method? The skeptic critique rates it as more credible than the method itself.",
+  "Can the unverified figures be re-cited from the repo, or should they be removed: the 18 judge rounds and about 12M tokens, the 22.2M-versus-26.6k projection, the pinned-model incident, the 6.3M-token audit figure, and the 95 KB versus 101 KB instruction-file sizes?",
+  "Where does 'trivial, use Claude Code alone' end? BMAD's unit of about one session or roughly 500 changed lines is the only size in the evidence, and it is a unit of work, not a triviality threshold."
+ ]
+}

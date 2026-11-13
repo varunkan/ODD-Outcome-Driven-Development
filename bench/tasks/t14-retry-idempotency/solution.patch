@@ -1,0 +1,216 @@
+diff --git a/README.md b/README.md
+index b866aa9..230e21b 100644
+--- a/README.md
++++ b/README.md
+@@ -20,7 +20,11 @@ queue.state('job-0001')       # 'done'
+   till has journals on disk in it.
+ - `jobrun/queue.py`: `JobQueue(path)`. Rebuilds each job's state (`queued`, `running`, `done`, `failed`) from the
+   journal when opened. A job that was started and never finished was cut off by a crash and is queued again.
+-- `jobrun/runner.py`: `Runner(queue, services, handlers=None)`, with `run_one(job_id)` and `run_pending()`.
++- `jobrun/runner.py`: `Runner(queue, services, handlers=None, max_attempts=3, backoff=1.0, sleep=time.sleep)`, with
++  `run_one(job_id)` and `run_pending()`. A `TransientError` starts the job again after `backoff`, then twice as long
++  each time, until it has been started `max_attempts` times; `queue.attempts(job_id)` counts the starts, across
++  restarts. Every provider call carries an idempotency key from `ctx.key(name)`, fixed per job id and side effect,
++  so no attempt or restart repeats a charge or a mail.
+ - `jobrun/handlers.py`: the job kinds and their payloads: `charge_invoice`, `split_charge`, `refund`,
+   `send_receipt`, `notify`.
+ - `jobrun/fakes.py`: in-memory `Ledger` (payments) and `Mailer` that behave like the real providers, including
+diff --git a/jobrun/handlers.py b/jobrun/handlers.py
+index a2dc0be..5c6cbe8 100644
+--- a/jobrun/handlers.py
++++ b/jobrun/handlers.py
+@@ -7,6 +7,9 @@ Payloads (amounts in whole cents):
+ - refund:         {"invoice", "account", "amount"}                  refund the account
+ - send_receipt:   {"invoice", "account", "amount", "email"}         charge the account, then mail a receipt
+ - notify:         {"email", "subject", "body"}                      mail a message
++
++Every provider call passes `key=ctx.key(<name>)`, a name unique within the handler, so that an attempt after a
++failure or a crash does not do again what an earlier attempt already did.
+ """
+ 
+ 
+@@ -28,7 +31,7 @@ def _field(payload, name):
+ 
+ def charge_invoice(job, ctx):
+     p = job.payload
+-    receipt = ctx.ledger.charge(_field(p, 'account'), _amount(p.get('amount')))
++    receipt = ctx.ledger.charge(_field(p, 'account'), _amount(p.get('amount')), key=ctx.key('charge'))
+     return {'invoice': p.get('invoice'), 'charge': receipt['id']}
+ 
+ 
+@@ -38,13 +41,14 @@ def split_charge(job, ctx):
+     if not isinstance(parts, list) or not parts:
+         raise ValueError('split_charge needs a non-empty list of parts')
+     checked = [(_field(part, 'account'), _amount(part.get('amount'))) for part in parts]
+-    charges = [ctx.ledger.charge(account, amount)['id'] for account, amount in checked]
++    charges = [ctx.ledger.charge(account, amount, key=ctx.key('charge-%d' % n))['id']
++               for n, (account, amount) in enumerate(checked)]
+     return {'invoice': p.get('invoice'), 'charges': charges}
+ 
+ 
+ def refund(job, ctx):
+     p = job.payload
+-    receipt = ctx.ledger.refund(_field(p, 'account'), _amount(p.get('amount')))
++    receipt = ctx.ledger.refund(_field(p, 'account'), _amount(p.get('amount')), key=ctx.key('refund'))
+     return {'invoice': p.get('invoice'), 'refund': receipt['id']}
+ 
+ 
+@@ -52,16 +56,16 @@ def send_receipt(job, ctx):
+     p = job.payload
+     amount = _amount(p.get('amount'))
+     email = _field(p, 'email')
+-    receipt = ctx.ledger.charge(_field(p, 'account'), amount)
++    receipt = ctx.ledger.charge(_field(p, 'account'), amount, key=ctx.key('charge'))
+     body = 'We received %d.%02d for invoice %s. Reference %s.' % (amount // 100, amount % 100, p.get('invoice'),
+                                                                    receipt['id'])
+-    message = ctx.mailer.send(email, 'Your receipt', body)
++    message = ctx.mailer.send(email, 'Your receipt', body, key=ctx.key('mail'))
+     return {'invoice': p.get('invoice'), 'charge': receipt['id'], 'message': message['id']}
+ 
+ 
+ def notify(job, ctx):
+     p = job.payload
+-    message = ctx.mailer.send(_field(p, 'email'), _field(p, 'subject'), p.get('body', ''))
++    message = ctx.mailer.send(_field(p, 'email'), _field(p, 'subject'), p.get('body', ''), key=ctx.key('mail'))
+     return {'message': message['id']}
+ 
+ 
+diff --git a/jobrun/queue.py b/jobrun/queue.py
+index a953a3b..282ae40 100644
+--- a/jobrun/queue.py
++++ b/jobrun/queue.py
+@@ -20,6 +20,7 @@ class Job:
+         self.state = 'queued'
+         self.output = None
+         self.error = None
++        self.attempts = 0
+ 
+     def __repr__(self):
+         return 'Job(%r, %r, state=%r)' % (self.id, self.kind, self.state)
+@@ -51,6 +52,11 @@ class JobQueue:
+     def state(self, job_id):
+         return self._job(job_id).state
+ 
++    def attempts(self, job_id):
++        """How many times the job was started: every `started` event in the journal, a start cut off by a crash
++        included. Counted from the events themselves, so journals written before this method existed count too."""
++        return self._job(job_id).attempts
++
+     def queued(self):
+         return [copy.deepcopy(job) for job in self._jobs.values() if job.state == 'queued']
+ 
+@@ -83,7 +89,8 @@ class JobQueue:
+         return self.get(job_id)
+ 
+     def mark_started(self, job_id):
+-        self._move(job_id, 'queued', {'event': 'started'})
++        """Record a start. A running job may start again: that is a retry after a passing failure."""
++        self._move(job_id, ('queued', 'running'), {'event': 'started'})
+ 
+     def mark_done(self, job_id, output=None):
+         self._move(job_id, 'running', {'event': 'done', 'output': output})
+@@ -122,6 +129,7 @@ class JobQueue:
+             return
+         if event == 'started':
+             job.state = 'running'
++            job.attempts += 1
+         elif event == 'done':
+             job.state, job.output, job.error = 'done', record.get('output'), None
+         elif event == 'failed':
+diff --git a/jobrun/runner.py b/jobrun/runner.py
+index 024f2fe..46d97c4 100644
+--- a/jobrun/runner.py
++++ b/jobrun/runner.py
+@@ -1,14 +1,17 @@
+ """The runner: takes queued jobs one at a time and runs their handlers."""
+ 
+ import logging
++import time
+ 
++from .errors import TransientError
+ from .handlers import DEFAULT_HANDLERS
+ 
+ log = logging.getLogger('jobrun')
+ 
+ 
+ class Context:
+-    """What a handler gets besides the job: the providers it may call."""
++    """What a handler gets besides the job: the providers it may call, and `key(name)`, the idempotency key for one
++    side effect of this job."""
+ 
+     def __init__(self, job, services):
+         self.job = job
+@@ -16,14 +19,24 @@ class Context:
+         self.ledger = services.get('ledger')
+         self.mailer = services.get('mailer')
+ 
++    def key(self, name):
++        """The idempotency key for the side effect `name` of this job: the same on every attempt and after every
++        restart, different for every job id and for every side effect within one job."""
++        return 'job:%s:%s' % (self.job.id, name)
++
+ 
+ class Runner:
+     """Runs the jobs of one queue. `services` maps names ('ledger', 'mailer') to provider objects."""
+ 
+-    def __init__(self, queue, services=None, handlers=None):
++    def __init__(self, queue, services=None, handlers=None, max_attempts=3, backoff=1.0, sleep=time.sleep):
++        if max_attempts < 1:
++            raise ValueError('max_attempts is at least 1')
+         self.queue = queue
+         self.services = dict(services or {})
+         self.handlers = dict(DEFAULT_HANDLERS if handlers is None else handlers)
++        self.max_attempts = max_attempts
++        self.backoff = backoff
++        self.sleep = sleep
+ 
+     def register(self, kind, handler):
+         if not callable(handler):
+@@ -31,21 +44,37 @@ class Runner:
+         self.handlers[kind] = handler
+ 
+     def run_one(self, job_id):
+-        """Run one queued job to its end. Returns its final state, 'done' or 'failed'."""
++        """Run one queued job to its end. Returns its final state, 'done' or 'failed'.
++
++        A TransientError starts the job again after a wait, until it has been started max_attempts times (starts
++        before a restart count). Side effects are not repeated: every provider call a handler makes carries
++        ctx.key(...), which the provider deduplicates."""
+         job = self.queue.get(job_id)
+         handler = self.handlers.get(job.kind)
+         if handler is None:
+             self.queue.mark_failed(job_id, 'no handler for kind %r' % job.kind)
+             return 'failed'
+-        self.queue.mark_started(job_id)
+-        try:
+-            output = handler(job, Context(job, self.services))
+-        except Exception as exc:
+-            log.warning('job %s failed: %s', job_id, exc)
+-            self.queue.mark_failed(job_id, '%s: %s' % (type(exc).__name__, exc))
+-            return 'failed'
+-        self.queue.mark_done(job_id, output)
+-        return 'done'
++        error = 'started %d times before' % self.queue.attempts(job_id)
++        started_here = 0
++        while self.queue.attempts(job_id) < self.max_attempts:
++            if started_here:
++                self.sleep(self.backoff * 2 ** (started_here - 1))
++            self.queue.mark_started(job_id)
++            started_here += 1
++            try:
++                output = handler(job, Context(job, self.services))
++            except TransientError as exc:
++                error = '%s: %s' % (type(exc).__name__, exc)
++                log.warning('job %s attempt %d failed: %s', job_id, self.queue.attempts(job_id), exc)
++                continue
++            except Exception as exc:
++                log.warning('job %s failed: %s', job_id, exc)
++                self.queue.mark_failed(job_id, '%s: %s' % (type(exc).__name__, exc))
++                return 'failed'
++            self.queue.mark_done(job_id, output)
++            return 'done'
++        self.queue.mark_failed(job_id, 'gave up after %d attempts: %s' % (self.queue.attempts(job_id), error))
++        return 'failed'
+ 
+     def run_pending(self):
+         """Run every queued job, in submission order. Returns {'done': n, 'failed': n}."""

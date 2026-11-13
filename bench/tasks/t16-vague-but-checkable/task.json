@@ -1,0 +1,8 @@
+{
+  "id": "t16-vague-but-checkable",
+  "size": "medium",
+  "kind": "vague",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done",
+  "note": "The ticket's wishes (more solid, tidy up, tell people recipes were left out) are not checked. The one stated rule is checked in all four functions it names: no recipe containing a profile allergen, where containing goes through ingredient aliases (groundnut oil), the ingredient table (butter contains milk; coconut milk does not), components at any depth (party platter, skewers, satay sauce) and the customer's own spelling (Peanuts, groundnut, Dairy, Wheat). Also checked, because the ticket states it: no-allergen output unchanged, the order of what is left unchanged, suggest and similar still fill their limit, the plan rotates over the dinners that are left, and suggest's shared memo never hands one customer's answer to another. A pass does not show the recipe card or the shopping list."
+}

@@ -1,0 +1,62 @@
+[
+ {
+  "area": "frugality",
+  "clusters": 25,
+  "keep": 6,
+  "refine": 5,
+  "merge": 6,
+  "drop": 8,
+  "overturned": 8,
+  "unruled_ids": 0
+ },
+ {
+  "area": "project-management",
+  "clusters": 43,
+  "keep": 21,
+  "refine": 10,
+  "merge": 7,
+  "drop": 5,
+  "overturned": 8,
+  "unruled_ids": 0
+ },
+ {
+  "area": "outcome-driven",
+  "clusters": 33,
+  "keep": 12,
+  "refine": 9,
+  "merge": 7,
+  "drop": 5,
+  "overturned": 19,
+  "unruled_ids": 0
+ },
+ {
+  "area": "verification",
+  "clusters": 44,
+  "keep": 20,
+  "refine": 11,
+  "merge": 10,
+  "drop": 3,
+  "overturned": 16,
+  "unruled_ids": 0
+ },
+ {
+  "area": "decisions-learning",
+  "clusters": 42,
+  "keep": 20,
+  "refine": 11,
+  "merge": 7,
+  "drop": 4,
+  "overturned": 15,
+  "unruled_ids": 0
+ },
+ {
+  "area": "safety",
+  "clusters": 37,
+  "keep": 14,
+  "refine": 6,
+  "merge": 11,
+  "drop": 6,
+  "overturned": 12,
+  "unruled_ids": 0
+ }
+]

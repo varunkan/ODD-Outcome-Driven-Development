@@ -1,0 +1,1692 @@
+[
+ {
+  "instruction": "Use a script for mechanical work (counts, diffs, greps, git facts, rule-decided verdicts). Spawn an agent only for judgement.",
+  "outcome": "On 2026-09-15, 106 agents found nothing and one script found the blocker.",
+  "owner_words": "mechanical work is a script, agents only for judgement",
+  "enforcement": "judge tokenFindings",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:18"
+  ],
+  "id": "FR-001"
+ },
+ {
+  "instruction": "Never wait on a job in the foreground. The step that LAUNCHES a job returns INCOMPLETE with the log path and pid, and a later step collects the result. A scheduler that has to wait does it in one scripted call (jobs_wait), never through an agent that keeps re-checking.",
+  "outcome": "43 of 294 swarm agents sleep-polled (2026-10-06). 24 collect agents spawned only to answer PENDING read 24.6M tokens (2026-10-07).",
+  "owner_words": "never wait or poll in the foreground",
+  "enforcement": "scripts/pipeline/tool_guard.py WAIT (PreToolUse hook); judged-swarm.js waitJobs via scripts/pipeline/jobs_wait.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:19"
+  ],
+  "id": "FR-002"
+ },
+ {
+  "instruction": "Never read a big file whole. Find the lines with grep -n or a code-graph query, then read a bounded range.",
+  "outcome": "Agents start at a median of 70k tokens of context and re-read all of it every turn.",
+  "owner_words": "never read big files whole",
+  "enforcement": "tool_guard.py READ (Read or cat of a file over 1000 lines)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:20"
+  ],
+  "id": "FR-003"
+ },
+ {
+  "instruction": "Give every spawned agent a named agent type with a short tools list. Use a minimal generic 'step' charter when no role charter applies.",
+  "outcome": "A default agent starts at about 95k tokens of context and a restricted one at about 48k: roughly 381M tokens re-read in one session (2026-10-06).",
+  "owner_words": "",
+  "enforcement": "judged-swarm.js uses step for planning; .claude/agents/step.md",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:27"
+  ],
+  "id": "FR-004"
+ },
+ {
+  "instruction": "Keep agent steps short by capping tool calls ([step-cap 30]). Refuse call 31 except a context-file write, return the remainder as nodesLeft, and continue it in a fresh small step.",
+  "outcome": "Cost grows with the square of step length. Measured: 934.5M tokens read against about 77k written across three swarms; eight developer agents (about 160 calls each at about 324k context per call) were 44% of it. Replaying with a 30-call cap reads about 40% less.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py LENGTH; judged-swarm.js stepped()",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:140-144"
+  ],
+  "id": "FR-005"
+ },
+ {
+  "instruction": "Read files in windows of at most 200 lines (sed -n A,Bp), after grep -n has located the lines.",
+  "outcome": "96 reads over 8 KB in the same swarms (tool_guard.py:27).",
+  "owner_words": "",
+  "enforcement": "tool_guard.py RANGE",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:145"
+  ],
+  "id": "FR-006"
+ },
+ {
+  "instruction": "Cite baseline numbers from the baseline script; never re-measure them per agent.",
+  "outcome": "Removes duplicate measurement runs.",
+  "owner_words": "",
+  "enforcement": "scripts/verify/baseline.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:319-321"
+  ],
+  "id": "FR-007"
+ },
+ {
+  "instruction": "(Reverted) Poll background jobs with periodic agent WAIT steps. Replaced: wait with a one-call scheduler script instead.",
+  "outcome": "Agent WAIT/collect steps were assumed to 'cost almost nothing', but 24 collects spawned only to answer PENDING read 24.6M tokens. Replaced by jobs_wait.sh.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/jobs_wait.sh",
+  "performance": "proven-failed-reverted",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:453-454,19"
+  ],
+  "id": "FR-008"
+ },
+ {
+  "instruction": "Keep each step's required rule-reading small (operating cards) so it fits the step budget.",
+  "outcome": "REQ-135.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:464-465"
+  ],
+  "id": "FR-009"
+ },
+ {
+  "instruction": "Never open a large file to answer 'what calls X', 'who writes Y' or 'what breaks if I change Z'. Ask the graph or a callers query, then open only the named file:line in a bounded window. A file read compounds: it is re-read on every remaining turn.",
+  "outcome": "Opening a 9,282-line file with 200 turns left costs 22.2M tokens, against 26.6k for graph_query.py callers. A 15-card wave re-read 235,682 tokens per turn over 3,512 turns: the bill is context size times turns, not agent count.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py READ/RANGE; scripts/verify/graph_query.py callers",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:535-542"
+  ],
+  "id": "FR-010"
+ },
+ {
+  "instruction": "Before spawning an agent, ask whether a command could answer the question. Counts, diffs, greps, conflicts, git facts, board state and rule-decided verdicts are scripts. Correctness review, acceptance-criterion observables, failure classes and root-causing are agent work.",
+  "outcome": "Triaging 53 stranded branches: 106 triage and judge agents were killed with no verdicts. One shell script plus one Python file took ~4 minutes at near-zero tokens and found the single systemic blocker.",
+  "owner_words": "be as frugal with tokens as possible, don't use llm where mechanical work is required.",
+  "enforcement": "judge tokenFindings",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:8, 201-203; docs/process/history/CLAUDE.md:1113-1133"
+  ],
+  "id": "FR-011"
+ },
+ {
+  "instruction": "Prefer a script even when an agent would work. A script is re-runnable, diffable, committable and idempotent, and it sees the whole distribution, where per-item agents each see one item.",
+  "outcome": "The script found that all 53 branches had zero conflicts and 44 were blocked by one late policy, which no per-branch agent would have surfaced. ledger_branch_backfill.py ran twice: 42 events, then 0.",
+  "owner_words": "",
+  "enforcement": "judge tokenFindings",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:203; docs/process/history/CLAUDE.md:1120-1124, 1135-1143"
+  ],
+  "id": "FR-012"
+ },
+ {
+  "instruction": "Never read a big file whole. Locate with grep -n or a code-graph query, then read a bounded range.",
+  "outcome": "A file read is re-read on every later turn. A 9,282-line file opened with 200 turns left costs ~22.2M tokens, against 26,600 for a graph callers query. A 15-card wave re-read 235,682 tokens per turn over 3,512 turns.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/tool_guard.py READ (refuses whole reads over 1000 lines)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:10; docs/process/history/CLAUDE.md:23, 535-541"
+  ],
+  "id": "FR-013"
+ },
+ {
+  "instruction": "Keep each ranged read window at 200 lines or fewer.",
+  "outcome": "The same swarms made 96 reads over 8 KB each.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/tool_guard.py RANGE",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:43; scripts/pipeline/tool_guard.py:28"
+  ],
+  "id": "FR-014"
+ },
+ {
+  "instruction": "Give every spawned workflow agent a named role type with a short tools list. Use a minimal generic 'step' charter when no role applies.",
+  "outcome": "A default agent starts at ~95k tokens of context and a restricted one at ~48k. About 381M tokens were re-read in one session (2026-10-06).",
+  "owner_words": "",
+  "enforcement": ".claude/agents/step.md; judged-swarm.js uses step for planning",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:17; docs/process/history/CLAUDE.md:30"
+  ],
+  "id": "FR-015"
+ },
+ {
+  "instruction": "Cap developer and fix steps at 30 tool calls ([step-cap 30]). Over the cap, only a context-file write is allowed; the remainder returns as nodesLeft and continues in a fresh step.",
+  "outcome": "Across three swarms, 934.5M tokens were read against ~77k written. Eight developer agents (~160 calls at ~324k context each) were 44% of the reads. Replaying with a 30-call cap reads ~40% less.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py LENGTH; judged-swarm.js stepped()",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:43; docs/process/history/CLAUDE.md:143-148; scripts/pipeline/tool_guard.py:23-27"
+  ],
+  "id": "FR-016"
+ },
+ {
+  "instruction": "Hold a byte budget (~32 KB) on the always-loaded instructions file and each agent definition. Keep one line per rule there, and move history, incidents and measurements to a non-auto-loaded file that is opened only when a rule's reason matters.",
+  "outcome": "On REQ-323's swarm, 74% of 338M tokens read was fixed starting context. A developer started at 81k tokens, 40k of it the 80 KB instructions file and a 78 KB charter. Later the file hit 32,317 bytes against the 32,000 budget, and the owner quotes moved out.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/context_budget.sh (POLICY 18)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:46, 205; scripts/pipeline/context_budget.sh:2-8; docs/process/history/CLAUDE.md:1150-1152"
+  ],
+  "id": "FR-017"
+ },
+ {
+  "instruction": "Split domain rules into path-scoped rules files that load only when an agent touches matching files. The main file keeps the one-line rule.",
+  "outcome": "Part of the context-budget slimming. No separate measurement.",
+  "owner_words": "slim CLAUDE.md, keep the rules in it, move the long domain sections",
+  "enforcement": "rules frontmatter 'paths:'",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/rules/gates.md:1-9; .claude/rules/sync.md:1-18"
+  ],
+  "id": "FR-018"
+ },
+ {
+  "instruction": "Cite, never re-run: a battery, gate or analyzer result recorded for the same tree sha is cited, not re-measured per agent. Whoever doubts one must say why.",
+  "outcome": "Re-running same-sha results was named as waste in the 2026-09-08 token review. No isolated figure.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:64, 191; docs/process/history/CLAUDE.md:922-923, 1076-1077"
+  ],
+  "id": "FR-019"
+ },
+ {
+  "instruction": "Be frugal on tokens, never on quality: no redundant reads, no re-running finished work, no bloated output. Delegate wide searches to subagents and keep only their conclusions.",
+  "outcome": "No measurement recorded.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:113; docs/process/history/CLAUDE.md:584-587"
+  ],
+  "id": "FR-020"
+ },
+ {
+  "instruction": "Launch the coding agent through a context-compression proxy, and warn at session start when it is not in the request path.",
+  "outcome": "Claimed ~50% context saving; not independently measured here.",
+  "owner_words": "",
+  "enforcement": "SessionStart warning when ANTHROPIC_BASE_URL is not the proxy",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:119, 129; docs/process/history/CLAUDE.md:621-625"
+  ],
+  "id": "FR-021"
+ },
+ {
+  "instruction": "Compact context at roughly every 1M cumulative tokens and at natural phase breaks.",
+  "outcome": "Not enforceable: no hook can observe cumulative tokens, so it is a standing checkpoint.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "CLAUDE.md:119; docs/process/history/CLAUDE.md:716-717"
+  ],
+  "id": "FR-022"
+ },
+ {
+  "instruction": "Be frugal with tokens, never with quality. No redundant reads, no re-running finished work, no bloated output. Correctness and thoroughness are never traded away to save tokens.",
+  "outcome": "Standing principle; no measurement in this section.",
+  "owner_words": "",
+  "enforcement": "none (judge tokenFindings per root CLAUDE.md)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:584-587"
+  ],
+  "id": "FR-023"
+ },
+ {
+  "instruction": "Delegate wide searches to subagents and keep only their conclusions in the main context.",
+  "outcome": "Standing principle; no measurement given.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:587-588"
+  ],
+  "id": "FR-024"
+ },
+ {
+  "instruction": "Launch the agent through a token-compression proxy. This is decided at launch and cannot be switched on mid-session, so confirm the base-URL env var points at the proxy.",
+  "outcome": "Claimed ~50% context saving (not measured in this file).",
+  "owner_words": "",
+  "enforcement": ".claude/settings.json SessionStart warns when ANTHROPIC_BASE_URL is not the proxy",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:621-625,708"
+  ],
+  "id": "FR-025"
+ },
+ {
+  "instruction": "Compact context about every 1M cumulative tokens and at natural phase breaks. Treat the mark as a standing checkpoint, because no hook can observe cumulative usage.",
+  "outcome": "Explicitly not enforced: the model cannot reliably self-trigger compaction and no hook sees cumulative tokens.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:627-628,717-718"
+  ],
+  "id": "FR-026"
+ },
+ {
+  "instruction": "Refuse charter upgrades that would not have changed a real decision, because charters are injected on every spawn. Delete rules as readily as you add them.",
+  "outcome": "Accretion costs tokens on every spawn; see the context-budget item.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/context_budget.sh (agent definitions <= 32000 bytes)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:686-687"
+  ],
+  "id": "FR-027"
+ },
+ {
+  "instruction": "Keep incident-earned domain rules in path-scoped rule files that load only when matching files are opened, with only the critical one-liners in the always-loaded file.",
+  "outcome": "Eleven sync rules load only with sync files.",
+  "owner_words": "",
+  "enforcement": ".claude/rules/sync.md path-scoped loading",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:848"
+  ],
+  "id": "FR-028"
+ },
+ {
+  "instruction": "Cite, never re-run: a battery, gate or analyzer result recorded for the SAME tree sha is cited. A reviewer who doubts one must say why.",
+  "outcome": "Re-running same-sha results is pure waste; part of the 10-20x estimate.",
+  "owner_words": "",
+  "enforcement": "none mechanical",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:923-924,1082-1083"
+  ],
+  "id": "FR-029"
+ },
+ {
+  "instruction": "Before spawning any agent, ask: could a command answer this? If the answer is a count, diff, grep, file state, git fact, schema check or a table joining those, it is mechanical: write the script.",
+  "outcome": "53 branches sat ahead of main. A 106-agent workflow was killed mid-run with no verdicts. One shell script plus one Python file took ~4 minutes at near-zero tokens and found that all 53 had zero conflicts and 44 were blocked by one thing (a missing ledger event after POLICY 16 landed).",
+  "owner_words": "be as frugal with tokens as possible, don't use llm where mechanical work is required.",
+  "enforcement": "judge tokenFindings (root CLAUDE.md)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:1109-1130"
+  ],
+  "id": "FR-030"
+ },
+ {
+  "instruction": "Prefer a script even when an agent would work: a script is re-runnable, diffable, committable and idempotent.",
+  "outcome": "ledger_branch_backfill.py ran twice: 42 events, then 0. An agent run twice gives two different answers and neither is reviewable.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:1145-1147"
+  ],
+  "id": "FR-031"
+ },
+ {
+  "instruction": "Keep the always-loaded instruction file and agent definitions under a byte budget, one line per rule. Move history, owner quotes and rationale to a non-auto-loaded history file, keeping a single copy.",
+  "outcome": "CLAUDE.md reached 32317 bytes against a 32000 budget when two merges composed. On one swarm, 74% of 338M tokens read was fixed starting context, and a developer agent started at 81k tokens, 40k of them CLAUDE.md plus its charter.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/context_budget.sh (POLICY 18)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/CLAUDE.md:1149-1155; scripts/pipeline/context_budget.sh:4-8,14-15"
+  ],
+  "id": "FR-032"
+ },
+ {
+  "instruction": "Reduce tokens while keeping agents excellent, and tier review effort by risk.",
+  "outcome": "Fed the efficiency retro's tiering, which was later made precise as diff-computed ladder tiers (#45).",
+  "owner_words": "",
+  "enforcement": "agreement #11; the efficiency retro's tiering",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:17"
+  ],
+  "id": "FR-033"
+ },
+ {
+  "instruction": "Have an LLM judge watch every agent for token efficiency and step in when an agent is doing something wrong.",
+  "outcome": "One day's fleet used 1.85 billion context tokens across 85 agents, with 274 full-suite runs, 110 trial merges and 193 analyzer runs.",
+  "owner_words": "ensure the agents are not wasting tokens, llm as judge monitor all agents they should efficiently work and guide them if they are performing anything wrong",
+  "enforcement": "judge rules per role under each charter's '## Charter upgrades'; directives_check.sh asserts the script and SKILL section exist",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:39"
+  ],
+  "id": "FR-034"
+ },
+ {
+  "instruction": "Build a per-agent efficiency ledger from the transcripts without a model (turns, full-suite runs, trial merges, repeated commands, tool-result KB, context tokens), so a judge can read it in about 2k tokens. Record the figures at every delivery.",
+  "outcome": "The judge reads a 2k-token ledger instead of whole transcripts.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/agent_efficiency.py <tasks-dir>; figures recorded in PIPELINE_STATE.md",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:39"
+  ],
+  "id": "FR-035"
+ },
+ {
+  "instruction": "Treat spend as turns times context: cut turns by batching commands, bound tool output, and run one suite per hand-off. Put a turn budget and bounded-output idioms in every dispatch prompt.",
+  "outcome": "Named the levers behind the 1.85B-token day.",
+  "owner_words": "",
+  "enforcement": "dispatch templates carry a turn budget",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:39"
+  ],
+  "id": "FR-036"
+ },
+ {
+  "instruction": "Run one gate per batch. Cite results for the same tree sha; never re-run them.",
+  "outcome": "The full suite had run 5 times for one batch.",
+  "owner_words": "",
+  "enforcement": "CLAUDE.md 'Dispatch per INVARIANT'",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:56"
+  ],
+  "id": "FR-037"
+ },
+ {
+  "instruction": "Before spawning any agent, ask whether a command could answer the question. If the answer is a count, diff, grep, file state, git fact, schema check, or a join of those, write a script.",
+  "outcome": "53 stranded branches: a workflow of 106 agents (53 triage plus 53 judges) was killed mid-run with no verdicts. One shell script plus one Python file took about 4 minutes and near-zero tokens, and found and cleared the single systemic blocker.",
+  "owner_words": "be as frugal with tokens as possible, don't use llm where mechanical work is required.",
+  "enforcement": "judge tokenFindings (named in CLAUDE.md; the register section names no script)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:83-102"
+  ],
+  "id": "FR-038"
+ },
+ {
+  "instruction": "Prefer a script even when an agent would work, because a script is re-runnable, diffable, committable and idempotent.",
+  "outcome": "ledger_branch_backfill.py ran twice: 42 events, then 0. An agent run twice gives two different answers, neither reviewable.",
+  "owner_words": "",
+  "enforcement": "none (method)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:117-119"
+  ],
+  "id": "FR-039"
+ },
+ {
+  "instruction": "Cap the length of developer and fix steps (30 tool calls) and hand the remainder to a fresh step through the ctx file. Cost scales with agent length, because every call re-reads everything before it. Never cap the main session or unmarked agents.",
+  "outcome": "934.5M context tokens read against about 77k written, 98% of them cache reads. Eight developer agents (about 160 calls each) were 44% of all reads. Replaying 2,648M tokens with a per-step cap gives 42% less at 25 calls, 36% at 40, 28% at 60.",
+  "owner_words": "Token usage must be absolutely optimal",
+  "enforcement": "scripts/pipeline/tool_guard.py LENGTH (PreToolUse); judged-swarm.js stepped(); test_tool_guard.sh; test_judged_swarm.mjs V11-V13",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:219-229"
+  ],
+  "id": "FR-040"
+ },
+ {
+  "instruction": "Read files in bounded windows of at most 200 lines.",
+  "outcome": "Part of the #62 token rule.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/tool_guard.py RANGE",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:225-226"
+  ],
+  "id": "FR-041"
+ },
+ {
+  "instruction": "Measure where tokens actually go before picking a lever. Here big tool outputs were negligible and call count dominated.",
+  "outcome": "Tool outputs over 8 KB were only about 0.55M tokens, against 934.5M of context reads.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/swarm_audit.py",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:220-224"
+  ],
+  "id": "FR-042"
+ },
+ {
+  "instruction": "Hold every always-loaded context file (instructions, charters) to a size budget, here 32 KB, enforced by a script.",
+  "outcome": "74% of one swarm's 338M tokens read was always-loaded context (the instructions file was 80 KB, charters up to 80 KB).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/context_budget.sh (POLICY 18)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/OWNER_DIRECTIVES.md:245-246"
+  ],
+  "id": "FR-043"
+ },
+ {
+  "instruction": "Inject a short operating card (at most three pages) at spawn rather than the full charter. Keep the full charter, lessons, domain notes and pipeline skill on disk, with a 'read on demand' table naming the trigger that opens each one. Keep incident history in a separate, non-auto-loaded file.",
+  "outcome": "Keeps a step's rule-reading inside its time budget (REQ-135).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh (size and BINDING ids)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/product-owner.card.md:1-5,50-59; .claude/agents/business-system-analyst.card.md:1-5,48-57; .claude/agents/product-owner.md:207"
+  ],
+  "id": "FR-044"
+ },
+ {
+  "instruction": "Run at most ten agents at once. Low-risk and tooling work gets one certifying-judge pass; high-risk money/sync/schema work gets two. Reviewers never run the full suite (the merge train does). Batch device-gated branches. Keep replies at or under 100 words.",
+  "outcome": "Earned in the #33 audit.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/product-owner.md:183"
+  ],
+  "id": "FR-045"
+ },
+ {
+  "instruction": "Every dispatch pastes the baseline block (main sha, test counts, analyzer triple, gate floors) and says 'cite, never re-run'. Never put a verifier or judge on a branch whose developer is still committing: name the frozen sha and check the running list first.",
+  "outcome": "Earned in the #28 audit.",
+  "owner_words": "",
+  "enforcement": "scripts/verify/baseline.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/product-owner.md:195"
+  ],
+  "id": "FR-046"
+ },
+ {
+  "instruction": "Every dispatch states its turn budget and bounded-output idioms: the full suite ONCE, on the trial merge into main; merge-tree plus the analyzer on sibling branches. Never re-derive a committed record except to refute it.",
+  "outcome": "Earned under #28.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/product-owner.md:197"
+  ],
+  "id": "FR-047"
+ },
+ {
+  "instruction": "Get speed without dilution: condition-waits over sleeps, batched commands, parallel independent work. Never skip a stage, a RED proof or a battery leg, and name carried-over scopes in the spec.",
+  "outcome": "Shared working agreement 6.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/product-owner.md:32-34; .claude/agents/business-system-analyst.md:119-121"
+  ],
+  "id": "FR-048"
+ },
+ {
+  "instruction": "Before spawning an agent or reading many files to build a table, ask 'could a command answer this?'. Counts, diffs, greps, git facts, file state and joins are mechanical: script them. Agents are only for judgement (correctness, right observable, failure class, adversarial review, root cause).",
+  "outcome": "A 106-agent workflow triaging 53 stranded branches produced nothing; one shell script plus one Python file answered in about 4 minutes. It found all 53 had zero conflicts and 44 were blocked by a single missing ledger event.",
+  "owner_words": "be as frugal with tokens as possible, don't use llm where mechanical work is required",
+  "enforcement": "judge tokenFindings",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/product-owner.card.md:65-80; .claude/agents/business-system-analyst.md:291-306"
+  ],
+  "id": "FR-049"
+ },
+ {
+  "instruction": "Prefer a script even where an agent would work: it is re-runnable, diffable and idempotent. A script sees the whole distribution, and the systemic answer lives in the distribution.",
+  "outcome": "Same 53-branch measurement: the script found the single systemic blocker that per-item agents could not see.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/product-owner.card.md:75-82; .claude/agents/business-system-analyst.md:301-308"
+  ],
+  "id": "FR-050"
+ },
+ {
+  "instruction": "The analysis is read-only and runs ahead: the analyst never runs the test suite, the analyzer, a gate, a battery or worktree creation. Produce each citation with ONE batched grep+window call per file covering every anchor, read cards, specs and lessons by section marker, and budget at most 110 turns.",
+  "outcome": "Eleven analysts ran 17 full suites. The lean rows delivered the same artifact in 81-101 turns.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh (BSA B-2)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/business-system-analyst.md:172-177; .claude/agents/business-system-analyst.card.md:15"
+  ],
+  "id": "FR-051"
+ },
+ {
+  "instruction": "Never open a large file to answer 'what calls X', 'who writes Y' or 'what breaks if I change Z'. Ask the code graph, then open only the file:line it names, in a bounded range.",
+  "outcome": "Opening a 9,282-line file with 200 turns left costs about 22,200,000 tokens; a graph callers query costs about 26,600. One wave re-read 235,682 tokens per turn over 3,512 turns: cost is context size times turns.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py READ (over 1000 lines); scripts/verify/graph_query.py",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/business-system-analyst.md:268-282"
+  ],
+  "id": "FR-052"
+ },
+ {
+  "instruction": "Prefer a bounded window (sed -n 'A,Bp') or a targeted grep -n over reading any file over about 500 lines.",
+  "outcome": "Same compounding-context measurement.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py READ/RANGE",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/business-system-analyst.md:283-284"
+  ],
+  "id": "FR-053"
+ },
+ {
+  "instruction": "Treat a grep hit list as cheap and the files it implicates as expensive. When the graph lacks an answer, fall back to a targeted search, never to opening everything.",
+  "outcome": "A delete-symbol grep is 1,442 bytes, but the five files it names are 26,403 lines; the graph answers in about 133 tokens.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/business-system-analyst.md:285-289"
+  ],
+  "id": "FR-054"
+ },
+ {
+  "instruction": "Never open a large file to answer 'what calls X', 'who writes Y' or 'what breaks if I change Z'. Ask the graph or a caller query, then read only the file:line it names, in a bounded range (sed -n 'A,Bp' or grep -n). Prefer bounded reads to a whole-file Read on anything over about 500 lines.",
+  "outcome": "Measured 2026-09-14: opening a 9,282-line service file with 200 turns left cost 22,200,000 tokens, against 26,600 for a caller query. A 15-card merge wave re-read 235,682 tokens per turn across 3,512 turns. The cost is context size times turns, not the number of agents.",
+  "owner_words": "",
+  "enforcement": "tool_guard READ (over 1000 lines), per CLAUDE.md; charter text",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/solution-architect.md:193-214; .claude/agents/developer.md:85"
+  ],
+  "id": "FR-055"
+ },
+ {
+  "instruction": "A grep hit list is cheap; the files it points to are not. Use the list (or the graph) to answer the question rather than opening every file it names.",
+  "outcome": "A grep for a delete call was 1,442 bytes and could not tell a call from a comment. The five files it named held 26,403 lines. The graph answered the real question in about 133 tokens.",
+  "owner_words": "",
+  "enforcement": "none (charter text)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/solution-architect.md:210-212"
+  ],
+  "id": "FR-056"
+ },
+ {
+  "instruction": "Inject a short operating card (at most about 3 pages) into each spawned role, not the full charter. Mark each non-negotiable rule with a BINDING id, and have a script fail when the card drops a BINDING id or grows past the size cap. Everything else is read on demand from a 'when X, read Y' table.",
+  "outcome": "REQ-135: 'shorter can never quietly become weaker'. The card cap is about 12 KB / 180 lines.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/solution-architect.md:180-185; .claude/agents/solution-architect.card.md:1-5,49-58; .claude/agents/developer.card.md:1-5,56-65; scripts/pipeline/card_check.sh:10,24-25,80"
+  ],
+  "id": "FR-057"
+ },
+ {
+  "instruction": "Mechanical work gets a SCRIPT, never an agent. Before spawning a subagent or reading many files to build a table, ask whether a command could answer it (counts, diffs, greps, git facts, file state, joins). Agents are for judgement: correctness, whether an AC names the right observable, failure classes, adversarial review, root cause. Prefer a script even where an agent would work.",
+  "outcome": "Measured 2026-09-15: a 106-agent workflow was launched to triage 53 stranded branches. One shell script plus one Python file answered in about 4 minutes and found that all 53 had zero conflicts and 44 were blocked by a single missing ledger event. A script sees the distribution; an agent sees only its one item.",
+  "owner_words": "Mechanical work gets a SCRIPT, never an agent",
+  "enforcement": "judge tokenFindings (per CLAUDE.md); charter text",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/solution-architect.md:216-220; .claude/agents/solution-architect.card.md:64-81; .claude/agents/developer.card.md:71-88"
+  ],
+  "id": "FR-058"
+ },
+ {
+  "instruction": "Design-role efficiency: cite file:line with a read-only grep on main plus the graph, one batched shell call per question. Name the entry point, the chokepoint and the across/down enumeration instead of re-narrating code. Stay within at most 100 turns and 20k output tokens.",
+  "outcome": "Directive #28 audit: one Architect ran 3 full suites and another emitted 71k output tokens (3.5x the median).",
+  "owner_words": "",
+  "enforcement": "none (charter text)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/solution-architect.md:237; docs/process/history/agent-solution-architect.md:215-220"
+  ],
+  "id": "FR-059"
+ },
+ {
+  "instruction": "A ruled step gets its bearings in ONE call (git status, a grep of the context file for the stage, and the log tail). It writes its log line in its LAST call, stating the final call count.",
+  "outcome": "REQ-304 r2. Cuts orientation overhead.",
+  "owner_words": "",
+  "enforcement": "none (charter text)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/developer.md:157"
+  ],
+  "id": "FR-060"
+ },
+ {
+  "instruction": "Never busy-wait or sleep-poll. An unavoidable wait is bounded (at most 60 s), happens at most once a minute, and prefers wait or flock. Lower test concurrency when another suite may be running.",
+  "outcome": "Machine load reached 137 from concurrent polling and suites.",
+  "owner_words": "",
+  "enforcement": "tool_guard WAIT (per CLAUDE.md)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/developer.md:187"
+  ],
+  "id": "FR-061"
+ },
+ {
+  "instruction": "Cite, don't re-run: record each battery, gate and analyzer result with its tree sha. On rework, make the reviewer's committed probes green first, then the delta. Never re-derive the battery.",
+  "outcome": "Saves duplicate runs; results are reusable by tree sha.",
+  "owner_words": "",
+  "enforcement": "none (charter text)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/developer.md:191"
+  ],
+  "id": "FR-062"
+ },
+ {
+  "instruction": "Run the full suite ONCE at hand-off, both roots, captured to a file and filtered from the file. Never re-run a suite to see what a 'tail' discarded; iterate on the parser, not the run. The TDD loop runs single files. Run the analyzer once per tree, to a file.",
+  "outcome": "Directive #28 audit, 2026-09-04: 25 Developers ran 109 full suites and 96 analyzers.",
+  "owner_words": "",
+  "enforcement": "scripts/verify/suite.sh slots; tool_guard SUITE (per CLAUDE.md)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/developer.md:201; docs/process/history/agent-developer.md:376-388"
+  ],
+  "id": "FR-063"
+ },
+ {
+  "instruction": "Check branch overlap with a trial merge-tree count. Pair every scratch worktree add with a remove, and print the worktree count at hand-off. Use one shell call per QUESTION, joining independent probes. Budgets: at most 150 turns, 2 suites, 1 trial merge (against main only) and 180 KB of tool results.",
+  "outcome": "Directive #28 audit: 44 worktrees were added and none removed.",
+  "owner_words": "",
+  "enforcement": "none (charter text)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/developer.md:202; docs/process/history/agent-developer.md:388-389"
+  ],
+  "id": "FR-064"
+ },
+ {
+  "instruction": "Do not run a third full judge on a diff when the pod's existing post-delivery judge on the same tree already satisfies the review step.",
+  "outcome": "Removes duplicate judging. Unmeasured.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:77-78"
+  ],
+  "id": "FR-065"
+ },
+ {
+  "instruction": "Never open a large file to answer 'what calls X / who writes Y / what breaks if I change Z'. Ask the graph or grep, then open only the named file:line with a bounded range.",
+  "outcome": "Measured 2026-09-14: a file read is re-paid on every remaining turn. Opening a 9,282-line file with 200 turns left cost 22,200,000 tokens; graph_query callers cost 26,600. The 15-card wave re-read 235,682 tokens per turn across 3,512 turns: context size times turns, not agent count.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/tool_guard.py READ",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:85; .claude/agents/orchestrator.md:23-37"
+  ],
+  "id": "FR-066"
+ },
+ {
+  "instruction": "On any file over ~500 lines use 'sed -n A,Bp' windows (at most 200 lines) or a targeted 'grep -n', never a whole-file Read.",
+  "outcome": "Same 22.2M vs 26.6K token measurement. The guard refuses whole reads over 1000 lines and sed windows over 200 lines.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/tool_guard.py:19,27,50 (READ, RANGE=200)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:86; .claude/agents/orchestrator.md:38-39; .claude/agents/step.md:11"
+  ],
+  "id": "FR-067"
+ },
+ {
+  "instruction": "Treat a grep hit list as cheap but the files it implicates as expensive. When the graph is silent, fall back to a targeted search, never to opening everything.",
+  "outcome": "Measured: the grep for one delete method was 1,442 bytes and could not tell a call from a comment. The five files it named are 26,403 lines. The graph answered for ~133 tokens.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/orchestrator.md:40-44"
+  ],
+  "id": "FR-068"
+ },
+ {
+  "instruction": "Before spawning a subagent or reading many files to build a table, ask 'could a command answer this?'. Script counts, diffs, greps, git facts, file states and joins, even where an agent would work. Agents are for judgement only (correctness, AC observables, failure classes, adversarial review, root-causing).",
+  "outcome": "Measured: a 106-agent workflow was launched to triage 53 stranded branches. One shell script plus one Python file answered in ~4 minutes and found what per-branch reading could not: all 53 had zero conflicts and 44 were blocked by a single missing ledger event. 'A script sees the distribution; an agent sees its one item.'",
+  "owner_words": "",
+  "enforcement": "judge tokenFindings; scripts/pipeline/swarm_audit.py",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:87; .claude/agents/test-agent.card.md:67-84; .claude/agents/orchestrator.md:154-171; .claude/agents/orchestrator.card.md:64-81"
+  ],
+  "id": "FR-069"
+ },
+ {
+  "instruction": "Batch deletion regression legs once per device window, covering every deletion merged since the last window.",
+  "outcome": "Batched-battery policy. Unmeasured.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:115"
+  ],
+  "id": "FR-070"
+ },
+ {
+  "instruction": "Hold a certification to a budget: at most 130 turns, 1 suite, 1 trial merge and 200 KB of output, with worktrees added = worktrees removed.",
+  "outcome": "Set by the #28 audit after one certifier ran both roots on four trees.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:134"
+  ],
+  "id": "FR-071"
+ },
+ {
+  "instruction": "Give each role charter's non-negotiables BINDING ids and inject a short card (at most ~3 pages) instead of the full charter. A script fails when the card drops an id or outgrows its cap, so 'shorter can never quietly become weaker'.",
+  "outcome": "REQ-135. card_check.sh caps a card at 12,000 bytes and 180 lines.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh:26-27,79-82",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:150-153; .claude/agents/orchestrator.md:142-147; .claude/agents/test-agent.card.md:3-5"
+  ],
+  "id": "FR-072"
+ },
+ {
+  "instruction": "Run no full suite inside a certification: the requirement's tests, the committed battery once, the gates and merge-trees on ONE trial composition. The full suite on both roots belongs to the merge train, once per composed tree (unless the tip moved after the cited sha).",
+  "outcome": "Directive #33: a certification that re-ran the suite spent a third of its budget re-measuring what the train measures again (history agent-test-agent.md:264). Bounded later by the REQ-274 stale-roots rule.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/runs.sh (suite-run count, per CLAUDE.md)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:181"
+  ],
+  "id": "FR-073"
+ },
+ {
+  "instruction": "Never drop a verification rung to save turns (RED re-execution, battery with control, gates, merge-trees, device leg or its honest NOT-RUN). Save turns by not re-reading cited results and by writing the numbers first so the judge cites them.",
+  "outcome": "Directive #34 'fast AND right' (history agent-test-agent.md:266).",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:182"
+  ],
+  "id": "FR-074"
+ },
+ {
+  "instruction": "Cite, don't re-run: a battery, gate or analyzer result recorded for the SAME tree sha is cited with its sha. Re-run only what you state a concrete doubt about, your own probes, or results whose sha differs from the tip.",
+  "outcome": "Owner: 'defect fixing is taking a lot of time... with smart strategy'. 'Three executions of one battery on one tree is waste, not rigor' (history agent-test-agent.md:280).",
+  "owner_words": "defect fixing is taking a lot of time\u2026 with smart strategy",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.md:188; .claude/agents/orchestrator.md:66-67,151"
+  ],
+  "id": "FR-075"
+ },
+ {
+  "instruction": "Keep reference material (domain notes, lessons ladder, full charter, pipeline topology, state) on disk and open it only when its trigger fires (money/sync path, before claiming a verification, etc.), not injected into every prompt.",
+  "outcome": "REQ-135 card design. Unmeasured.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/test-agent.card.md:52-61; .claude/agents/orchestrator.card.md:49-58"
+  ],
+  "id": "FR-076"
+ },
+ {
+  "instruction": "Demand the finished thing in the fewest tokens and steps that produce it: strict is not wasteful.",
+  "outcome": "Unmeasured.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/judge.md:48"
+  ],
+  "id": "FR-077"
+ },
+ {
+  "instruction": "Check token use by measuring the judged agents' transcripts with a script (lines and KB per transcript; role and stage from the first prompt; tool names; tool results over 8 KB; first and last timestamps). Flag whole reads of large files, repeated test or gate runs on an unchanged tree, re-derived ctx facts and outputs pasted whole, and turn each into a directive.",
+  "outcome": "Judge check 6. Feeds the per-milestone token report (#47).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/swarm_audit.py",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/judge.md:58"
+  ],
+  "id": "FR-078"
+ },
+ {
+  "instruction": "Cap the judge at 15 tool calls per pass: read the diffs and the artifact, and never read a large source file whole.",
+  "outcome": "Token discipline for the judge itself.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/judge.md:39,67"
+  ],
+  "id": "FR-079"
+ },
+ {
+  "instruction": "Identify an agent transcript only by its first prompt's line-anchored ROLE and Stage, printed by the same script that counts its calls, never by timing. A judge transcript is never scored as the reviewed role, and when none is found the criterion is UNSCORED, never met.",
+  "outcome": "REQ-305 plan-r1, a PROCESS defect that recurred: the plan judge scored its own transcript as the plan author's because it was the newest file. Prompts quoting a ruling carry 'ROLE: Judge' mid-line, hence the anchoring.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/swarm_audit.py",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/judge.md:83"
+  ],
+  "id": "FR-080"
+ },
+ {
+  "instruction": "Orient in ONE shell call: grep the context file for the previous stage's marker (cut to 300 chars) plus tail -3. Never Read the context file or print its rulings section by range.",
+  "outcome": "The Read tool paged a 240-line ctx at 35k tokens. Five, then six judges in a row printed the rulings whole (36-53 KB each, re-read every later turn) because dispatches said 'Read ctx FIRST' (history agent-judge.md). Recurred six times.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/tool_guard.py READ (partial)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/judge.md:84"
+  ],
+  "id": "FR-081"
+ },
+ {
+  "instruction": "Give every workflow agent a named agent type with a short tools list. Use a lean single-step worker (file and shell tools only) for any agent not covered by a role charter.",
+  "outcome": "The charter claims it starts at about half the context of a general-purpose agent. No measurement record was found in these sources.",
+  "owner_words": "",
+  "enforcement": "none in these sources (CLAUDE.md names the rule)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/agents/step.md:2-4"
+  ],
+  "id": "FR-082"
+ },
+ {
+  "instruction": "Query first, then open only the file:line it names, with a bounded window (sed -n 'A,Bp').",
+  "outcome": "Every open file is re-read on each remaining turn. Opening a 9,282-line file with 200 turns left compounds to ~22,200,000 tokens, vs 26,600 for one graph query.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py READ (over 1000 lines, per CLAUDE.md)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/surgical-fix/SKILL.md:80-89"
+  ],
+  "id": "FR-083"
+ },
+ {
+  "instruction": "Never cat a file over ~500 lines.",
+  "outcome": "Follows from the compounding-read measurement above.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py READ/RANGE (per CLAUDE.md)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/surgical-fix/SKILL.md:90"
+  ],
+  "id": "FR-084"
+ },
+ {
+  "instruction": "A grep hit list is cheap; the files it points at are not. Use grep -rn to locate and never open every hit.",
+  "outcome": "Part of the token discipline measured above.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/surgical-fix/SKILL.md:91"
+  ],
+  "id": "FR-085"
+ },
+ {
+  "instruction": "Aim for 3 graph/locator calls per file read and zero tool results over 8k tokens.",
+  "outcome": "A live pod held 20 calls to 6 reads with 0 results over 8k; that was adopted as the bar.",
+  "owner_words": "",
+  "enforcement": "none (agent_efficiency.py reports tool-result KB)",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/surgical-fix/SKILL.md:92-93"
+  ],
+  "id": "FR-086"
+ },
+ {
+  "instruction": "Agents never run the full test suite. Name the test paths or compute the affected tests from the diff; the full suite runs once, at the merge door.",
+  "outcome": "Sixteen agents each recomputed the same ~3,182-test answer the train recomputes anyway: ~48 minutes of a two-slot pool for one result.",
+  "owner_words": "",
+  "enforcement": "scripts/verify/suite.sh refuses a duplicate full run; scripts/verify/affected_tests.py --base main",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/surgical-fix/SKILL.md:95-102; .claude/skills/product-pipeline/SKILL.md:358-360,557-558"
+  ],
+  "id": "FR-087"
+ },
+ {
+  "instruction": "Steps inherit the session model. Never pin a specific model on a step.",
+  "outcome": "On 2026-09-06 every Opus-pinned step died on the monthly Opus spend limit while the one inherited step ran.",
+  "owner_words": "use fable 5.1, its limit is not reached",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:120"
+  ],
+  "id": "FR-088"
+ },
+ {
+  "instruction": "Cite, don't re-run. A battery/gate/analyzer result recorded for the SAME tree sha is cited downstream; re-run only what you doubt (say why) plus your own probes.",
+  "outcome": "Owner directive #33 throughput rule (1).",
+  "owner_words": "",
+  "enforcement": "PRE rules text",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/req-ladder/SKILL.md:318; .claude/skills/product-pipeline/SKILL.md:549"
+  ],
+  "id": "FR-089"
+ },
+ {
+  "instruction": "Get speed without dilution: condition-waits over sleeps, batched device commands, parallel independent work. Never skip a stage, RED proof or battery leg, and name carried-over device scopes in the spec.",
+  "outcome": "Working agreement #6.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:76-78"
+  ],
+  "id": "FR-090"
+ },
+ {
+  "instruction": "Measure token spend as CONTEXT tokens (turns x context size), not output tokens.",
+  "outcome": "2026-09-04: 1.85 billion context tokens across 85 agents vs 1.2 million output, with 274 full-suite runs, 110 trial merges and 193 analyzer runs.",
+  "owner_words": "ensure the agents are not wasting tokens, llm as judge monitor all agents they should efficiently work and guide them if they are performing anything wrong.",
+  "enforcement": "scripts/pipeline/agent_efficiency.py",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:335-341"
+  ],
+  "id": "FR-091"
+ },
+ {
+  "instruction": "At every delivery, run a model-free transcript parser for per-agent turns, tool calls, suite/analyzer/merge/gate runs, repeats, re-reads, result size and tokens. It also writes an ordered command ledger for a judge to read.",
+  "outcome": "A judge reviews ~2k tokens of ledger instead of a ~300k-token transcript.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/agent_efficiency.py --out",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:343-348"
+  ],
+  "id": "FR-092"
+ },
+ {
+  "instruction": "Record efficiency figures in the state entry. An over-budget agent is the dispatcher's defect, unless the ledger shows the agent ignored the prompt; then that role's charter gains the rule.",
+  "outcome": "No measurement given.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:349-352"
+  ],
+  "id": "FR-093"
+ },
+ {
+  "instruction": "When more than six agents are in flight, run an LLM-judge efficiency audit (one auditor per running agent, then a synthesis). Deliver guidance as stop+relaunch, the next dispatch prompt, or a charter rule.",
+  "outcome": "The orchestrator cannot message a running agent.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:353-357"
+  ],
+  "id": "FR-094"
+ },
+ {
+  "instruction": "Dispatch prompts carry the budget and the idioms: full suite once, on the trial merge into main; sibling branches get merge-tree plus analyze, never a suite; all suite/analyzer/log output bounded (| tail); independent commands batched in one call; long docs read by section; reviewers refute evidence rather than re-derive it.",
+  "outcome": "Response to the 274 suite runs / 110 trial merges measured 2026-09-04.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:358-364"
+  ],
+  "id": "FR-095"
+ },
+ {
+  "instruction": "Set per-role budgets (turns, full-suite runs, trial merges, tool-result KB, worktrees added = removed) and enforce them as trip-wires that exit non-zero for a running agent.",
+  "outcome": "Budgets came from the 2026-09-04 judge synthesis and were already met by each role's lean rows.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/agent_efficiency.py --trip",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:366-373"
+  ],
+  "id": "FR-096"
+ },
+ {
+  "instruction": "Delegate measurement (suite, analyzer, gates, battery) to one bounded measurer subagent that returns figures only.",
+  "outcome": "Measurer budget: 60 turns or fewer, 80 KB of tool results.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:367-368,383-384"
+  ],
+  "id": "FR-097"
+ },
+ {
+  "instruction": "Turn device legs into integration tests the train runs, and shrink spawn injection to a short operating card per role.",
+  "outcome": "Owner directive #33 (4), via REQ-134/135.",
+  "owner_words": "",
+  "enforcement": "none",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/skills/product-pipeline/SKILL.md:549"
+  ],
+  "id": "FR-098"
+ },
+ {
+  "instruction": "Put a hard cap on agents per outcome run (default 20). Send every spawn through one counter, and when the cap is reached stop and hand control back to the human/PO. Do not keep spawning.",
+  "outcome": "Brake logs 'BRAKE: N agents spent; stopping for the PO'. Added because runaway swarms burned hundreds of millions of tokens (REQ-323).",
+  "owner_words": "",
+  "enforcement": "outcome-first.js:18 spawn() counter",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/outcome-first.js:16-18"
+  ],
+  "id": "FR-099"
+ },
+ {
+  "instruction": "Give every worker step a tool-call cap written into its prompt ([step-cap N], 30 for developer/fix/audit/prove steps, 15 for judges, 25 for a whole-requirement judge). Before reaching the cap, the step appends at most 6 lines of progress to the ctx file's ## Log and returns what is left, so a fresh step can continue.",
+  "outcome": "Every call re-reads the whole context, so an agent's cost grows with the square of its length. Eight developer agents averaged ~160 calls at ~324k tokens of context per call, 44% of three swarms' reads. Replaying the transcripts with a 30-call cap read ~40% less (a replay estimate, not a live after-measurement).",
+  "owner_words": "Token usage must be absolutely optimal",
+  "enforcement": "scripts/pipeline/tool_guard.py:23,53,154-173 LENGTH refuses call N+1 for a subagent whose prompt carries [step-cap N]",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/outcome-first.js:19; .claude/workflows/judged-swarm.js:103-110; .claude/workflows/task-by-task.js:29,83"
+  ],
+  "id": "FR-100"
+ },
+ {
+  "instruction": "Never open a whole large file. Find lines with grep -n, then read windows of at most 200 lines.",
+  "outcome": "Cuts per-call context size, which compounds across every later call.",
+  "owner_words": "",
+  "enforcement": "prompt text; tool_guard READ/RANGE per CLAUDE.md",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/outcome-first.js:20; .claude/workflows/judged-swarm.js:49; .claude/workflows/task-by-task.js:30"
+  ],
+  "id": "FR-101"
+ },
+ {
+  "instruction": "Never paste big outputs, and cite file:line for every claim.",
+  "outcome": "Part of the token discipline appended to every swarm prompt.",
+  "owner_words": "",
+  "enforcement": "prompt text (PRE)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:49"
+  ],
+  "id": "FR-102"
+ },
+ {
+  "instruction": "Run a mechanical check as a dedicated step agent with a single exact command. Use exactly one tool call, return only rc and the last line, never run anything else, and use the cheapest model/effort.",
+  "outcome": "Mechanical work costs two model turns instead of an agent's reading (see jobs_wait measurement).",
+  "owner_words": "",
+  "enforcement": "workflow prompts with agentType 'step', model 'haiku', effort 'low'",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/outcome-first.js:33-34; .claude/workflows/judged-swarm.js:150-152,176-178; .claude/workflows/task-by-task.js:36,93"
+  ],
+  "id": "FR-103"
+ },
+ {
+  "instruction": "Charge rulings against the agent budget (one-way = 3 agents, two-way = 1) and cap rulings per run (2 in an outcome run, 4 by default in a backlog run).",
+  "outcome": "Stops ruling loops from bypassing the agent cap.",
+  "owner_words": "",
+  "enforcement": "workflow code",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/outcome-first.js:64-65; .claude/workflows/task-by-task.js:56-57"
+  ],
+  "id": "FR-104"
+ },
+ {
+  "instruction": "Cap steps per lane (default 25) and agents per backlog run (default 200), with a brake that stops spawning when the cap is hit.",
+  "outcome": "Runaway prevention.",
+  "owner_words": "",
+  "enforcement": "task-by-task.js:28 spawn()",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/task-by-task.js:25-28"
+  ],
+  "id": "FR-105"
+ },
+ {
+  "instruction": "Give each build wave an agent budget (default 15 + 25 per lane). A wave that spends its budget without a judge PASS gets no further agents, and the run stops and hands back to the PO.",
+  "outcome": "Earned by REQ-323 wave 1, which spent ~130 agents with no judge PASS and nothing stopped it.",
+  "owner_words": "my tokens are wasted a lot",
+  "enforcement": "judged-swarm.js spawn() BRAKE",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:22-30,362,397-398"
+  ],
+  "id": "FR-106"
+ },
+ {
+  "instruction": "Orient from the shared ctx file without reading it whole. Grep the marker of the previous stage (cut to 300 chars) for binding rulings, tail the last 6 lines for the latest log, and never print a whole section. Obey those rulings, and append at most 10 lines under ## Log when finished.",
+  "outcome": "Earned by D90: ctx files grew, and whole-file reads were costly.",
+  "owner_words": "",
+  "enforcement": "PRE prompt text",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:47"
+  ],
+  "id": "FR-107"
+ },
+ {
+  "instruction": "Continue a capped step in fresh continuation steps (up to 8). Each continuation is told which nodes earlier steps finished, never to redo them, and to do ONLY the remainder.",
+  "outcome": "Small windows instead of one long context.",
+  "owner_words": "",
+  "enforcement": "stepped() in judged-swarm.js:115-140",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:109,115-120"
+  ],
+  "id": "FR-108"
+ },
+ {
+  "instruction": "Developer and fix steps never start or wait on long jobs (mutation battery, full suite, gates). They run only the affected tests in the foreground. Long jobs belong to the verifier, launched and waited on by the scheduler.",
+  "outcome": "Earned by REQ-323 (2026-10-07): fix continuations launched batteries, then spent eight steps re-checking them, each counting as 'progress' for one checked job.",
+  "owner_words": "",
+  "enforcement": "NO_JOBS prompt rule",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:111-113"
+  ],
+  "id": "FR-109"
+ },
+ {
+  "instruction": "Wait for background jobs with one call of a wait script in a lean step (cheapest model, low effort, at most 110 s per call, about an hour in total). Spawn a collect only after the jobs have ended.",
+  "outcome": "Measured 2026-10-07: 24 collects in the REQ-306 and REQ-323 journals were spawned only to answer PENDING, reading 24.6M tokens, and every chain ended UNVERIFIED.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/jobs_wait.sh (prints '<pid> ALIVE|ENDED <log>' and 'alive=N'), waitJobs()",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:170-178,194"
+  ],
+  "id": "FR-110"
+ },
+ {
+  "instruction": "REVERTED rule: do not spawn a test agent to find out whether a background job has ended.",
+  "outcome": "Failed at 24.6M tokens over 24 PENDING-only collects, with every chain UNVERIFIED (six back-to-back collects against a battery queued an hour for a suite slot). Replaced by the one-call waiter script.",
+  "owner_words": "",
+  "enforcement": "replaced by scripts/pipeline/jobs_wait.sh",
+  "performance": "proven-failed-reverted",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:170-173; scripts/pipeline/jobs_wait.sh:9-13"
+  ],
+  "id": "FR-111"
+ },
+ {
+  "instruction": "Cap launch steps like any other step. Return probes, rows or jobs not yet started as the remainder, and list every started job so it reaches the collect.",
+  "outcome": "Launches had run 50-83 uncapped calls, using 69M of REQ-306's 163M tokens.",
+  "owner_words": "",
+  "enforcement": "LAUNCH_CAP rule",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:179-181"
+  ],
+  "id": "FR-112"
+ },
+ {
+  "instruction": "Use the cheapest model and lowest effort for mechanical steps (waiting, ticking, checker runs) and medium effort for template-driven generation (plan/tasks).",
+  "outcome": "Lower token cost for work that needs no judgement.",
+  "owner_words": "",
+  "enforcement": "agent opts model/effort",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   ".claude/workflows/judged-swarm.js:152,178,283,292; .claude/workflows/task-by-task.js:36"
+  ],
+  "id": "FR-113"
+ },
+ {
+  "instruction": "Keep the always-loaded instruction file to an operating card of at most 200 lines. It holds every rule that decides an action and names every refusing script. Move the long form verbatim with pointers. A policy check enforces the cap. Ship with before/after token measurement and revert if the cut is under 30%.",
+  "outcome": "CLAUDE.md was 1,469 lines (~25-30k tokens), injected into every spawn. The queue reported 15 runs / ~4.5M tokens, 654k on one run. The trim was mandated with a revert condition.",
+  "owner_words": "",
+  "enforcement": "scripts/policy_check.sh (card over 200 lines refused); agent_efficiency.py before/after",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:114-152"
+  ],
+  "id": "FR-114"
+ },
+ {
+  "instruction": "Cap the shared per-requirement context file (12 KB) and re-fold it before dispatching the next stage, because every agent reads it first.",
+  "outcome": "The ctx was 18,813 B when ordered re-folded to 12 KB or less.",
+  "owner_words": "",
+  "enforcement": "none recorded here (D51(3) cap)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:1246, :1248"
+  ],
+  "id": "FR-115"
+ },
+ {
+  "instruction": "Orient each role with a targeted grep of the context file for the previous stage's rulings plus its last few lines. Never read the whole rulings section.",
+  "outcome": "Measured 58,830 bytes (whole section) against 1,430 bytes (stage grep): 41x less on every spawn. A later edit back to 'sed -n the whole Judge rulings section' (33,616 bytes) was reverted (D92(5)).",
+  "owner_words": "",
+  "enforcement": ".claude/workflows/judged-swarm.js:36 orient form",
+  "performance": "proven-paid",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:1389-1393, :1567-1569"
+  ],
+  "id": "FR-116"
+ },
+ {
+  "instruction": "A PreToolUse guard hook must fail open on its own errors, never cap the main session, and leave the structured return tool outside its matcher. Prove it does not falsely cap uncapped agents by checking where injected text lands relative to its scan window.",
+  "outcome": "Measured: hook 57 ms on a 2.1 MB transcript. In 410 of 433 transcripts the injected CLAUDE.md starts at byte 104,725 or later, outside the 64 KB window, so there were no false caps. Reproduced test_tool_guard 36/36.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/tool_guard.py; scripts/pipeline/test_tool_guard.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:1965"
+  ],
+  "id": "FR-117"
+ },
+ {
+  "instruction": "Cite evidence already held for the same tree (same blob/md5). Never re-run it. After an edit, re-run only the rows whose code the edit touched.",
+  "outcome": "The verifier cited run 9773 as the GREEN half and re-ran only seven rows. battery-rest3 stays valid for rows outside the edited function.",
+  "owner_words": "",
+  "enforcement": "CLAUDE.md 'cite, never re-run' (#45)",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/product/pos-zero-defect/DECISIONS.md:2361, :2376"
+  ],
+  "id": "FR-118"
+ },
+ {
+  "instruction": "Never wait on a job in the foreground: no sleep loops, no sleep of 5 s or more, no polling; run long jobs in the background and let a separate step collect.",
+  "outcome": "43 agents found sleeping on their own jobs; the step that launches a job must never see its result (directive #48).",
+  "owner_words": "",
+  "enforcement": "tool_guard.py WAIT rule (background commands pass)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/tool_guard.py:13-17"
+  ],
+  "id": "FR-119"
+ },
+ {
+  "instruction": "Never read a file over 1000 lines whole (Read without limit or whole-file cat); grep -n first, then a bounded read.",
+  "outcome": "A file read is re-read on every later turn; a 9,282-line service file alone motivated BIG=1000.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py READ rule (BIG = 1000)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/tool_guard.py:18-19,49"
+  ],
+  "id": "FR-120"
+ },
+ {
+  "instruction": "Read line windows of at most 200 lines per sed -n A,Bp call.",
+  "outcome": "96 reads over 8 KB found in the audited swarms; the guard refused this session's 221-line window.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py RANGE rule (RANGE = 200)",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/tool_guard.py:27,50"
+  ],
+  "id": "FR-121"
+ },
+ {
+  "instruction": "Cap every implementation/fix subagent's tool calls with a step cap (e.g. [step-cap 30]); past the cap the agent may only write progress to its ctx file and return, and a fresh step continues.",
+  "outcome": "Cost grows with the square of agent length: eight developer agents averaged ~160 calls at ~324k tokens of context per call, 44% of three swarms' reads.",
+  "owner_words": "",
+  "enforcement": "tool_guard.py LENGTH rule; judged-swarm stepped() continuation",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/tool_guard.py:22-26,53"
+  ],
+  "id": "FR-122"
+ },
+ {
+  "instruction": "Keep always-loaded context (CLAUDE.md and each agent definition) under a byte budget (~32 KB each): one line per rule; move history, incidents and measurements to non-auto-loaded docs.",
+  "outcome": "74% of 338M tokens read in one swarm was fixed starting context; a developer agent started at 81k tokens, 40k of it CLAUDE.md (80 KB) and its charter (78 KB).",
+  "owner_words": "my tokens are wasted a lot",
+  "enforcement": "scripts/pipeline/context_budget.sh (rc 1 names offenders); test_context_budget.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/context_budget.sh:1-8,15-16"
+  ],
+  "id": "FR-123"
+ },
+ {
+  "instruction": "Inject a short per-role operating card instead of the full charter; each charter ends with a BINDING rules section of ids, and a card missing any id, or a charter with no such section, fails the check.",
+  "outcome": "Injected context was a quarter of a typical agent's budget before it read code; the id check stops 'shorter' quietly becoming 'weaker' (L-8: a check with nothing to check reports success forever).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/card_check.sh; test_card_check.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/card_check.sh:1-16"
+  ],
+  "id": "FR-124"
+ },
+ {
+  "instruction": "Before launching an evidence job or judge for a task node, refuse if a ruling closed the node or the clean HEAD tree already has a GREEN line for it: cite, never re-run.",
+  "outcome": "Prevents re-verifying the same tree sha (directive #47 'cite, never re-run').",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/evidence_guard.sh (rc 3/4 refusals); test_evidence_guard.sh",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/evidence_guard.sh:1-6"
+  ],
+  "id": "FR-125"
+ },
+ {
+  "instruction": "Parse agent transcripts mechanically into per-agent command ledgers (turns, tool calls, repeated commands and reads, full-suite runs) so a judge reviews in ~2k tokens.",
+  "outcome": "Avoids re-reading 300k-token transcripts (directive #28).",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/agent_efficiency.py --health",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/agent_efficiency.py:1-9"
+  ],
+  "id": "FR-126"
+ },
+ {
+  "instruction": "Write workflow args into a relaunch script file (args embedded at the anchor) instead of pasting large args into each call.",
+  "outcome": "Swarm args ran 8-15 KB and were pasted by hand four times in one day; resumes on another machine need the file.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/swarm_relaunch.py",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/swarm_relaunch.py:1-10"
+  ],
+  "id": "FR-127"
+ },
+ {
+  "instruction": "Build artifacts once per input tree: content-address them by the tree hash of their inputs and reuse.",
+  "outcome": "216 abandoned builds (12 GB) covered 9 distinct trees: 24x duplication, ~9 hours of build for 22 minutes of work, nearly filling the disk.",
+  "owner_words": "",
+  "enforcement": "scripts/verify/apk_cache.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/verify/apk_cache.sh:1-18"
+  ],
+  "id": "FR-128"
+ },
+ {
+  "instruction": "Apply doc patches with a deterministic anchored applier: each anchor resolves to exactly one occurrence, all hunks resolve in memory before writing, and every removed line is printed.",
+  "outcome": "Four rounds spent 117k-291k tokens each on an agent whose only job was transcribing already-written hunks.",
+  "owner_words": "",
+  "enforcement": "scripts/pipeline/apply_patch.sh",
+  "performance": "incident-earned",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "scripts/pipeline/apply_patch.sh:1-12; scripts/pipeline/apply_patch.py:1-11"
+  ],
+  "id": "FR-129"
+ },
+ {
+  "instruction": "Judge tokens: measure the agents being judged from their transcripts and turn each waste finding (whole large reads, repeated runs on an unchanged tree, re-derived facts, pasted outputs) into a directive.",
+  "outcome": "Judge check 6.",
+  "owner_words": "",
+  "enforcement": "judge charter; agent_efficiency.py",
+  "performance": "mandated-unmeasured",
+  "generalizable": true,
+  "stage": "tokens-efficiency",
+  "sources": [
+   "docs/process/history/agent-judge.md:110-114"
+  ],
+  "id": "FR-130"
+ }
+]

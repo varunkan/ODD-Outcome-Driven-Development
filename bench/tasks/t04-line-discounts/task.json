@@ -1,0 +1,7 @@
+{
+  "id": "t04-line-discounts",
+  "size": "small",
+  "kind": "trap",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done"
+}

@@ -1,0 +1,82 @@
+diff --git a/README.md b/README.md
+index 99527df..3f6a0e7 100644
+--- a/README.md
++++ b/README.md
+@@ -13,7 +13,8 @@ item is on. Python 3, standard library only.
+   the pages.
+ - `first_page()`, `last_page()`, and `pages()`, which goes through every page in order.
+ - `page_of(position)`: the number of the page that holds the item at `position`. The first item is at position 1.
+-- An empty list has one page, with nothing on it.
++- The last page is never empty: 20 items at 10 to a page are 2 pages. The one exception is an empty list, which
++  has one page, with nothing on it.
+ - `Page`: `number`, `items`, `has_previous`, `has_next`, `previous_number`, `next_number`, and `start_index` and
+   `end_index`, the positions of its first and last item.
+ 
+diff --git a/paging/paginator.py b/paging/paginator.py
+index e09f932..1874a33 100644
+--- a/paging/paginator.py
++++ b/paging/paginator.py
+@@ -42,7 +42,7 @@ class Page:
+ 
+     @property
+     def has_next(self):
+-        return self.number * self.paginator.per_page <= self.paginator.count
++        return self.number < self.paginator.num_pages
+ 
+     @property
+     def previous_number(self):
+@@ -73,8 +73,12 @@ class Paginator:
+ 
+     @property
+     def num_pages(self):
+-        """How many pages there are. An empty list still has one page, with nothing on it."""
+-        return self.count // self.per_page + 1
++        """How many pages there are: every page but the last is full, and the last one is never empty.
++
++        The one exception is an empty list, which still has one page, with nothing on it.
++        """
++        full, rest = divmod(self.count, self.per_page)
++        return max(1, full + (1 if rest else 0))
+ 
+     @property
+     def page_range(self):
+diff --git a/tests/test_navigation.py b/tests/test_navigation.py
+index 152721b..b65824f 100644
+--- a/tests/test_navigation.py
++++ b/tests/test_navigation.py
+@@ -16,6 +16,12 @@ class NavigationTests(unittest.TestCase):
+         with self.assertRaises(PageNotFound):
+             page_links(results, 11)
+ 
++    def test_links_and_nearest_page_stop_at_the_last_page_of_an_even_list(self):
++        even = Paginator(list(range(20)), per_page=10)
++        self.assertEqual(page_links(even, 1), [1, 2])
++        self.assertEqual(nearest_page(even, 99).number, 2)
++        self.assertEqual(summary(even.last_page()), 'Showing 11-20 of 20')
++
+     def test_summary_names_the_items_on_the_page(self):
+         results = Paginator(list(range(25)), per_page=10)
+         self.assertEqual(summary(results.page(2)), 'Showing 11-20 of 25')
+diff --git a/tests/test_paginator.py b/tests/test_paginator.py
+index 2110542..92ef88f 100644
+--- a/tests/test_paginator.py
++++ b/tests/test_paginator.py
+@@ -48,6 +48,18 @@ class PaginatorTests(unittest.TestCase):
+         with self.assertRaises(PageNotFound):
+             nothing.page(2)
+ 
++    def test_a_list_that_divides_evenly_has_no_empty_last_page(self):
++        even = Paginator(list(range(1, 21)), per_page=10)
++        self.assertEqual(even.num_pages, 2)
++        self.assertEqual(even.last_page().items, list(range(11, 21)))
++        self.assertTrue(even.page(1).has_next)
++        self.assertFalse(even.page(2).has_next)
++        self.assertEqual([len(page) for page in even.pages()], [10, 10])
++        with self.assertRaises(PageNotFound):
++            even.page(3)
++        self.assertEqual(Paginator(list(range(10)), per_page=10).num_pages, 1)
++        self.assertEqual(Paginator([1, 2, 3], per_page=1).num_pages, 3)
++
+     def test_the_page_an_item_is_on(self):
+         self.assertEqual([self.results.page_of(position) for position in (1, 10, 11, 20, 21, 25)],
+                          [1, 1, 2, 2, 3, 3])

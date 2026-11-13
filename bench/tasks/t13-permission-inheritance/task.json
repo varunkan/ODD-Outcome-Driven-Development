@@ -1,0 +1,8 @@
+{
+  "id": "t13-permission-inheritance",
+  "size": "large",
+  "kind": "bugfix",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done",
+  "note": "Fixing Resolver.explain alone makes the reported example pass. A pass also needs the separate filter path, the audit sheet and the cache invalidation (users who hold the changed role only by inheritance) to follow the same deny-wins rule, with the cache kept."
+}

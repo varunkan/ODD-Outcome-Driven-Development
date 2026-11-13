@@ -1,0 +1,7 @@
+{
+  "id": "t09-pagination-off-by-one",
+  "size": "small",
+  "kind": "bugfix",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "t03-csv-quotes",
+  "size": "small",
+  "kind": "bugfix",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done"
+}

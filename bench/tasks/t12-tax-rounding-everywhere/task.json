@@ -1,0 +1,8 @@
+{
+  "id": "t12-tax-rounding-everywhere",
+  "size": "medium",
+  "kind": "trap",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done",
+  "note": "The rounding rule is applied in three paths: invoices (the only path the visible tests exercise on rounding), credit notes (negative nets, and the last units of a line give back what is left of its tax) and the CSV export (which recomputed tax from summed nets). Documents already issued keep their stored figures in get, render, the export and when refunded in full. A pass does not show the command line output."
+}

@@ -1,0 +1,8034 @@
+{
+ "restated_directives": [
+  {
+   "directive": 32,
+   "markers": [
+    "ignored"
+   ]
+  },
+  {
+   "directive": 34,
+   "markers": [
+    "ignored"
+   ]
+  },
+  {
+   "directive": 44,
+   "markers": [
+    "ignored"
+   ]
+  },
+  {
+   "directive": 46,
+   "markers": [
+    "ignored",
+    "same thing again",
+    "violated"
+   ]
+  },
+  {
+   "directive": 48,
+   "markers": [
+    "not at all followed"
+   ]
+  },
+  {
+   "directive": 49,
+   "markers": [
+    "fourth",
+    "not followed"
+   ]
+  },
+  {
+   "directive": 65,
+   "markers": [
+    "reaffirmed"
+   ]
+  }
+ ],
+ "first_claude_md": "2026-08-11",
+ "commits_total": 4572,
+ "merges_total": 850,
+ "periods": [
+  [
+   "P0 pre-CLAUDE.md",
+   "2025-08-01",
+   "2026-08-11"
+  ],
+  [
+   "P1 CLAUDE.md, before pods/directives",
+   "2026-08-11",
+   "2026-09-04"
+  ],
+  [
+   "P2 pods + directives #23-#44",
+   "2026-09-04",
+   "2026-09-08"
+  ],
+  [
+   "P3 #45-#50 invariant batching, measure, 3-min steps, legs-as-code, scripts",
+   "2026-09-08",
+   "2026-09-29"
+  ],
+  [
+   "P4 #51-#60 decision judge, judged swarm",
+   "2026-09-29",
+   "2026-10-07"
+  ],
+  [
+   "P5 #61-#67 outcome-first, step caps, simulation, local CI",
+   "2026-10-07",
+   "2026-11-12"
+  ]
+ ],
+ "period_summary": {
+  "P0 pre-CLAUDE.md": {
+   "weeks": 22,
+   "commits_per_week": 9.6,
+   "product_commit_share": 0.69,
+   "process_only_commit_share": 0.19,
+   "product_lines_per_week": 10091,
+   "test_lines_per_week": 944,
+   "process_lines_per_week": 1979,
+   "process_to_product_line_ratio": 0.2,
+   "merges_per_week_all": 1.0,
+   "product_merges_per_week": 0.5,
+   "reqs_in_product_merge_subjects_per_week": 0.0,
+   "product_merge_lead_hours_median": 7.1,
+   "product_merge_lead_hours_p90": 5125.7,
+   "test_to_product_line_ratio": 0.09,
+   "reverts_per_week": 0.45,
+   "rework_msgs_per_week": 0.0,
+   "decisions_per_week": 0.0,
+   "activity_entries_per_week": 0.0,
+   "activity_unverified_named_share": 0.0
+  },
+  "P1 CLAUDE.md, before pods/directives": {
+   "weeks": 3,
+   "commits_per_week": 367.3,
+   "product_commit_share": 0.15,
+   "process_only_commit_share": 0.76,
+   "product_lines_per_week": 11420,
+   "test_lines_per_week": 30020,
+   "process_lines_per_week": 113428,
+   "process_to_product_line_ratio": 9.93,
+   "merges_per_week_all": 133.0,
+   "product_merges_per_week": 6.7,
+   "reqs_in_product_merge_subjects_per_week": 4.7,
+   "product_merge_lead_hours_median": 9.1,
+   "product_merge_lead_hours_p90": 133.1,
+   "test_to_product_line_ratio": 2.63,
+   "reverts_per_week": 2.67,
+   "rework_msgs_per_week": 60.3,
+   "decisions_per_week": 0.0,
+   "activity_entries_per_week": 0.0,
+   "activity_unverified_named_share": 0.0
+  },
+  "P2 pods + directives #23-#44": {
+   "weeks": 1,
+   "commits_per_week": 275.0,
+   "product_commit_share": 0.12,
+   "process_only_commit_share": 0.84,
+   "product_lines_per_week": 11078,
+   "test_lines_per_week": 42308,
+   "process_lines_per_week": 61049,
+   "process_to_product_line_ratio": 5.51,
+   "merges_per_week_all": 83.0,
+   "product_merges_per_week": 13.0,
+   "reqs_in_product_merge_subjects_per_week": 23.0,
+   "product_merge_lead_hours_median": 1.8,
+   "product_merge_lead_hours_p90": 104.3,
+   "test_to_product_line_ratio": 3.82,
+   "reverts_per_week": 4.0,
+   "rework_msgs_per_week": 14.0,
+   "decisions_per_week": 0.0,
+   "activity_entries_per_week": 0.0,
+   "activity_unverified_named_share": 0.0
+  },
+  "P3 #45-#50 invariant batching, measure, 3-min steps, legs-as-code, scripts": {
+   "weeks": 3,
+   "commits_per_week": 384.7,
+   "product_commit_share": 0.18,
+   "process_only_commit_share": 0.79,
+   "product_lines_per_week": 15097,
+   "test_lines_per_week": 33168,
+   "process_lines_per_week": 50966,
+   "process_to_product_line_ratio": 3.38,
+   "merges_per_week_all": 80.3,
+   "product_merges_per_week": 21.7,
+   "reqs_in_product_merge_subjects_per_week": 27.0,
+   "product_merge_lead_hours_median": 43.5,
+   "product_merge_lead_hours_p90": 305.0,
+   "test_to_product_line_ratio": 2.2,
+   "reverts_per_week": 2.0,
+   "rework_msgs_per_week": 31.0,
+   "decisions_per_week": 2.0,
+   "activity_entries_per_week": 0.0,
+   "activity_unverified_named_share": 0.0
+  },
+  "P4 #51-#60 decision judge, judged swarm": {
+   "weeks": 1,
+   "commits_per_week": 134.0,
+   "product_commit_share": 0.2,
+   "process_only_commit_share": 0.69,
+   "product_lines_per_week": 9750,
+   "test_lines_per_week": 71426,
+   "process_lines_per_week": 38630,
+   "process_to_product_line_ratio": 3.96,
+   "merges_per_week_all": 11.0,
+   "product_merges_per_week": 9.0,
+   "reqs_in_product_merge_subjects_per_week": 9.0,
+   "product_merge_lead_hours_median": 2.2,
+   "product_merge_lead_hours_p90": 723.3,
+   "test_to_product_line_ratio": 7.33,
+   "reverts_per_week": 0.0,
+   "rework_msgs_per_week": 5.0,
+   "decisions_per_week": 284.0,
+   "activity_entries_per_week": 0.0,
+   "activity_unverified_named_share": 0.0
+  },
+  "P5 #61-#67 outcome-first, step caps, simulation, local CI": {
+   "weeks": 5,
+   "commits_per_week": 339.0,
+   "product_commit_share": 0.33,
+   "process_only_commit_share": 0.58,
+   "product_lines_per_week": 16018,
+   "test_lines_per_week": 61145,
+   "process_lines_per_week": 38546,
+   "process_to_product_line_ratio": 2.41,
+   "merges_per_week_all": 19.0,
+   "product_merges_per_week": 12.4,
+   "reqs_in_product_merge_subjects_per_week": 10.0,
+   "product_merge_lead_hours_median": 0.8,
+   "product_merge_lead_hours_p90": 11.7,
+   "test_to_product_line_ratio": 3.82,
+   "reverts_per_week": 1.0,
+   "rework_msgs_per_week": 67.6,
+   "decisions_per_week": 88.6,
+   "activity_entries_per_week": 112.8,
+   "activity_unverified_named_share": 0.14
+  }
+ },
+ "weekly": {
+  "2025-08-11": {
+   "commits": 12,
+   "commits_process": 6,
+   "lines_process": 8434,
+   "lines_other": 2100296,
+   "commits_product": 4,
+   "lines_product": 102328,
+   "commits_other": 2
+  },
+  "2025-08-18": {
+   "commits": 3,
+   "commits_product": 2,
+   "lines_process": 4634,
+   "lines_other": 2257,
+   "lines_product": 10254,
+   "commits_other": 1
+  },
+  "2025-08-25": {
+   "commits": 9,
+   "commits_other": 1,
+   "lines_other": 10126,
+   "commits_product": 7,
+   "lines_product": 8463,
+   "lines_process": 1987,
+   "commits_process": 1
+  },
+  "2025-09-01": {
+   "commits": 11,
+   "commits_product": 10,
+   "lines_product": 739,
+   "lines_other": 158,
+   "commits_process": 1,
+   "lines_process": 65
+  },
+  "2025-09-08": {
+   "commits": 3,
+   "commits_other": 1,
+   "lines_other": 3210,
+   "commits_product": 2,
+   "lines_process": 3627,
+   "lines_product": 13067
+  },
+  "2025-09-15": {
+   "commits": 5,
+   "commits_other": 2,
+   "lines_other": 1158,
+   "commits_product": 3,
+   "lines_product": 6697,
+   "lines_process": 177
+  },
+  "2025-10-06": {
+   "commits": 3,
+   "commits_product": 2,
+   "lines_product": 4616,
+   "lines_other": 134,
+   "commits_other": 1,
+   "lines_process": 32
+  },
+  "2025-10-13": {
+   "commits": 2,
+   "commits_product": 1,
+   "lines_product": 778,
+   "lines_other": 4,
+   "commits_other": 1
+  },
+  "2025-10-20": {
+   "commits": 12,
+   "commits_product": 12,
+   "lines_product": 4228,
+   "lines_other": 4,
+   "reverts": 6
+  },
+  "2025-10-27": {
+   "commits": 8,
+   "commits_other": 2,
+   "lines_other": 2,
+   "commits_product": 6,
+   "lines_product": 287
+  },
+  "2025-11-03": {
+   "commits": 4,
+   "commits_process": 2,
+   "lines_process": 356,
+   "commits_product": 2,
+   "lines_other": 1106,
+   "lines_product": 1500
+  },
+  "2025-11-10": {
+   "commits": 1,
+   "commits_product": 1,
+   "lines_product": 1776,
+   "lines_other": 2
+  },
+  "2025-11-17": {
+   "commits": 2,
+   "commits_product": 2,
+   "lines_product": 1771,
+   "lines_other": 8,
+   "merges": 1,
+   "product_merges": 1,
+   "reqs_merged": 0
+  },
+  "2026-01-05": {
+   "commits": 2,
+   "commits_product": 2,
+   "lines_other": 282,
+   "lines_product": 13756,
+   "lines_process": 316,
+   "lines_test": 242
+  },
+  "2026-01-12": {
+   "commits": 1,
+   "commits_product": 1,
+   "lines_product": 462
+  },
+  "2026-01-26": {
+   "commits": 6,
+   "commits_product": 6,
+   "lines_product": 4561,
+   "lines_process": 1031,
+   "lines_other": 102
+  },
+  "2026-02-02": {
+   "commits": 2,
+   "commits_product": 2,
+   "lines_product": 2037,
+   "lines_other": 0
+  },
+  "2026-02-16": {
+   "commits": 2,
+   "commits_other": 1,
+   "lines_other": 3,
+   "commits_product": 1,
+   "lines_product": 5202
+  },
+  "2026-03-09": {
+   "commits": 3,
+   "commits_other": 1,
+   "lines_other": 54,
+   "commits_product": 1,
+   "lines_product": 347,
+   "lines_test": 2397,
+   "commits_test": 1
+  },
+  "2026-04-13": {
+   "commits": 4,
+   "commits_product": 4,
+   "lines_product": 13314,
+   "lines_test": 1684,
+   "lines_process": 185,
+   "lines_other": 409
+  },
+  "2026-05-18": {
+   "commits": 3,
+   "commits_process": 3,
+   "lines_other": 42534,
+   "lines_process": 6382
+  },
+  "2026-08-10": {
+   "commits": 114,
+   "commits_other": 10,
+   "lines_other": 18470,
+   "commits_product": 75,
+   "lines_process": 16322,
+   "lines_product": 25824,
+   "lines_test": 16434,
+   "commits_process": 27,
+   "reverts": 4,
+   "commits_test": 2,
+   "merges": 20,
+   "product_merges": 9,
+   "reqs_merged": 0
+  },
+  "2026-08-17": {
+   "commits": 95,
+   "commits_process": 46,
+   "lines_process": 15540,
+   "commits_product": 47,
+   "lines_product": 8581,
+   "lines_test": 14554,
+   "lines_other": 10,
+   "commits_other": 2,
+   "rework_msgs": 2,
+   "reverts": 1,
+   "merges": 4,
+   "product_merges": 2,
+   "reqs_merged": 0
+  },
+  "2026-08-24": {
+   "commits": 261,
+   "commits_process": 213,
+   "lines_process": 123819,
+   "reverts": 2,
+   "commits_product": 41,
+   "lines_product": 12853,
+   "lines_test": 19695,
+   "rework_msgs": 20,
+   "lines_other": 6017,
+   "commits_other": 6,
+   "commits_test": 1,
+   "merges": 128,
+   "product_merges": 9,
+   "reqs_merged": 5
+  },
+  "2026-08-31": {
+   "commits": 746,
+   "commits_process": 579,
+   "lines_process": 200926,
+   "lines_test": 55811,
+   "rework_msgs": 159,
+   "commits_product": 80,
+   "lines_product": 12826,
+   "commits_test": 87,
+   "lines_other": 109,
+   "reverts": 5,
+   "merges": 267,
+   "product_merges": 9,
+   "reqs_merged": 9
+  },
+  "2026-09-07": {
+   "commits": 275,
+   "commits_process": 231,
+   "lines_process": 61049,
+   "commits_product": 34,
+   "lines_product": 11078,
+   "lines_test": 42308,
+   "commits_test": 10,
+   "lines_other": 230,
+   "reverts": 4,
+   "rework_msgs": 14,
+   "merges": 83,
+   "product_merges": 13,
+   "reqs_merged": 23
+  },
+  "2026-09-14": {
+   "commits": 649,
+   "commits_product": 90,
+   "lines_process": 85618,
+   "lines_product": 14858,
+   "lines_test": 44139,
+   "commits_process": 548,
+   "rework_msgs": 34,
+   "lines_other": 133,
+   "commits_test": 11,
+   "reverts": 4,
+   "merges": 196,
+   "product_merges": 48,
+   "reqs_merged": 50
+  },
+  "2026-09-21": {
+   "commits": 291,
+   "commits_process": 201,
+   "lines_process": 44980,
+   "lines_test": 36759,
+   "rework_msgs": 12,
+   "commits_product": 82,
+   "lines_product": 24083,
+   "commits_test": 8,
+   "lines_other": 184,
+   "reverts": 1,
+   "merges": 25,
+   "product_merges": 11,
+   "reqs_merged": 22
+  },
+  "2026-09-28": {
+   "commits": 214,
+   "commits_process": 166,
+   "lines_process": 22300,
+   "rework_msgs": 47,
+   "lines_test": 18606,
+   "commits_test": 10,
+   "commits_product": 38,
+   "lines_product": 6349,
+   "lines_other": 21410,
+   "reverts": 1,
+   "merges": 20,
+   "product_merges": 6,
+   "reqs_merged": 9,
+   "decisions": 6
+  },
+  "2026-10-05": {
+   "commits": 134,
+   "commits_product": 27,
+   "lines_process": 38630,
+   "lines_product": 9750,
+   "lines_other": 288,
+   "commits_process": 92,
+   "lines_test": 71426,
+   "rework_msgs": 5,
+   "commits_test": 15,
+   "merges": 11,
+   "product_merges": 9,
+   "reqs_merged": 9,
+   "decisions": 284
+  },
+  "2026-10-12": {
+   "commits": 123,
+   "commits_process": 52,
+   "lines_process": 38261,
+   "commits_product": 65,
+   "lines_product": 30866,
+   "lines_test": 126989,
+   "rework_msgs": 10,
+   "lines_other": 613,
+   "commits_test": 6,
+   "merges": 15,
+   "product_merges": 12,
+   "reqs_merged": 15,
+   "decisions": 47
+  },
+  "2026-10-19": {
+   "commits": 137,
+   "commits_process": 63,
+   "lines_process": 10440,
+   "lines_test": 22641,
+   "commits_product": 68,
+   "lines_product": 16264,
+   "lines_other": 1116,
+   "rework_msgs": 18,
+   "commits_test": 4,
+   "commits_other": 2,
+   "merges": 31,
+   "product_merges": 19,
+   "reqs_merged": 12,
+   "decisions": 39
+  },
+  "2026-10-26": {
+   "commits": 428,
+   "commits_process": 232,
+   "lines_process": 72446,
+   "lines_test": 99717,
+   "rework_msgs": 97,
+   "commits_product": 175,
+   "lines_product": 14041,
+   "commits_test": 20,
+   "lines_other": 12564,
+   "commits_other": 1,
+   "merges": 48,
+   "product_merges": 30,
+   "reqs_merged": 22,
+   "decisions": 116,
+   "activity_entries": 5
+  },
+  "2026-11-02": {
+   "commits": 435,
+   "commits_process": 254,
+   "lines_process": 57239,
+   "lines_test": 35728,
+   "commits_test": 36,
+   "commits_product": 145,
+   "lines_product": 13748,
+   "rework_msgs": 98,
+   "lines_other": 5,
+   "decisions": 153,
+   "activity_entries": 222,
+   "activity_names_unverified": 23
+  },
+  "2026-11-09": {
+   "commits": 572,
+   "commits_process": 375,
+   "lines_process": 14345,
+   "lines_test": 20651,
+   "commits_test": 90,
+   "commits_product": 107,
+   "lines_product": 5172,
+   "lines_other": 2,
+   "rework_msgs": 115,
+   "reverts": 5,
+   "merges": 1,
+   "product_merges": 1,
+   "reqs_merged": 1,
+   "decisions": 88,
+   "activity_entries": 337,
+   "activity_names_unverified": 57
+  }
+ },
+ "snapshots": {
+  "2025-08-11": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3431854,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-08-18": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3494308,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-08-25": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3764750,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-09-01": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3784311,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-09-08": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3537642,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-09-15": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3588940,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-10-06": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3394966,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-10-13": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3426082,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-10-20": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3509522,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-10-27": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3515320,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-11-03": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3566522,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-11-10": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3576740,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2025-11-17": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 3633200,
+   "test_files": 2,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-01-05": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 4061786,
+   "test_files": 5,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-01-12": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 4062531,
+   "test_files": 5,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-01-26": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 4207220,
+   "test_files": 5,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-02-02": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 4246308,
+   "test_files": 5,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-02-16": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 4406699,
+   "test_files": 5,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-03-09": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 0,
+   "lib_dart_bytes": 4416149,
+   "test_files": 7,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-04-13": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 16340,
+   "lib_dart_bytes": 4134407,
+   "test_files": 11,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-05-18": {
+   "claude_md_bytes": 0,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 0,
+   "governance_script_bytes": 0,
+   "process_doc_bytes": 32656,
+   "lib_dart_bytes": 4134407,
+   "test_files": 22,
+   "integration_tests": 0,
+   "mutation_batteries": 0
+  },
+  "2026-08-10": {
+   "claude_md_bytes": 23259,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 2,
+   "governance_script_bytes": 3347,
+   "process_doc_bytes": 383017,
+   "lib_dart_bytes": 4301919,
+   "test_files": 121,
+   "integration_tests": 3,
+   "mutation_batteries": 0
+  },
+  "2026-08-17": {
+   "claude_md_bytes": 23259,
+   "directives": 0,
+   "lessons_live": 0,
+   "agent_charter_bytes": 0,
+   "governance_scripts": 2,
+   "governance_script_bytes": 3347,
+   "process_doc_bytes": 599076,
+   "lib_dart_bytes": 4386549,
+   "test_files": 139,
+   "integration_tests": 3,
+   "mutation_batteries": 0
+  },
+  "2026-08-24": {
+   "claude_md_bytes": 41755,
+   "directives": 22,
+   "lessons_live": 34,
+   "agent_charter_bytes": 156765,
+   "governance_scripts": 28,
+   "governance_script_bytes": 143026,
+   "process_doc_bytes": 7656187,
+   "lib_dart_bytes": 4671409,
+   "test_files": 227,
+   "integration_tests": 3,
+   "mutation_batteries": 0
+  },
+  "2026-08-31": {
+   "claude_md_bytes": 48420,
+   "directives": 36,
+   "lessons_live": 64,
+   "agent_charter_bytes": 227205,
+   "governance_scripts": 86,
+   "governance_script_bytes": 375349,
+   "process_doc_bytes": 18591541,
+   "lib_dart_bytes": 4679143,
+   "test_files": 250,
+   "integration_tests": 3,
+   "mutation_batteries": 3
+  },
+  "2026-09-07": {
+   "claude_md_bytes": 80025,
+   "directives": 49,
+   "lessons_live": 69,
+   "agent_charter_bytes": 301473,
+   "governance_scripts": 184,
+   "governance_script_bytes": 925946,
+   "process_doc_bytes": 23269503,
+   "lib_dart_bytes": 5049976,
+   "test_files": 381,
+   "integration_tests": 25,
+   "mutation_batteries": 35
+  },
+  "2026-09-14": {
+   "claude_md_bytes": 91814,
+   "directives": 49,
+   "lessons_live": 58,
+   "agent_charter_bytes": 347974,
+   "governance_scripts": 234,
+   "governance_script_bytes": 1385695,
+   "process_doc_bytes": 30581352,
+   "lib_dart_bytes": 5759567,
+   "test_files": 598,
+   "integration_tests": 67,
+   "mutation_batteries": 70
+  },
+  "2026-09-21": {
+   "claude_md_bytes": 94567,
+   "directives": 49,
+   "lessons_live": 58,
+   "agent_charter_bytes": 350232,
+   "governance_scripts": 293,
+   "governance_script_bytes": 1490214,
+   "process_doc_bytes": 31634689,
+   "lib_dart_bytes": 6282700,
+   "test_files": 671,
+   "integration_tests": 67,
+   "mutation_batteries": 72
+  },
+  "2026-09-28": {
+   "claude_md_bytes": 95335,
+   "directives": 52,
+   "lessons_live": 60,
+   "agent_charter_bytes": 361883,
+   "governance_scripts": 308,
+   "governance_script_bytes": 1639491,
+   "process_doc_bytes": 43226987,
+   "lib_dart_bytes": 6657347,
+   "test_files": 778,
+   "integration_tests": 72,
+   "mutation_batteries": 87
+  },
+  "2026-10-05": {
+   "claude_md_bytes": 31940,
+   "directives": 65,
+   "lessons_live": 60,
+   "agent_charter_bytes": 274765,
+   "governance_scripts": 352,
+   "governance_script_bytes": 1919886,
+   "process_doc_bytes": 47785478,
+   "lib_dart_bytes": 6881241,
+   "test_files": 906,
+   "integration_tests": 74,
+   "mutation_batteries": 92
+  },
+  "2026-10-12": {
+   "claude_md_bytes": 31500,
+   "directives": 67,
+   "lessons_live": 60,
+   "agent_charter_bytes": 275309,
+   "governance_scripts": 360,
+   "governance_script_bytes": 2009405,
+   "process_doc_bytes": 56161203,
+   "lib_dart_bytes": 7370742,
+   "test_files": 1045,
+   "integration_tests": 79,
+   "mutation_batteries": 116
+  },
+  "2026-10-19": {
+   "claude_md_bytes": 31500,
+   "directives": 67,
+   "lessons_live": 60,
+   "agent_charter_bytes": 275309,
+   "governance_scripts": 362,
+   "governance_script_bytes": 2047041,
+   "process_doc_bytes": 57424266,
+   "lib_dart_bytes": 7592888,
+   "test_files": 1108,
+   "integration_tests": 81,
+   "mutation_batteries": 140
+  },
+  "2026-10-26": {
+   "claude_md_bytes": 31500,
+   "directives": 67,
+   "lessons_live": 60,
+   "agent_charter_bytes": 276696,
+   "governance_scripts": 377,
+   "governance_script_bytes": 2083983,
+   "process_doc_bytes": 61477652,
+   "lib_dart_bytes": 7838870,
+   "test_files": 1224,
+   "integration_tests": 81,
+   "mutation_batteries": 169
+  },
+  "2026-11-02": {
+   "claude_md_bytes": 31500,
+   "directives": 67,
+   "lessons_live": 60,
+   "agent_charter_bytes": 276689,
+   "governance_scripts": 382,
+   "governance_script_bytes": 2125749,
+   "process_doc_bytes": 58258533,
+   "lib_dart_bytes": 7908020,
+   "test_files": 1271,
+   "integration_tests": 81,
+   "mutation_batteries": 169
+  },
+  "2026-11-09": {
+   "claude_md_bytes": 31500,
+   "directives": 67,
+   "lessons_live": 60,
+   "agent_charter_bytes": 276689,
+   "governance_scripts": 382,
+   "governance_script_bytes": 2146106,
+   "process_doc_bytes": 60931589,
+   "lib_dart_bytes": 8023947,
+   "test_files": 1307,
+   "integration_tests": 82,
+   "mutation_batteries": 169
+  }
+ },
+ "directive_timeline": [
+  [
+   23,
+   "2026-09-04"
+  ],
+  [
+   24,
+   "2026-09-04"
+  ],
+  [
+   25,
+   "2026-09-04"
+  ],
+  [
+   26,
+   "2026-09-04"
+  ],
+  [
+   27,
+   "2026-09-04"
+  ],
+  [
+   28,
+   "2026-09-04"
+  ],
+  [
+   29,
+   "2026-09-04"
+  ],
+  [
+   30,
+   "2026-09-04"
+  ],
+  [
+   31,
+   "2026-09-05"
+  ],
+  [
+   32,
+   "2026-09-05"
+  ],
+  [
+   33,
+   "2026-09-05"
+  ],
+  [
+   34,
+   "2026-09-05"
+  ],
+  [
+   35,
+   "2026-09-05"
+  ],
+  [
+   36,
+   "2026-09-05"
+  ],
+  [
+   37,
+   "2026-09-05"
+  ],
+  [
+   38,
+   "2026-09-05"
+  ],
+  [
+   39,
+   "2026-09-05"
+  ],
+  [
+   40,
+   "2026-09-05"
+  ],
+  [
+   41,
+   "2026-09-05"
+  ],
+  [
+   42,
+   "2026-09-05"
+  ],
+  [
+   43,
+   "2026-09-06"
+  ],
+  [
+   44,
+   "2026-09-08"
+  ],
+  [
+   45,
+   "2026-09-08"
+  ],
+  [
+   46,
+   "2026-09-08"
+  ],
+  [
+   47,
+   "2026-09-08"
+  ],
+  [
+   48,
+   "2026-09-08"
+  ],
+  [
+   49,
+   "2026-09-08"
+  ],
+  [
+   51,
+   "2026-09-29"
+  ],
+  [
+   52,
+   "2026-09-29"
+  ],
+  [
+   53,
+   "2026-09-29"
+  ],
+  [
+   54,
+   "2026-10-01"
+  ],
+  [
+   55,
+   "2026-10-06"
+  ],
+  [
+   56,
+   "2026-10-06"
+  ],
+  [
+   57,
+   "2026-10-06"
+  ],
+  [
+   58,
+   "2026-10-06"
+  ],
+  [
+   59,
+   "2026-10-06"
+  ],
+  [
+   60,
+   "2026-10-06"
+  ],
+  [
+   61,
+   "2026-10-06"
+  ],
+  [
+   62,
+   "2026-10-06"
+  ],
+  [
+   63,
+   "2026-10-06"
+  ],
+  [
+   64,
+   "2026-10-07"
+  ],
+  [
+   65,
+   "2026-10-07"
+  ],
+  [
+   65,
+   "2026-10-08"
+  ],
+  [
+   66,
+   "2026-10-08"
+  ],
+  [
+   67,
+   "2026-10-08"
+  ],
+  [
+   68,
+   "2026-10-14"
+  ]
+ ],
+ "merges": [
+  {
+   "d": "2026-11-11T07:24:29-05:00",
+   "lead_h": 263.2,
+   "branch_commits": 1280,
+   "reqs": 1,
+   "product": true,
+   "files": 886
+  },
+  {
+   "d": "2026-10-31T19:24:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-10-31T19:22:57-04:00",
+   "lead_h": 12.8,
+   "branch_commits": 37,
+   "reqs": 1,
+   "product": true,
+   "files": 91
+  },
+  {
+   "d": "2026-10-31T06:17:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-31T06:16:11-04:00",
+   "lead_h": 4.3,
+   "branch_commits": 31,
+   "reqs": 1,
+   "product": true,
+   "files": 113
+  },
+  {
+   "d": "2026-10-31T04:16:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-10-31T04:12:19-04:00",
+   "lead_h": 2.8,
+   "branch_commits": 18,
+   "reqs": 1,
+   "product": true,
+   "files": 33
+  },
+  {
+   "d": "2026-10-30T22:52:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-10-30T22:46:20-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 8
+  },
+  {
+   "d": "2026-10-30T22:20:30-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 6
+  },
+  {
+   "d": "2026-10-30T20:59:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-10-30T20:42:30-04:00",
+   "lead_h": 2.1,
+   "branch_commits": 8,
+   "reqs": 1,
+   "product": true,
+   "files": 25
+  },
+  {
+   "d": "2026-10-30T09:18:11-04:00",
+   "lead_h": 1.9,
+   "branch_commits": 4,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-10-30T06:28:09-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-10-30T05:57:01-04:00",
+   "lead_h": 6.3,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 59
+  },
+  {
+   "d": "2026-10-29T13:35:14-04:00",
+   "lead_h": 5.7,
+   "branch_commits": 56,
+   "reqs": 0,
+   "product": true,
+   "files": 183
+  },
+  {
+   "d": "2026-10-29T02:55:23-04:00",
+   "lead_h": 2.0,
+   "branch_commits": 17,
+   "reqs": 1,
+   "product": true,
+   "files": 44
+  },
+  {
+   "d": "2026-10-29T01:15:34-04:00",
+   "lead_h": 0.5,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-10-29T00:48:28-04:00",
+   "lead_h": 0.7,
+   "branch_commits": 12,
+   "reqs": 1,
+   "product": true,
+   "files": 25
+  },
+  {
+   "d": "2026-10-28T23:59:39-04:00",
+   "lead_h": 11.7,
+   "branch_commits": 10,
+   "reqs": 1,
+   "product": true,
+   "files": 32
+  },
+  {
+   "d": "2026-10-28T23:37:32-04:00",
+   "lead_h": 11.4,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 11
+  },
+  {
+   "d": "2026-10-28T11:54:59-04:00",
+   "lead_h": 0.6,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 30
+  },
+  {
+   "d": "2026-10-28T10:47:35-04:00",
+   "lead_h": 0.7,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 110
+  },
+  {
+   "d": "2026-10-28T09:45:47-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 16
+  },
+  {
+   "d": "2026-10-28T09:00:39-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 13
+  },
+  {
+   "d": "2026-10-28T08:15:31-04:00",
+   "lead_h": 6.7,
+   "branch_commits": 19,
+   "reqs": 1,
+   "product": true,
+   "files": 137
+  },
+  {
+   "d": "2026-10-28T00:33:50-04:00",
+   "lead_h": 1.3,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 21
+  },
+  {
+   "d": "2026-10-27T19:46:04-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-27T19:42:38-04:00",
+   "lead_h": 17.7,
+   "branch_commits": 12,
+   "reqs": 1,
+   "product": true,
+   "files": 55
+  },
+  {
+   "d": "2026-10-27T18:41:05-04:00",
+   "lead_h": 1.1,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 21
+  },
+  {
+   "d": "2026-10-27T16:54:04-04:00",
+   "lead_h": 0.7,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 38
+  },
+  {
+   "d": "2026-10-27T14:35:48-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-10-27T14:29:54-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-10-27T14:10:16-04:00",
+   "lead_h": 100.7,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-10-27T14:09:45-04:00",
+   "lead_h": 12.7,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-10-27T14:08:17-04:00",
+   "lead_h": 0.5,
+   "branch_commits": 4,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-10-27T13:55:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 4
+  },
+  {
+   "d": "2026-10-27T13:51:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-10-27T13:50:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 18
+  },
+  {
+   "d": "2026-10-27T13:07:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-10-27T13:05:17-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-10-27T11:42:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-27T10:56:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-10-27T10:53:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": true,
+   "files": 8
+  },
+  {
+   "d": "2026-10-27T10:52:33-04:00",
+   "lead_h": 8.6,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-10-27T01:28:45-04:00",
+   "lead_h": 0.2,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-10-27T01:07:45-04:00",
+   "lead_h": 1.7,
+   "branch_commits": 9,
+   "reqs": 1,
+   "product": true,
+   "files": 32
+  },
+  {
+   "d": "2026-10-27T00:59:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-10-27T00:56:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-10-23T09:19:23-04:00",
+   "lead_h": 5.4,
+   "branch_commits": 13,
+   "reqs": 0,
+   "product": true,
+   "files": 23
+  },
+  {
+   "d": "2026-10-23T03:51:30-04:00",
+   "lead_h": 0.6,
+   "branch_commits": 7,
+   "reqs": 0,
+   "product": true,
+   "files": 20
+  },
+  {
+   "d": "2026-10-23T03:34:23-04:00",
+   "lead_h": 0.7,
+   "branch_commits": 5,
+   "reqs": 0,
+   "product": true,
+   "files": 15
+  },
+  {
+   "d": "2026-10-23T02:13:25-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": true,
+   "files": 9
+  },
+  {
+   "d": "2026-10-22T23:04:18-04:00",
+   "lead_h": 200.3,
+   "branch_commits": 38,
+   "reqs": 0,
+   "product": true,
+   "files": 107
+  },
+  {
+   "d": "2026-10-22T19:21:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-10-22T08:15:04-04:00",
+   "lead_h": 0.7,
+   "branch_commits": 4,
+   "reqs": 1,
+   "product": true,
+   "files": 25
+  },
+  {
+   "d": "2026-10-22T00:24:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-22T00:21:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-10-21T22:19:21-04:00",
+   "lead_h": 0.6,
+   "branch_commits": 15,
+   "reqs": 1,
+   "product": true,
+   "files": 25
+  },
+  {
+   "d": "2026-10-21T21:37:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 6
+  },
+  {
+   "d": "2026-10-21T21:28:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 5
+  },
+  {
+   "d": "2026-10-21T21:16:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 8
+  },
+  {
+   "d": "2026-10-21T21:01:51-04:00",
+   "lead_h": 0.8,
+   "branch_commits": 9,
+   "reqs": 1,
+   "product": true,
+   "files": 59
+  },
+  {
+   "d": "2026-10-21T18:21:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-21T18:20:04-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 17
+  },
+  {
+   "d": "2026-10-21T17:46:09-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 11
+  },
+  {
+   "d": "2026-10-21T17:14:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-21T17:12:44-04:00",
+   "lead_h": 170.5,
+   "branch_commits": 18,
+   "reqs": 1,
+   "product": true,
+   "files": 116
+  },
+  {
+   "d": "2026-10-21T16:28:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-21T16:22:49-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": true,
+   "files": 14
+  },
+  {
+   "d": "2026-10-21T16:20:54-04:00",
+   "lead_h": 0.5,
+   "branch_commits": 4,
+   "reqs": 1,
+   "product": true,
+   "files": 11
+  },
+  {
+   "d": "2026-10-21T14:36:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-21T14:27:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-21T14:11:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-10-21T13:06:02-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-10-21T12:50:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-10-21T12:32:04-04:00",
+   "lead_h": 2.0,
+   "branch_commits": 14,
+   "reqs": 0,
+   "product": true,
+   "files": 66
+  },
+  {
+   "d": "2026-10-21T10:23:30-04:00",
+   "lead_h": 0.8,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 18
+  },
+  {
+   "d": "2026-10-21T09:34:09-04:00",
+   "lead_h": 8.4,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 17
+  },
+  {
+   "d": "2026-10-21T01:10:09-04:00",
+   "lead_h": 0.9,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 20
+  },
+  {
+   "d": "2026-10-14T16:59:41-04:00",
+   "lead_h": 1.0,
+   "branch_commits": 7,
+   "reqs": 1,
+   "product": true,
+   "files": 22
+  },
+  {
+   "d": "2026-10-14T16:17:38-04:00",
+   "lead_h": 3.5,
+   "branch_commits": 16,
+   "reqs": 2,
+   "product": true,
+   "files": 23
+  },
+  {
+   "d": "2026-10-14T14:14:18-04:00",
+   "lead_h": 13.5,
+   "branch_commits": 16,
+   "reqs": 1,
+   "product": true,
+   "files": 41
+  },
+  {
+   "d": "2026-10-13T21:59:13-04:00",
+   "lead_h": 7.8,
+   "branch_commits": 28,
+   "reqs": 2,
+   "product": true,
+   "files": 61
+  },
+  {
+   "d": "2026-10-13T19:39:19-04:00",
+   "lead_h": 8.1,
+   "branch_commits": 13,
+   "reqs": 2,
+   "product": true,
+   "files": 40
+  },
+  {
+   "d": "2026-10-13T16:06:41-04:00",
+   "lead_h": 2.3,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-10-13T14:55:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 5
+  },
+  {
+   "d": "2026-10-13T14:53:50-04:00",
+   "lead_h": 6.8,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 42
+  },
+  {
+   "d": "2026-10-13T10:31:17-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-10-13T10:29:27-04:00",
+   "lead_h": 4.2,
+   "branch_commits": 42,
+   "reqs": 0,
+   "product": true,
+   "files": 169
+  },
+  {
+   "d": "2026-10-13T07:51:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 4
+  },
+  {
+   "d": "2026-10-13T07:49:43-04:00",
+   "lead_h": 1.9,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 35
+  },
+  {
+   "d": "2026-10-13T04:31:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 4
+  },
+  {
+   "d": "2026-10-13T04:27:35-04:00",
+   "lead_h": 4.1,
+   "branch_commits": 14,
+   "reqs": 2,
+   "product": true,
+   "files": 584
+  },
+  {
+   "d": "2026-10-13T04:17:54-04:00",
+   "lead_h": 2.3,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 16
+  },
+  {
+   "d": "2026-10-08T20:46:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 7
+  },
+  {
+   "d": "2026-10-08T20:43:12-04:00",
+   "lead_h": 5.1,
+   "branch_commits": 8,
+   "reqs": 1,
+   "product": true,
+   "files": 91
+  },
+  {
+   "d": "2026-10-08T19:11:40-04:00",
+   "lead_h": 2.2,
+   "branch_commits": 9,
+   "reqs": 1,
+   "product": true,
+   "files": 46
+  },
+  {
+   "d": "2026-10-08T16:34:31-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 4
+  },
+  {
+   "d": "2026-10-08T09:41:06-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-10-08T08:28:23-04:00",
+   "lead_h": 0.6,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 26
+  },
+  {
+   "d": "2026-10-08T07:28:08-04:00",
+   "lead_h": 9.6,
+   "branch_commits": 39,
+   "reqs": 1,
+   "product": true,
+   "files": 122
+  },
+  {
+   "d": "2026-10-08T07:25:04-04:00",
+   "lead_h": 18.2,
+   "branch_commits": 8,
+   "reqs": 1,
+   "product": true,
+   "files": 65
+  },
+  {
+   "d": "2026-10-07T18:50:05-04:00",
+   "lead_h": 1.6,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": false,
+   "files": 54
+  },
+  {
+   "d": "2026-10-06T17:47:00-04:00",
+   "lead_h": 1.1,
+   "branch_commits": 4,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-10-06T16:44:21-04:00",
+   "lead_h": 723.3,
+   "branch_commits": 102,
+   "reqs": 1,
+   "product": true,
+   "files": 210
+  },
+  {
+   "d": "2026-09-30T00:00:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-29T17:16:54-04:00",
+   "lead_h": 9.2,
+   "branch_commits": 44,
+   "reqs": 0,
+   "product": false,
+   "files": 13
+  },
+  {
+   "d": "2026-09-29T17:16:46-04:00",
+   "lead_h": 10.4,
+   "branch_commits": 114,
+   "reqs": 2,
+   "product": true,
+   "files": 224
+  },
+  {
+   "d": "2026-09-29T07:37:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-29T07:24:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-29T07:22:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-29T07:20:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-29T07:16:36-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-29T07:14:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-09-29T06:56:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-29T06:55:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-29T06:46:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-29T06:45:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-29T06:41:27-04:00",
+   "lead_h": 1.9,
+   "branch_commits": 4,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-29T06:35:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-29T06:33:53-04:00",
+   "lead_h": 277.3,
+   "branch_commits": 62,
+   "reqs": 6,
+   "product": true,
+   "files": 97
+  },
+  {
+   "d": "2026-09-29T01:19:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-29T01:15:43-04:00",
+   "lead_h": 180.1,
+   "branch_commits": 137,
+   "reqs": 0,
+   "product": true,
+   "files": 429
+  },
+  {
+   "d": "2026-09-29T00:02:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 6
+  },
+  {
+   "d": "2026-09-29T00:01:32-04:00",
+   "lead_h": 117.4,
+   "branch_commits": 8,
+   "reqs": 1,
+   "product": true,
+   "files": 18
+  },
+  {
+   "d": "2026-09-24T02:37:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 5
+  },
+  {
+   "d": "2026-09-24T02:29:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-24T02:23:24-04:00",
+   "lead_h": 160.4,
+   "branch_commits": 89,
+   "reqs": 2,
+   "product": true,
+   "files": 169
+  },
+  {
+   "d": "2026-09-22T23:45:16-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 4,
+   "reqs": 1,
+   "product": true,
+   "files": 11
+  },
+  {
+   "d": "2026-09-22T19:35:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-22T17:44:45-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-09-22T17:37:52-04:00",
+   "lead_h": 1.6,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 9
+  },
+  {
+   "d": "2026-09-22T17:12:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-22T16:11:10-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-22T15:44:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-22T09:51:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-22T09:05:47-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 23,
+   "reqs": 5,
+   "product": true,
+   "files": 95
+  },
+  {
+   "d": "2026-09-22T08:42:42-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-22T04:10:28-04:00",
+   "lead_h": 0.8,
+   "branch_commits": 24,
+   "reqs": 3,
+   "product": true,
+   "files": 20
+  },
+  {
+   "d": "2026-09-22T04:05:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-22T04:01:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-22T03:52:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-22T03:42:41-04:00",
+   "lead_h": 0.4,
+   "branch_commits": 32,
+   "reqs": 6,
+   "product": true,
+   "files": 66
+  },
+  {
+   "d": "2026-09-22T03:34:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-22T03:13:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-22T02:27:53-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 5,
+   "reqs": 1,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-09-22T02:18:30-04:00",
+   "lead_h": 0.2,
+   "branch_commits": 11,
+   "reqs": 2,
+   "product": true,
+   "files": 11
+  },
+  {
+   "d": "2026-09-22T02:07:11-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-22T01:54:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 5
+  },
+  {
+   "d": "2026-09-22T01:10:37-04:00",
+   "lead_h": 104.3,
+   "branch_commits": 58,
+   "reqs": 0,
+   "product": true,
+   "files": 77
+  },
+  {
+   "d": "2026-09-17T17:04:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T16:58:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-17T16:58:49-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 2,
+   "reqs": 1,
+   "product": true,
+   "files": 6
+  },
+  {
+   "d": "2026-09-17T16:58:46-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 2,
+   "reqs": 1,
+   "product": true,
+   "files": 6
+  },
+  {
+   "d": "2026-09-17T16:58:45-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-17T15:45:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T15:41:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-09-17T15:37:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T15:31:49-04:00",
+   "lead_h": 302.8,
+   "branch_commits": 93,
+   "reqs": 1,
+   "product": true,
+   "files": 56
+  },
+  {
+   "d": "2026-09-17T14:52:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T14:40:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T14:35:19-04:00",
+   "lead_h": 485.5,
+   "branch_commits": 31,
+   "reqs": 1,
+   "product": true,
+   "files": 21
+  },
+  {
+   "d": "2026-09-17T14:24:48-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T14:22:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T14:18:08-04:00",
+   "lead_h": 0.2,
+   "branch_commits": 7,
+   "reqs": 1,
+   "product": true,
+   "files": 15
+  },
+  {
+   "d": "2026-09-17T14:12:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T14:00:09-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T13:57:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T13:47:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T13:46:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T13:42:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T13:37:31-04:00",
+   "lead_h": 300.6,
+   "branch_commits": 15,
+   "reqs": 1,
+   "product": true,
+   "files": 27
+  },
+  {
+   "d": "2026-09-17T13:25:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T13:20:57-04:00",
+   "lead_h": 300.4,
+   "branch_commits": 32,
+   "reqs": 1,
+   "product": true,
+   "files": 24
+  },
+  {
+   "d": "2026-09-17T13:15:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T13:11:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T13:06:33-04:00",
+   "lead_h": 303.4,
+   "branch_commits": 43,
+   "reqs": 1,
+   "product": true,
+   "files": 25
+  },
+  {
+   "d": "2026-09-17T12:57:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T12:45:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T12:38:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T12:38:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T12:36:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T12:31:53-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 4,
+   "reqs": 1,
+   "product": true,
+   "files": 6
+  },
+  {
+   "d": "2026-09-17T12:31:52-04:00",
+   "lead_h": 16.8,
+   "branch_commits": 6,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-17T12:25:06-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T12:24:45-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T12:20:02-04:00",
+   "lead_h": 65.1,
+   "branch_commits": 21,
+   "reqs": 1,
+   "product": true,
+   "files": 11
+  },
+  {
+   "d": "2026-09-17T12:16:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T12:16:01-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-17T12:01:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T11:56:45-04:00",
+   "lead_h": 479.9,
+   "branch_commits": 43,
+   "reqs": 1,
+   "product": true,
+   "files": 25
+  },
+  {
+   "d": "2026-09-17T11:53:45-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T11:48:54-04:00",
+   "lead_h": 474.5,
+   "branch_commits": 43,
+   "reqs": 0,
+   "product": true,
+   "files": 33
+  },
+  {
+   "d": "2026-09-17T11:46:37-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T11:46:31-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T11:41:56-04:00",
+   "lead_h": 57.7,
+   "branch_commits": 15,
+   "reqs": 1,
+   "product": true,
+   "files": 14
+  },
+  {
+   "d": "2026-09-17T11:39:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-17T11:35:33-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T11:29:27-04:00",
+   "lead_h": 312.8,
+   "branch_commits": 27,
+   "reqs": 1,
+   "product": true,
+   "files": 20
+  },
+  {
+   "d": "2026-09-17T11:20:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-17T11:14:02-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T11:09:37-04:00",
+   "lead_h": 56.4,
+   "branch_commits": 17,
+   "reqs": 1,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-09-17T11:05:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T11:01:40-04:00",
+   "lead_h": 55.8,
+   "branch_commits": 18,
+   "reqs": 2,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-09-17T11:01:38-04:00",
+   "lead_h": 304.4,
+   "branch_commits": 32,
+   "reqs": 1,
+   "product": true,
+   "files": 27
+  },
+  {
+   "d": "2026-09-17T11:01:37-04:00",
+   "lead_h": 305.0,
+   "branch_commits": 30,
+   "reqs": 1,
+   "product": true,
+   "files": 16
+  },
+  {
+   "d": "2026-09-17T10:55:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-17T10:31:18-04:00",
+   "lead_h": 0.2,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-17T10:20:03-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T10:15:47-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T10:15:46-04:00",
+   "lead_h": 14.0,
+   "branch_commits": 13,
+   "reqs": 1,
+   "product": true,
+   "files": 9
+  },
+  {
+   "d": "2026-09-17T10:15:45-04:00",
+   "lead_h": 14.1,
+   "branch_commits": 15,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-09-17T10:02:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-17T07:50:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T07:47:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T07:42:59-04:00",
+   "lead_h": 295.0,
+   "branch_commits": 48,
+   "reqs": 1,
+   "product": true,
+   "files": 24
+  },
+  {
+   "d": "2026-09-17T07:42:58-04:00",
+   "lead_h": 295.0,
+   "branch_commits": 33,
+   "reqs": 1,
+   "product": true,
+   "files": 21
+  },
+  {
+   "d": "2026-09-17T07:42:04-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T07:34:11-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T07:19:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T07:00:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-17T00:49:48-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T00:42:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T00:39:31-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T00:34:49-04:00",
+   "lead_h": 294.2,
+   "branch_commits": 22,
+   "reqs": 1,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-09-17T00:34:40-04:00",
+   "lead_h": 45.7,
+   "branch_commits": 13,
+   "reqs": 2,
+   "product": true,
+   "files": 11
+  },
+  {
+   "d": "2026-09-17T00:34:38-04:00",
+   "lead_h": 287.7,
+   "branch_commits": 34,
+   "reqs": 1,
+   "product": true,
+   "files": 16
+  },
+  {
+   "d": "2026-09-17T00:25:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T00:07:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-17T00:01:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T23:53:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T23:26:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-16T23:17:26-04:00",
+   "lead_h": 286.4,
+   "branch_commits": 17,
+   "reqs": 1,
+   "product": true,
+   "files": 13
+  },
+  {
+   "d": "2026-09-16T23:17:25-04:00",
+   "lead_h": 43.9,
+   "branch_commits": 14,
+   "reqs": 1,
+   "product": true,
+   "files": 10
+  },
+  {
+   "d": "2026-09-16T23:17:22-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-09-16T23:08:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-16T22:51:58-04:00",
+   "lead_h": 8.9,
+   "branch_commits": 10,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-16T22:51:52-04:00",
+   "lead_h": 52.6,
+   "branch_commits": 11,
+   "reqs": 1,
+   "product": true,
+   "files": 17
+  },
+  {
+   "d": "2026-09-16T22:51:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T22:04:55-04:00",
+   "lead_h": 43.5,
+   "branch_commits": 9,
+   "reqs": 1,
+   "product": true,
+   "files": 18
+  },
+  {
+   "d": "2026-09-16T20:08:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T20:06:45-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T19:56:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T19:29:41-04:00",
+   "lead_h": 9.7,
+   "branch_commits": 5,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-16T19:29:40-04:00",
+   "lead_h": 9.7,
+   "branch_commits": 4,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T19:28:24-04:00",
+   "lead_h": 22.3,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": false,
+   "files": 14
+  },
+  {
+   "d": "2026-09-16T19:28:23-04:00",
+   "lead_h": 9.7,
+   "branch_commits": 9,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-16T19:24:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T18:50:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T18:43:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T18:37:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-16T18:37:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T14:16:03-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T14:13:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T14:13:48-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T14:10:47-04:00",
+   "lead_h": 34.9,
+   "branch_commits": 7,
+   "reqs": 1,
+   "product": true,
+   "files": 15
+  },
+  {
+   "d": "2026-09-16T14:08:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T14:02:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T13:58:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T13:56:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T13:50:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T13:49:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T13:46:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T13:43:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T13:43:11-04:00",
+   "lead_h": 34.4,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-09-16T13:42:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T13:39:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T13:37:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T13:35:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T13:34:18-04:00",
+   "lead_h": 34.3,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-09-16T11:00:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-16T10:51:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-16T10:39:13-04:00",
+   "lead_h": 0.5,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-16T10:38:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T10:36:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-09-16T10:05:53-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T09:46:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-16T09:43:17-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T09:34:02-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-16T09:32:38-04:00",
+   "lead_h": 30.8,
+   "branch_commits": 4,
+   "reqs": 1,
+   "product": true,
+   "files": 11
+  },
+  {
+   "d": "2026-09-16T09:30:38-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T09:24:33-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T09:21:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T09:19:57-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-16T09:19:57-04:00",
+   "lead_h": 8.8,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-16T09:19:56-04:00",
+   "lead_h": 8.9,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-16T09:18:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T09:15:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-16T09:04:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-16T09:00:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T08:59:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T08:51:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-16T00:46:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-16T00:35:33-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-15T23:20:06-04:00",
+   "lead_h": 166.5,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-15T23:20:05-04:00",
+   "lead_h": 1.8,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-15T23:20:04-04:00",
+   "lead_h": 21.3,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-09-15T23:20:04-04:00",
+   "lead_h": 20.2,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-15T23:20:04-04:00",
+   "lead_h": 2.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-15T23:19:56-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-15T23:12:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-15T23:03:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-15T21:37:04-04:00",
+   "lead_h": 437.0,
+   "branch_commits": 27,
+   "reqs": 1,
+   "product": true,
+   "files": 16
+  },
+  {
+   "d": "2026-09-15T21:35:04-04:00",
+   "lead_h": 19.6,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 13
+  },
+  {
+   "d": "2026-09-15T21:31:49-04:00",
+   "lead_h": 26.9,
+   "branch_commits": 9,
+   "reqs": 1,
+   "product": true,
+   "files": 11
+  },
+  {
+   "d": "2026-09-15T21:13:16-04:00",
+   "lead_h": 1.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-15T13:29:39-04:00",
+   "lead_h": 429.9,
+   "branch_commits": 10,
+   "reqs": 0,
+   "product": false,
+   "files": 0
+  },
+  {
+   "d": "2026-09-15T13:19:12-04:00",
+   "lead_h": 12.1,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-15T11:35:48-04:00",
+   "lead_h": 236.4,
+   "branch_commits": 16,
+   "reqs": 1,
+   "product": true,
+   "files": 10
+  },
+  {
+   "d": "2026-09-15T07:29:46-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 2,
+   "reqs": 1,
+   "product": true,
+   "files": 2
+  },
+  {
+   "d": "2026-09-15T07:26:27-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-15T07:22:44-04:00",
+   "lead_h": 4.5,
+   "branch_commits": 4,
+   "reqs": 1,
+   "product": true,
+   "files": 9
+  },
+  {
+   "d": "2026-09-15T07:13:21-04:00",
+   "lead_h": 5.3,
+   "branch_commits": 2,
+   "reqs": 1,
+   "product": true,
+   "files": 8
+  },
+  {
+   "d": "2026-09-15T07:08:52-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-15T04:02:30-04:00",
+   "lead_h": 0.5,
+   "branch_commits": 7,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-15T03:57:56-04:00",
+   "lead_h": 146.6,
+   "branch_commits": 13,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-09-15T03:53:33-04:00",
+   "lead_h": 3.2,
+   "branch_commits": 17,
+   "reqs": 0,
+   "product": false,
+   "files": 17
+  },
+  {
+   "d": "2026-09-15T03:11:41-04:00",
+   "lead_h": 419.3,
+   "branch_commits": 30,
+   "reqs": 3,
+   "product": true,
+   "files": 38
+  },
+  {
+   "d": "2026-09-15T01:54:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-15T01:41:04-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 10
+  },
+  {
+   "d": "2026-09-15T00:50:04-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-15T00:46:32-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-15T00:43:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-15T00:39:33-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-15T00:36:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-15T00:34:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-14T23:32:11-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-14T23:21:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-14T22:47:17-04:00",
+   "lead_h": 142.3,
+   "branch_commits": 21,
+   "reqs": 1,
+   "product": true,
+   "files": 36
+  },
+  {
+   "d": "2026-09-14T22:30:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-14T22:29:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-14T20:42:09-04:00",
+   "lead_h": 1.5,
+   "branch_commits": 4,
+   "reqs": 1,
+   "product": true,
+   "files": 9
+  },
+  {
+   "d": "2026-09-14T20:34:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-14T19:27:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-14T19:18:20-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 17
+  },
+  {
+   "d": "2026-09-14T19:03:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-14T18:33:40-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-14T18:33:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-14T18:31:36-04:00",
+   "lead_h": 114.1,
+   "branch_commits": 6,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-14T17:59:09-04:00",
+   "lead_h": 137.4,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-14T17:50:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-14T17:48:35-04:00",
+   "lead_h": 246.2,
+   "branch_commits": 23,
+   "reqs": 2,
+   "product": true,
+   "files": 27
+  },
+  {
+   "d": "2026-09-14T17:33:45-04:00",
+   "lead_h": 110.9,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-14T17:33:39-04:00",
+   "lead_h": 110.3,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-14T17:32:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-14T17:30:45-04:00",
+   "lead_h": 0.6,
+   "branch_commits": 4,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-09-10T03:06:39-04:00",
+   "lead_h": 2.6,
+   "branch_commits": 8,
+   "reqs": 1,
+   "product": true,
+   "files": 24
+  },
+  {
+   "d": "2026-09-10T02:34:14-04:00",
+   "lead_h": 1.5,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-10T02:24:46-04:00",
+   "lead_h": 0.6,
+   "branch_commits": 3,
+   "reqs": 4,
+   "product": true,
+   "files": 19
+  },
+  {
+   "d": "2026-09-10T01:41:31-04:00",
+   "lead_h": 1.8,
+   "branch_commits": 2,
+   "reqs": 3,
+   "product": true,
+   "files": 13
+  },
+  {
+   "d": "2026-09-10T01:19:10-04:00",
+   "lead_h": 133.9,
+   "branch_commits": 35,
+   "reqs": 0,
+   "product": true,
+   "files": 79
+  },
+  {
+   "d": "2026-09-10T00:58:19-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 2,
+   "reqs": 2,
+   "product": true,
+   "files": 37
+  },
+  {
+   "d": "2026-09-10T00:25:47-04:00",
+   "lead_h": 1.1,
+   "branch_commits": 4,
+   "reqs": 1,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-09-10T00:15:32-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T23:42:09-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T22:45:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 1,
+   "product": true,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T22:37:07-04:00",
+   "lead_h": 1.7,
+   "branch_commits": 9,
+   "reqs": 0,
+   "product": false,
+   "files": 48
+  },
+  {
+   "d": "2026-09-09T22:26:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T22:18:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T21:59:19-04:00",
+   "lead_h": 1.1,
+   "branch_commits": 7,
+   "reqs": 0,
+   "product": true,
+   "files": 36
+  },
+  {
+   "d": "2026-09-09T21:21:59-04:00",
+   "lead_h": 13.2,
+   "branch_commits": 15,
+   "reqs": 1,
+   "product": true,
+   "files": 35
+  },
+  {
+   "d": "2026-09-09T12:10:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-09T12:04:05-04:00",
+   "lead_h": 1.6,
+   "branch_commits": 11,
+   "reqs": 0,
+   "product": false,
+   "files": 47
+  },
+  {
+   "d": "2026-09-09T09:55:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T09:31:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-09T08:42:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-09T08:13:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-09T07:37:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T07:22:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T04:49:22-04:00",
+   "lead_h": 98.3,
+   "branch_commits": 22,
+   "reqs": 0,
+   "product": false,
+   "files": 24
+  },
+  {
+   "d": "2026-09-09T04:45:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-09T04:37:05-04:00",
+   "lead_h": 5.5,
+   "branch_commits": 34,
+   "reqs": 5,
+   "product": true,
+   "files": 83
+  },
+  {
+   "d": "2026-09-09T03:58:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-09T03:44:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-09T03:38:33-04:00",
+   "lead_h": 0.8,
+   "branch_commits": 6,
+   "reqs": 0,
+   "product": false,
+   "files": 11
+  },
+  {
+   "d": "2026-09-09T03:14:35-04:00",
+   "lead_h": 0.8,
+   "branch_commits": 8,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-09-09T02:08:01-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-09T02:04:15-04:00",
+   "lead_h": 104.3,
+   "branch_commits": 89,
+   "reqs": 0,
+   "product": true,
+   "files": 141
+  },
+  {
+   "d": "2026-09-09T02:04:03-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 21
+  },
+  {
+   "d": "2026-09-09T01:09:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-09T00:36:54-04:00",
+   "lead_h": 1.5,
+   "branch_commits": 10,
+   "reqs": 3,
+   "product": true,
+   "files": 14
+  },
+  {
+   "d": "2026-09-08T23:37:32-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-08T23:23:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T22:59:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-08T22:47:48-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-08T22:44:17-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-08T20:33:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-08T20:32:01-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T20:29:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T20:27:19-04:00",
+   "lead_h": 3.9,
+   "branch_commits": 13,
+   "reqs": 2,
+   "product": true,
+   "files": 17
+  },
+  {
+   "d": "2026-09-08T20:11:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T20:03:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T19:52:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-08T19:03:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T19:01:58-04:00",
+   "lead_h": 75.2,
+   "branch_commits": 8,
+   "reqs": 0,
+   "product": false,
+   "files": 19
+  },
+  {
+   "d": "2026-09-08T19:01:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T18:44:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T18:27:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T18:22:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T18:10:04-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T18:07:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-09-08T17:29:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-08T17:26:09-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T17:24:33-04:00",
+   "lead_h": 70.9,
+   "branch_commits": 19,
+   "reqs": 0,
+   "product": false,
+   "files": 49
+  },
+  {
+   "d": "2026-09-08T17:11:29-04:00",
+   "lead_h": 1.2,
+   "branch_commits": 6,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-08T17:10:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-08T16:49:00-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-08T16:45:26-04:00",
+   "lead_h": 0.9,
+   "branch_commits": 6,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-09-08T16:45:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-08T16:19:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-08T16:01:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-08T15:51:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-08T15:20:11-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 11
+  },
+  {
+   "d": "2026-09-08T09:06:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-08T08:52:17-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-08T02:50:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T02:42:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-08T02:34:00-04:00",
+   "lead_h": 59.2,
+   "branch_commits": 9,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-08T01:23:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-07T14:28:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-07T14:19:09-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-07T14:15:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-07T14:13:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-07T14:13:01-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-07T14:11:02-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-07T14:06:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-07T14:05:32-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-07T14:04:53-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-07T13:58:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T19:57:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T19:51:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-05T19:44:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-05T19:42:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-05T18:48:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T18:48:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T18:45:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T18:32:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-05T18:29:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-05T18:29:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-05T18:21:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-05T18:19:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-05T18:15:54-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-05T18:14:32-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T18:11:54-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-05T18:08:45-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-05T18:04:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-05T17:54:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-05T16:50:36-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T16:47:36-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-05T16:47:26-04:00",
+   "lead_h": 0.2,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-05T16:47:26-04:00",
+   "lead_h": 1.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T16:33:29-04:00",
+   "lead_h": 15.1,
+   "branch_commits": 5,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-05T16:32:08-04:00",
+   "lead_h": 18.9,
+   "branch_commits": 10,
+   "reqs": 1,
+   "product": true,
+   "files": 19
+  },
+  {
+   "d": "2026-09-05T16:31:16-04:00",
+   "lead_h": 16.1,
+   "branch_commits": 12,
+   "reqs": 1,
+   "product": true,
+   "files": 14
+  },
+  {
+   "d": "2026-09-05T15:46:11-04:00",
+   "lead_h": 5.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T15:46:10-04:00",
+   "lead_h": 18.3,
+   "branch_commits": 14,
+   "reqs": 0,
+   "product": false,
+   "files": 38
+  },
+  {
+   "d": "2026-09-05T13:56:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-09-05T13:46:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 17
+  },
+  {
+   "d": "2026-09-05T13:16:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-09-05T12:50:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-05T12:24:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-05T12:12:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-05T11:48:01-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-05T11:26:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-05T11:22:37-04:00",
+   "lead_h": 8.9,
+   "branch_commits": 7,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-05T11:21:39-04:00",
+   "lead_h": 8.7,
+   "branch_commits": 7,
+   "reqs": 0,
+   "product": false,
+   "files": 16
+  },
+  {
+   "d": "2026-09-05T10:46:53-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-05T10:40:09-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-09-05T10:29:30-04:00",
+   "lead_h": 9.5,
+   "branch_commits": 9,
+   "reqs": 0,
+   "product": false,
+   "files": 14
+  },
+  {
+   "d": "2026-09-05T10:08:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-09-05T03:22:53-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-09-05T03:14:40-04:00",
+   "lead_h": 27.5,
+   "branch_commits": 16,
+   "reqs": 1,
+   "product": true,
+   "files": 24
+  },
+  {
+   "d": "2026-09-05T02:53:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-09-05T02:48:44-04:00",
+   "lead_h": 8.5,
+   "branch_commits": 10,
+   "reqs": 0,
+   "product": false,
+   "files": 37
+  },
+  {
+   "d": "2026-09-05T01:27:45-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-05T01:08:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T01:06:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T01:05:04-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T01:03:00-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T00:54:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T00:52:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T00:41:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T00:38:02-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 13
+  },
+  {
+   "d": "2026-09-05T00:32:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T00:29:53-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T00:28:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T00:27:31-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T00:17:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T00:13:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-05T00:11:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-05T00:08:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T21:41:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T21:27:11-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T18:46:53-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T18:43:54-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T18:43:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T18:41:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T18:40:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T18:38:34-04:00",
+   "lead_h": 3.5,
+   "branch_commits": 8,
+   "reqs": 0,
+   "product": false,
+   "files": 42
+  },
+  {
+   "d": "2026-09-04T18:38:34-04:00",
+   "lead_h": 169.6,
+   "branch_commits": 11,
+   "reqs": 0,
+   "product": false,
+   "files": 17
+  },
+  {
+   "d": "2026-09-04T18:32:42-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T18:29:38-04:00",
+   "lead_h": 14.0,
+   "branch_commits": 12,
+   "reqs": 1,
+   "product": true,
+   "files": 15
+  },
+  {
+   "d": "2026-09-04T18:14:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T18:04:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T17:51:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T17:45:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T17:43:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-04T17:37:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 11
+  },
+  {
+   "d": "2026-09-04T17:28:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T17:25:22-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T17:23:26-04:00",
+   "lead_h": 1.2,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 13
+  },
+  {
+   "d": "2026-09-04T17:20:45-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T17:09:45-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T17:05:24-04:00",
+   "lead_h": 0.2,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-09-04T16:38:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-09-04T16:19:42-04:00",
+   "lead_h": 0.9,
+   "branch_commits": 7,
+   "reqs": 1,
+   "product": true,
+   "files": 19
+  },
+  {
+   "d": "2026-09-04T16:19:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T16:12:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T16:11:03-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T16:07:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 11
+  },
+  {
+   "d": "2026-09-04T16:04:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T16:02:06-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T16:00:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T15:58:06-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 11
+  },
+  {
+   "d": "2026-09-04T15:51:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T15:48:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T15:44:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T15:42:56-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T15:39:11-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T15:34:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T15:33:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T15:31:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-04T15:02:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T12:00:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T11:58:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T11:56:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-09-04T11:53:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-04T11:48:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T11:46:56-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-04T11:40:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T11:37:01-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-04T11:31:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T11:27:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T11:26:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T11:25:48-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T11:25:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-09-04T11:15:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-04T11:12:54-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T11:10:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T11:08:04-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T11:05:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T11:04:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T11:03:48-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-04T11:00:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T10:58:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-04T10:55:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T10:53:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T10:51:31-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T10:49:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T10:48:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-04T10:45:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T10:43:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T10:41:56-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T10:38:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T10:37:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T10:35:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T10:31:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-09-04T10:25:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T10:23:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-04T10:20:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-04T10:18:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T10:07:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T05:37:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T05:36:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T05:36:22-04:00",
+   "lead_h": 6.6,
+   "branch_commits": 9,
+   "reqs": 1,
+   "product": true,
+   "files": 13
+  },
+  {
+   "d": "2026-09-04T05:30:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T05:26:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T05:24:59-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T05:23:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-09-04T05:21:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T05:21:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T05:16:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T05:14:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T05:13:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T05:12:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T05:11:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T05:11:00-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T05:10:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T05:08:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T05:06:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T05:05:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T05:04:06-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T05:03:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T05:02:02-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T05:01:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T05:00:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T04:52:31-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T04:51:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T04:50:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T04:48:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-09-04T04:47:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T04:46:54-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T04:45:54-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T04:44:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T04:43:36-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T04:42:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T04:40:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T04:35:38-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T04:34:58-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T04:34:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T04:29:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": false,
+   "files": 21
+  },
+  {
+   "d": "2026-09-04T04:23:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T04:21:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-09-04T04:20:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T04:20:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T04:16:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T04:15:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-04T04:13:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T04:12:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T02:30:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T02:29:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T02:24:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T02:22:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T02:22:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T02:21:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T02:19:36-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T02:17:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T02:16:42-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T02:11:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-04T02:09:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T02:07:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T02:07:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T02:05:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T02:03:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T02:02:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T01:58:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T01:48:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:48:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-09-04T01:43:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:42:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-04T01:41:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T01:40:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:40:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T01:39:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T01:34:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:33:32-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:33:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-04T01:25:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:24:48-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T01:24:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:19:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:18:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-04T01:17:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:16:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T01:08:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:07:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T01:07:00-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T00:57:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:56:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T00:53:06-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:52:56-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-04T00:51:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T00:49:38-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:46:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T00:45:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-04T00:42:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:42:41-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:42:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:41:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-04T00:32:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:31:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-04T00:24:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:24:02-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:23:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-04T00:20:17-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-09-03T22:52:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-03T22:51:22-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-03T22:44:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-03T22:43:42-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-09-03T22:43:03-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-03T22:35:09-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-03T22:34:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-03T22:29:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-03T22:28:47-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-03T22:10:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-03T22:08:16-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-03T22:02:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-09-03T21:20:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-09-03T01:08:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-09-03T01:08:09-04:00",
+   "lead_h": 1.0,
+   "branch_commits": 5,
+   "reqs": 0,
+   "product": false,
+   "files": 14
+  },
+  {
+   "d": "2026-09-03T01:04:44-04:00",
+   "lead_h": 132.6,
+   "branch_commits": 6,
+   "reqs": 1,
+   "product": true,
+   "files": 14
+  },
+  {
+   "d": "2026-09-03T01:04:44-04:00",
+   "lead_h": 133.1,
+   "branch_commits": 10,
+   "reqs": 1,
+   "product": true,
+   "files": 9
+  },
+  {
+   "d": "2026-09-03T00:05:15-04:00",
+   "lead_h": 134.8,
+   "branch_commits": 10,
+   "reqs": 0,
+   "product": false,
+   "files": 12
+  },
+  {
+   "d": "2026-09-02T23:59:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-09-02T23:50:19-04:00",
+   "lead_h": 239.7,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-09-02T23:50:01-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T18:40:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T17:23:17-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T17:10:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T17:09:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T17:07:38-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T17:03:32-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T16:56:53-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 13
+  },
+  {
+   "d": "2026-08-28T16:51:55-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T16:46:36-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T16:44:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-08-28T16:38:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T16:34:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T16:28:11-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T16:24:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 17
+  },
+  {
+   "d": "2026-08-28T16:18:13-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T16:15:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T16:12:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-08-28T16:04:03-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T15:54:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-08-28T15:41:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T15:38:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T15:33:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 23
+  },
+  {
+   "d": "2026-08-28T15:28:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-08-28T15:05:01-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 31
+  },
+  {
+   "d": "2026-08-28T14:25:42-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T14:08:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T13:50:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T13:41:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T13:32:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T13:03:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T12:39:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T12:33:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-08-28T12:26:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T12:22:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T12:20:22-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T12:17:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T12:10:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T12:06:20-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T12:05:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T12:03:00-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T12:00:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T11:59:11-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T11:56:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-08-28T11:54:22-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T11:51:31-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T11:40:06-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T11:38:00-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T11:27:38-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T11:25:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T11:20:25-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-08-28T10:53:56-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 19
+  },
+  {
+   "d": "2026-08-28T10:48:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T10:01:33-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T09:29:26-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T09:27:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T09:22:43-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-08-28T09:15:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T09:11:10-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T09:06:12-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T09:02:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T09:00:46-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T08:55:24-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T08:47:19-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T08:44:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T08:43:29-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T08:41:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T08:40:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-08-28T08:38:18-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-08-28T08:33:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T08:28:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T08:24:56-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T08:22:03-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 10
+  },
+  {
+   "d": "2026-08-28T08:18:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T08:16:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-08-28T08:13:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T08:11:22-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T08:09:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T08:08:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T08:03:02-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T08:00:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T07:57:40-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T07:54:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T07:52:06-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T07:47:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T07:43:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T07:23:35-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T04:07:17-04:00",
+   "lead_h": 2.2,
+   "branch_commits": 7,
+   "reqs": 1,
+   "product": true,
+   "files": 15
+  },
+  {
+   "d": "2026-08-28T04:07:17-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T02:17:20-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 13
+  },
+  {
+   "d": "2026-08-28T02:15:57-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 2,
+   "reqs": 1,
+   "product": true,
+   "files": 9
+  },
+  {
+   "d": "2026-08-28T01:55:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T01:54:54-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 9
+  },
+  {
+   "d": "2026-08-28T01:43:34-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T01:42:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T01:41:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-28T01:29:32-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T01:19:23-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-28T01:19:09-04:00",
+   "lead_h": 6.6,
+   "branch_commits": 37,
+   "reqs": 1,
+   "product": true,
+   "files": 28
+  },
+  {
+   "d": "2026-08-28T00:53:44-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-28T00:38:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-28T00:38:07-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-08-28T00:13:31-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-28T00:00:53-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-27T23:58:56-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 8
+  },
+  {
+   "d": "2026-08-27T23:41:52-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-27T23:40:15-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-27T23:11:05-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-27T22:45:08-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-27T22:27:37-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-27T22:12:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-27T22:07:36-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-27T21:51:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-27T20:17:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-27T19:40:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-27T19:28:27-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-27T19:03:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 11
+  },
+  {
+   "d": "2026-08-27T18:40:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-08-27T18:34:01-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-27T11:06:33-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-27T10:30:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-27T10:20:20-04:00",
+   "lead_h": 9.1,
+   "branch_commits": 22,
+   "reqs": 1,
+   "product": true,
+   "files": 34
+  },
+  {
+   "d": "2026-08-27T09:39:50-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-27T08:55:49-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 14
+  },
+  {
+   "d": "2026-08-27T01:08:17-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 3,
+   "reqs": 1,
+   "product": true,
+   "files": 13
+  },
+  {
+   "d": "2026-08-27T00:47:28-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 15
+  },
+  {
+   "d": "2026-08-27T00:18:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 18
+  },
+  {
+   "d": "2026-08-26T22:10:57-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 52
+  },
+  {
+   "d": "2026-08-25T23:34:26-04:00",
+   "lead_h": 154.1,
+   "branch_commits": 70,
+   "reqs": 0,
+   "product": true,
+   "files": 139
+  },
+  {
+   "d": "2026-08-20T23:39:25-04:00",
+   "lead_h": 33.7,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 3
+  },
+  {
+   "d": "2026-08-20T23:37:48-04:00",
+   "lead_h": 6.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-08-18T22:32:47-04:00",
+   "lead_h": 15.6,
+   "branch_commits": 21,
+   "reqs": 0,
+   "product": true,
+   "files": 30
+  },
+  {
+   "d": "2026-08-18T01:08:27-04:00",
+   "lead_h": 18.5,
+   "branch_commits": 7,
+   "reqs": 0,
+   "product": true,
+   "files": 22
+  },
+  {
+   "d": "2026-08-16T23:04:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 14
+  },
+  {
+   "d": "2026-08-16T22:52:43-04:00",
+   "lead_h": 0.3,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 2
+  },
+  {
+   "d": "2026-08-16T16:09:14-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 4
+  },
+  {
+   "d": "2026-08-16T15:51:39-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 4
+  },
+  {
+   "d": "2026-08-16T14:21:00-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 7
+  },
+  {
+   "d": "2026-08-16T12:35:21-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 6
+  },
+  {
+   "d": "2026-08-16T12:01:58-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-16T11:48:42-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-16T11:08:51-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 5
+  },
+  {
+   "d": "2026-08-16T10:01:51-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": false,
+   "files": 344
+  },
+  {
+   "d": "2026-08-16T08:34:30-04:00",
+   "lead_h": 0.0,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-16T07:58:51-04:00",
+   "lead_h": 7.3,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-08-15T22:42:31-04:00",
+   "lead_h": 0.1,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-13T21:45:18-04:00",
+   "lead_h": 19.3,
+   "branch_commits": 20,
+   "reqs": 0,
+   "product": true,
+   "files": 34
+  },
+  {
+   "d": "2026-08-13T01:56:23-04:00",
+   "lead_h": 2.4,
+   "branch_commits": 9,
+   "reqs": 0,
+   "product": true,
+   "files": 12
+  },
+  {
+   "d": "2026-08-13T00:41:49-04:00",
+   "lead_h": 1.6,
+   "branch_commits": 1,
+   "reqs": 0,
+   "product": true,
+   "files": 3
+  },
+  {
+   "d": "2026-08-12T18:56:10-04:00",
+   "lead_h": 12.1,
+   "branch_commits": 2,
+   "reqs": 0,
+   "product": false,
+   "files": 1
+  },
+  {
+   "d": "2026-08-12T16:28:18-04:00",
+   "lead_h": 5125.7,
+   "branch_commits": 50,
+   "reqs": 0,
+   "product": true,
+   "files": 627
+  },
+  {
+   "d": "2026-08-12T06:46:19-04:00",
+   "lead_h": 7.1,
+   "branch_commits": 4,
+   "reqs": 0,
+   "product": true,
+   "files": 8
+  },
+  {
+   "d": "2026-08-11T23:40:58-04:00",
+   "lead_h": 0.5,
+   "branch_commits": 9,
+   "reqs": 0,
+   "product": true,
+   "files": 144
+  },
+  {
+   "d": "2025-11-22T07:03:27-05:00",
+   "lead_h": 221.2,
+   "branch_commits": 3,
+   "reqs": 0,
+   "product": true,
+   "files": 40
+  }
+ ]
+}

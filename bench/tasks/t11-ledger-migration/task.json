@@ -1,0 +1,8 @@
+{
+  "id": "t11-ledger-migration",
+  "size": "large",
+  "kind": "feature",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done",
+  "note": "A stored format gains a field. Hidden tests: statuses through Ledger.add/set_status, void left out of every total (Ledger balances, ledgerbook.balances, report.monthly, Budget), cleared_balance and report 'pending', the report's closing balances equal Ledger.balances, files written in format 1 (memos with semicolons, including ones that end in a status word) load unchanged with every entry cleared, and new files round-trip. A pass does not show that the command line or report.render handle statuses."
+}

@@ -1,0 +1,2 @@
+/bmad-build-auto
+{ticket}

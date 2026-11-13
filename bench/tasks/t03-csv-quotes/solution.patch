@@ -1,0 +1,43 @@
+diff --git a/tinycsv/reader.py b/tinycsv/reader.py
+index bdce83f..c6f7744 100644
+--- a/tinycsv/reader.py
++++ b/tinycsv/reader.py
+@@ -5,13 +5,34 @@ def parse_line(line, delimiter=','):
+     """Split one line of delimited text into its fields.
+ 
+     A field may be wrapped in double quotes; the quotes are not part of the value.
++    Inside a quoted field the delimiter is ordinary text, and two double quotes in a
++    row stand for one double quote character.
+     The line ending, if any, is ignored. `delimiter` is a single character.
+     """
++    text = line.rstrip('\r\n')
+     fields = []
+-    for raw in line.rstrip('\r\n').split(delimiter):
+-        if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+-            raw = raw[1:-1]
+-        fields.append(raw)
++    value = []
++    quoted = False
++    i = 0
++    while i < len(text):
++        ch = text[i]
++        if quoted:
++            if ch != '"':
++                value.append(ch)
++            elif text[i + 1:i + 2] == '"':
++                value.append('"')
++                i += 1
++            else:
++                quoted = False
++        elif ch == '"' and not value:
++            quoted = True
++        elif ch == delimiter:
++            fields.append(''.join(value))
++            value = []
++        else:
++            value.append(ch)
++        i += 1
++    fields.append(''.join(value))
+     return fields
+ 
+ 

@@ -1,0 +1,182 @@
+# What paid and what was waste: the POS evidence ledger
+
+*Produced 2026-11-11 by a read-only research agent (Claude Fable 5.2); rendered from `data/research/pos.json` by `tools/render_evidence.py`. Agent-written: every figure carries its source, and the "Not verified" list says what the agent could not confirm.*
+
+Scope: only numbers recorded in the POS repository itself (directives, history, decisions, activity log, git). Citations are paths in that repository.
+
+## Honest assessment
+
+The method paid where it changed the shape of the work and lost where it added checking or ceremony, and the repo's own scorecard says so (docs/process/history/CLAUDE.md:1023-1029).
+
+Three results have real before/after numbers: invariant batching (17x on one instance), scripts instead of agents (4 minutes vs 106 agents), and legs as code (about 11x per leg, but only 13 of 57 legs). Outcome-first has one strong data point: about 2 hours to a host proof against a 14-hour swarm.
+
+The overhead outweighed the benefit in four places:
+- **The judged swarm.** 14 hours, 81 agents and 23 REVISEs of 30 on REQ-306, most REVISEs naming no product defect. It was mandated on 2026-10-06 and effectively withdrawn the next day.
+- **The step cap.** Because of a counting bug in the guard, the cap ran at about half its value for four weeks; runners became 82% of a 446M-token run, at about 90M tokens per outcome. A frugality rule produced the largest recorded waste after the swarm.
+- **Directive volume.** 68 directives, 28 policies and 204 governance scripts, with 53% of commits touching no product or test code. The repo records that adding directives did not stop violations: two three-day-old rules were broken on the day there were already 45.
+- **Decision judging.** 733 rulings in 44 days, 278 of them on one REQ that is still NO-GO.
+
+The central unproven claim is the product outcome itself. The only real-system run on record failed at 'Adding Firebase' on a refusal no fake produced. The next day #66 removed the real device and real Google from the merge conditions. Everything after is proven on fakes, with the simulation's blind spots written into the directive. I found no ruling recording a successful real install-to-first-order.
+
+What this ledger does not establish:
+- Most 'paid' figures are single instances measured by the same session that built the change, not repeated measurements.
+- #61, #62, #64, #66 and #67 have no recorded after-figure.
+- Tool-guard violations before and after cannot be measured from the repo.
+- Total token spend for the project is not recorded anywhere I found; only per-run figures exist (1.3B on 2026-09-08, 934.5M and 2,648M in the #62 replay, 338M, 446M).
+- I did not validate or refine the directives, and did not compare against Spec Kit, BMAD or Superpowers; this step was the ledger only.
+
+No files were edited.
+
+## The few rules that mattered most
+
+- Dispatch per invariant and tier the ladder from the diff (#45): the only rule with a clean before/after on real work, 17x on REQ-161.
+- Could a command answer this? Then write the script (#50): 4 minutes against 106 agents with no verdicts, and it found the systemic cause.
+- Start from one owner-visible outcome and prove that path first (#65): a host proof in about 2 hours where the swarm ran 14 hours on polish. It needs the original 'proven on the real system' clause to mean anything.
+- A process change ships with a before and after number or is reverted (#47): the rule that produced every usable figure in this ledger, and the one most often left half-done (no after-figure for #61, #62, #64, #66).
+- Keep always-loaded context small (#64): 74% of a swarm's tokens were the instruction files themselves.
+- Push a rule down into a script that refuses, not another paragraph (#46, #49): prose restated three times refused nothing.
+
+## What paid
+
+### Invariant batching and risk-tiered ladder (#45)
+
+- Magnitude: 17x on the one measured instance
+- Evidence: Before: 115 agents, 11,542 turns, 1.3B context tokens in one day to merge 5 cards while 12 were added (board 140 to 152); every card ran the same 7-stage ladder at about 840k tokens. After, on REQ-161: 4 cards for about 200k tokens against about 3.4M as four ladders. The directive itself caps the realistic gain at 10-20x, not the 100x asked for.
+- Source: docs/process/history/CLAUDE.md:1054-1090, docs/process/history/CLAUDE.md:1017, docs/product/OWNER_DIRECTIVES.md:56
+
+### Mechanical work as a script, not an agent (#50)
+
+- Magnitude: 106 agents and no answer vs about 4 minutes and the answer
+- Evidence: Triage of 53 stranded branches: a workflow of 53 triage agents plus 53 judges (106 agents) was killed mid-run with no verdicts; one shell script plus one Python file answered in about 4 minutes at near-zero tokens and found that all 53 had zero conflicts and 44 were blocked by one cause (POLICY 16 landing after they were written). The backfill script ran twice: 42 events, then 0.
+- Source: docs/product/OWNER_DIRECTIVES.md:85-97, docs/product/OWNER_DIRECTIVES.md:117-119
+
+### Device legs as code (#49)
+
+- Magnitude: about 11x per leg, on 13 of 57 legs
+- Evidence: About 450 tool calls, 830k tokens and 2 hours for about 40 hand-driven legs, against about 8 tool calls and 128 s for 8 integration tests. Limit recorded in the scorecard: only 13 of 57 legs were convertible. The rule had to be stated four times before a script enforced it. #66 later removed the real device as a merge condition, so the benefit window was about one month.
+- Source: docs/product/OWNER_DIRECTIVES.md:60, docs/process/history/CLAUDE.md:1018-1019, docs/product/OWNER_DIRECTIVES.md:299
+
+### Batching the rig by device state (#47 scorecard)
+
+- Magnitude: about 5x
+- Evidence: 5 state transitions covered 24 graded legs.
+- Source: docs/process/history/CLAUDE.md:1018, docs/product/OWNER_DIRECTIVES.md:58
+
+### Outcome-first (#65, D163/D164) as a correction to the judged swarm
+
+- Magnitude: about 2 hours to a host proof, against 14 hours for REQ-306's swarm
+- Evidence: The owner stopped REQ-323's swarm with 'this feature has consumed exponential amount of tokens without any benefit'. D163's outcome-first run then proved install-to-first-order on host fakes in about two hours, and D168 recorded the outcome judge PASS. Caveat: that proof was on fakes; the owner's first real-Google run stopped at 'Adding Firebase' on a 403 no fake produced.
+- Source: docs/product/pos-zero-defect/DECISIONS.md:2410-2412, docs/product/pos-zero-defect/DECISIONS.md:2440, docs/product/OWNER_DIRECTIVES.md:253-258
+
+### Context budget (#64, POLICY 18)
+
+- Magnitude: always-loaded CLAUDE.md cut by about 69%; token effect not measured
+- Evidence: 74% of one swarm's 338M tokens read was always-loaded context (CLAUDE.md 80 KB, charters up to 80 KB). CLAUDE.md was 101,112 bytes on 2026-10-06 and is 31,671 bytes now, with the detail moved to a 1,159-line history file. No after-measurement of swarm tokens is recorded; the saving is inferred from the size cut, not observed.
+- Source: docs/product/OWNER_DIRECTIVES.md:244-246; git show a2cbef008:CLAUDE.md (101,112 bytes) vs CLAUDE.md (31,671 bytes); docs/process/history/CLAUDE.md:1151
+
+### Scripts before judges (#61): diagnosis paid, effect unmeasured
+
+- Magnitude: not measured
+- Evidence: The diagnosis is solid: on REQ-306, six of seven wave-2 engine REVISEs named no product defect, and four of six wave-3 REWORKs were failure classes existing scripts already covered. The directive names REQ-322 and REQ-323 as the 'after', but I found no recorded after-figure for either; both were moved off the swarm one day later by D163/D164, so the comparison was never completed.
+- Source: docs/product/OWNER_DIRECTIVES.md:209-214, docs/process/history/CLAUDE.md:137-139, docs/product/pos-zero-defect/DECISIONS.md:2410-2418
+
+### Decision judge (#51/#63): removed owner waits, at a cost
+
+- Magnitude: 733 decisions not sent to the owner; value per decision not measured
+- Evidence: 733 rulings are recorded between 2026-09-29 and 2026-11-11, with 137 on 2026-10-06 and 142 on 2026-11-03. It took two tellings: #51's charter lived in an uncommitted scratch file that vanished, so the PO kept asking the owner for merge go-aheads on 2026-10-06. No number records owner time saved.
+- Source: docs/product/pos-zero-defect/DECISIONS.md (733 headings matching '## <date> · D<n>'), docs/product/OWNER_DIRECTIVES.md:233-236
+
+### Local CI (#67)
+
+- Magnitude: binary: an impossible gate became a possible one
+- Evidence: GitHub Actions jobs had been failing for weeks without starting (runner_id 0, zero steps, the account's Actions budget), so 'CI green' could never be met and every push woke the session. Replacing it with scripts/ci_local.sh removed an unmeetable gate. No time or token figure is recorded.
+- Source: docs/product/OWNER_DIRECTIVES.md:335-345
+
+## What was waste
+
+### The full judged swarm (#55-#59)
+
+- Evidence: REQ-306 ran 14 hours with 81 agents and 23 REVISEs in 30 verdicts; spec and design took 13 serial rounds (190 minutes). A stuck run had 48 agents and 0 judge calls, and one wave spent about 130 agents with no judge pass. The owner's verdict on REQ-323's swarm was 'exponential amount of tokens without any benefit'; the directive records that it 'certified polish while the owner's outcome went unproven'. It was made the mandatory protocol on 2026-10-06 and demoted to judge-ruled exception on 2026-10-07.
+- Source: docs/product/OWNER_DIRECTIVES.md:209-211, docs/process/history/CLAUDE.md:120, docs/product/OWNER_DIRECTIVES.md:246, docs/product/OWNER_DIRECTIVES.md:255, docs/product/pos-zero-defect/DECISIONS.md:2412
+
+### The 'complete all tasks' detour inside outcome-first
+
+- Evidence: After the real-Google run failed, three hours went on backlog tasks (85 to 191 of 340) while the outcome stayed unreached. The next day the opposite misreading parked REQ-323 at 207 of 341 tasks waiting on the owner. The rule needed two corrections and a reaffirmation within two days.
+- Source: docs/product/OWNER_DIRECTIVES.md:257-258, docs/product/OWNER_DIRECTIVES.md:277-281, docs/product/OWNER_DIRECTIVES.md:319-321
+
+### Step cap (#62) as enforced by the tool guard
+
+- Evidence: The cap was predicted to cut reads 42% at 25 calls. In practice the guard double-counted tool calls (median ratio 1.94 over 309 REQ-406 runners), cutting runners at 12-16 real calls. Each outcome then took 39-71 runner sessions, each re-orienting, and runners were 82% of that run's 446M tokens (about 90M per outcome). The bug ran from the rule's creation on 2026-10-06 until the fix on 2026-11-03. The after-measurement on the fixed run is listed as still to take.
+- Source: docs/product/OWNER_DIRECTIVES.md:221-226, docs/activity-log/ACTIVITY_LOG.md:3598-3608
+
+### Checking tooling presented as speed (#47 scorecard)
+
+- Evidence: REQ-136 mutation generator: two reworks, about 600k tokens, caught defects but no delivery speedup. REQ-126 suite lock: unmeasured. The scorecard's own conclusion is that six of seven merges in a day were factory work.
+- Source: docs/process/history/CLAUDE.md:1021-1029
+
+### Per-card seven-stage ladder and four pods
+
+- Evidence: Before #45, a one-flag script change cost the same 840k tokens as a schema migration, the full suite ran five times in a day, and one defect was split into four cards with four ladders. Pods went from four to one within a day of the four-developer rule (#31 and #37 are both dated 2026-09-05).
+- Source: docs/process/history/CLAUDE.md:1059-1067, docs/product/OWNER_DIRECTIVES.md:42, docs/product/OWNER_DIRECTIVES.md:48
+
+### Hand-driven device legs
+
+- Evidence: About 450 tool calls, 830k tokens and 2 hours for about 40 legs, after the rule against it had already been stated three times.
+- Source: docs/product/OWNER_DIRECTIVES.md:60
+
+### Step time budgets (#42 then #48)
+
+- Evidence: The 5-minute rule was written on 2026-09-05; three days later the PO was still writing budgets of 25 and 40 minutes into dispatches, with real durations of 7 to 51 minutes. The owner: 'this directive is not at all followed'.
+- Source: docs/product/OWNER_DIRECTIVES.md:53, docs/product/OWNER_DIRECTIVES.md:59
+
+### Decision judge at REQ-406 scale
+
+- Evidence: REQ-406 alone has 278 recorded rulings across 36 distinct outcome ids between 2026-10-31 and 2026-11-11, and its release ruling on 2026-11-11 is NO-GO. Rulings per REQ grew from 39 (REQ-322) to 93 (REQ-306) to 121 (REQ-323) to 278.
+- Source: docs/product/pos-zero-defect/DECISIONS.md:6617, docs/product/pos-zero-defect/DECISIONS.md:9731; counts from grep of '## <date> · D<n>' headings by REQ id
+
+### State file discipline (#17)
+
+- Evidence: PIPELINE_STATE.md went 6 days stale while nine cards merged, and a second pipeline ran for five days with no mention in it. The file's header still says regenerated 2026-09-15.
+- Source: docs/product/pos-zero-defect/PIPELINE_STATE.md:1-28
+
+### Simulated environment (#66): cost and benefit both unmeasured, and a known hole
+
+- Evidence: No token, time or defect figure is recorded for it. Its own text records that host simulation cannot observe real Firestore index and query semantics, server timestamps or release-mode behaviour. The one real-system run on record failed on exactly such a gap (a bare 403 on the Firebase terms that no fake produced). I found no later ruling recording a successful real-Google install-to-first-order.
+- Source: docs/product/OWNER_DIRECTIVES.md:311-313, docs/product/OWNER_DIRECTIVES.md:256-257, docs/product/pos-zero-defect/DECISIONS.md:5907
+
+## What the process itself cost
+
+Size of the governance layer today:
+- 68 numbered directives (docs/product/OWNER_DIRECTIVES.md:13-62 for #1-#49, :81-348 for #50-#68), 359 lines.
+- 28 distinct POLICY ids in scripts/policy_check.sh (1,822 lines).
+- LESSONS.md is 584 lines / 63,807 bytes; lesson ids reach at least L-41 before the 2026-09-16 curation folded them (.claude/agents/LESSONS.md:11, :197).
+- 733 judge rulings in DECISIONS.md (9,749 lines) in 44 days.
+- 204 governance scripts: 79 in scripts/pipeline plus 125 in scripts/verify, about 35,000 lines; 30 more files in scripts/gates. Product code in lib/ is about 208,000 lines.
+- 16 agent charter files totalling 308 KB with CLAUDE.md; 4 workflow files.
+- Activity log: 3,875 lines, 566 entries.
+
+CLAUDE.md growth: 1,969 bytes on 2026-08-11, 37,060 on 2026-08-28, 57,972 on 2026-09-05, 101,112 on 2026-10-06, then cut to 31,671 by the context budget. It was edited in 100 commits.
+
+Share of commits: of 4,476 non-merge commits since 2026-08-10, 1,054 (24%) touch lib/android/ios, 1,040 (23%) touch tests only, and 2,382 (53%) touch only docs, scripts, specs or process files.
+
+Violations after a rule was written (all recorded by the repo itself):
+- #49 no manual taps: four tellings before a script refused it (OWNER_DIRECTIVES.md:60).
+- #42 five-minute step: violated in every dispatch three days later (:59).
+- #41 and #40.5: violated within three days, on the day there were already 45 directives (:57).
+- #51 decision judge: restated as #63 a week later because its charter was never committed (:233-236).
+- #65 outcome-first: reaffirmed twice in two days (:277, :319).
+- #17 live state: 6 days stale (PIPELINE_STATE.md:27-28).
+- #67 was numbered #66 on another branch and had to be renumbered (:332-333).
+
+Tool guard before/after: not measurable. .claude/scratch/guard/denials.jsonl holds 3 lines, all dated 2026-11-11 from one session (1 RANGE, 1 WAIT, 1 override); the file is scratch and carries no history.
+
+## Throughput
+
+Derived from git and the generated board; none of it is a recorded productivity figure.
+- 6,049 commits in total, 1,475 of them merges (git log --oneline | wc -l; git log --merges). About 5,950 fall in the 14 weeks 2026-W33 to W46, an average of about 425 commits and 105 merge commits a week.
+- Peak weeks: W36 (1,029 commits, 283 merges) and W38 (1,082 commits, 433 merges). After the judged swarm and outcome-first rules arrived (W41 onward) merges ran 24 to 102 a week.
+- Defect board: 192 of 226 cards MERGED, 5 implementing, 6 carded, 15 parked (docs/product/pos-zero-defect/DEFECT-BOARD.md:5). Of the dated merges, 4 are in August and 148 in September 2026; the board covers the zero-defect programme only, not cloud onboarding or REQ-406.
+- 344 distinct REQ ids appear in commit subjects and 310 in merge-commit subjects since 2026-08-10. That is ids mentioned, not REQs delivered.
+- No version tags and no completed/ tags exist in this clone, so releases per week cannot be derived.
+- Latest release ruling, 2026-11-11: NO-GO (DECISIONS.md:9731).
+- Commit dates start in August 2026, not September as the task text says.

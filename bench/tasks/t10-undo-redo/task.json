@@ -1,0 +1,7 @@
+{
+  "id": "t10-undo-redo",
+  "size": "medium",
+  "kind": "feature",
+  "grade": "python3 -m unittest discover -s tests_hidden -q",
+  "expect": "done"
+}
