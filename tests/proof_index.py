@@ -30,7 +30,7 @@ THEMES = [
     ('More correct work, not only checked work',
      'Aids that catch weak proofs, missing requirements, wrong proofs and leftovers before review.',
      ['ProofStrength', 'Coverage', 'AmbiguityStop', 'KindTemplates', 'FailureFeedback', 'AttemptFeedback', 'InertFiles',
-      'InertHunks', 'LookAlikes', 'Challenge', 'Disputes', 'Spec']),
+      'InertHunks', 'LookAlikes', 'Challenge', 'Disputes', 'Spec', 'Plan']),
     ('Cheaper and faster',
      'Cheap models first, parallel attempts, no repeated work, no waiting, and a budget that stops spending.',
      ['Race', 'Cascade', 'Chain', 'Isolation', 'VerifyCache', 'AffectedGuards', 'RaceCache', 'StopWhenProven',

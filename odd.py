@@ -72,6 +72,7 @@ DEFAULTS = {
     'max_attempts': 0,     # backlog item 15: park an outcome after this many failed attempts (done, race, cascade, chain); 0 is off
     'inert': 'off',        # R7: each changed file taken out on its own; off, report, or enforce (a file the proof does not need fails)
     'held_out': [],        # R8: proofs the agent never sees, [{"name", "proof", "in"}], run only by gate --recompute
+    'reasoner': None,      # one agent command for judgement-heavy roles (plan, the proof author, the challenger)
     'max_cost': 0,         # backlog 28: park an outcome once its attempts' reported cost reaches this many dollars; 0 is off
     'owed': 'report',      # backlog 27: steps owed on the real system: report (never the auto lane) or enforce (fail)
     'repeat': 1,           # backlog 25: the take-out run must fail, and the proof pass after it, this many times
@@ -231,7 +232,8 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'held_out': _commands('proof'), 'checks': _commands('cmd'),
             'repeat': lambda v: type(v) is int and 1 <= v <= 10,
             'owed': lambda v: v in ('report', 'enforce'),
-            'max_cost': lambda v: type(v) in (int, float) and 0 <= v < float('inf')}
+            'max_cost': lambda v: type(v) in (int, float) and 0 <= v < float('inf'),
+            'reasoner': lambda v: v is None or (isinstance(v, str) and bool(v.strip()))}
 
 
 def load_config(root, at=None):
@@ -3136,7 +3138,7 @@ def cmd_challenge(a, root):
     Exit 1 when it succeeds (read the claim: if it is right, the proof needs that case), 0 when the proof withstood it.
     Nothing is applied, recorded as a failed attempt, or read by the gate."""
     cfg = load_config(root)
-    agent = _agents(cfg, [a.agent] if a.agent else cfg['agents'][:1], 'race')[0]
+    agent = _agents(cfg, [a.agent] if a.agent else [cfg['reasoner']] if cfg['reasoner'] else cfg['agents'][:1], 'race')[0]
     o, head, base, fixed = _race_start(root, cfg, a.slug, a.base)
     changed = changed_files(root, base)
     if o.skip or not standing(root, cfg, o, changed):
@@ -3457,14 +3459,160 @@ def _proof_check(root, cfg, o, at, fixed):
     return ''
 
 
+def _authored(root, cfg, cmd, text, head, fixed, tries, keep, judge, ok_note):
+    """An author agent (`cmd`) writes files in its own clone of `head`, at most `tries` times; `judge(at)` returns why
+    a try is refused (fed to the next try's prompt) or '' with at['paths'] (or at['tests']) set to what to bring back.
+    Returns (the patch of the accepted try or '', the reasons, the last try). Shared by spec and plan."""
+    run, reasons, patch, done, p, at = _run_dir(root), [], '', queue.Queue(), None, {}
+    try:
+        for i in range(1, tries + 1):
+            at = dict(cmd=cmd, wt=_worktree(root, run, str(i), head, fixed), prompt=os.path.join(
+                keep, 'prompt-%d.md' % i), log=os.path.join(keep, 'agent-%d.log' % i))
+            at['start'] = rev(at['wt'], 'HEAD')
+            with open(at['prompt'], 'w', encoding='utf-8') as f:
+                f.write(text + (SPEC_BEFORE % '\n'.join(reasons) if reasons else ''))
+            p = _launch(at, cfg['race_timeout'], done)
+            _next(done)
+            why = judge(at)
+            print('  try %d: the author ended after %ss; %s' % (i, at['agent_s'], ('refused: ' + why.split('\n')[0])
+                                                                  if why else ok_note(at)))
+            if not why:
+                paths = at.get('paths') or at['tests']
+                git(at['wt'], 'add', '-A', '--', *paths)
+                patch = git(at['wt'], 'diff', '--cached', '--binary', '--no-renames', at['start'], '--', *paths)
+                break
+            reasons.append('- try %d: %s' % (i, why[:1500]))
+    finally:
+        if p is not None:
+            _killpg(p)
+        _drop_run(root, run)
+    return patch, reasons, at
+
+
+PLAN_PROMPT = """You plan one ticket into outcomes for odd, and ONLY plan: no code, no tests. You work in your own copy of the
+repository (the current directory); odd brings back only the files below.
+
+The ticket's requirements (.odd/requirements/%(ticket)s.md):
+%(reqs)s
+
+Write one file per outcome, .odd/outcomes/<slug>.md (slug: lowercase letters, digits, - or _), in this form:
+---
+outcome: <one sentence: who observes what, checkable>
+proof: <the narrowest command that exits 0 only when the outcome holds, for a test under a test path>
+in: <comma-separated globs of the product files this outcome may change>
+covers: <the requirement ids it covers, e.g. R1, R3>
+---
+why: <one line: why this outcome is shaped and bounded this way>
+
+Prefer one outcome for the whole ticket. Split only when each part can be proven by changing the files inside its own
+`in:` once the outcomes before it are built. Then write .odd/chains/%(ticket)s.md: the slugs in the order to build them,
+one per line. Every requirement must be covered; if the ticket cannot be done as written (requirements contradict),
+write no outcome and say why in your output. Do not commit or push.
+"""
+
+
+def _plan_check(root, cfg, ticket, reqs, at):
+    """Why a plan written in its clone is refused, or '' with at['paths'] and at['order'] set: only outcome files and
+    the ticket's chain file changed, each outcome parses, says something observable, has a proof that shows its own
+    exit code, and gives its reason; the chain lists exactly the new outcomes; every requirement is covered."""
+    wt, start = at['wt'], at['start']
+    if at['rc'] is None:
+        return 'timed out after %ss (killed with its process group)' % cfg['race_timeout']
+    why = _settle(root, at)
+    if why:
+        return why
+    chain = '.odd/chains/%s.md' % ticket
+    changed = changed_files(wt, start)
+    outcomes = [p for p in changed if OUTCOME_FILE.match(p)]
+    other = [p for p in changed if p not in outcomes and p != chain]
+    if other:
+        return 'changed %s; a plan writes outcome files and %s only' % (', '.join(other[:6]), chain)
+    if not outcomes:
+        return 'wrote no outcome file (if the ticket cannot be done as written, say why; nothing is brought back)'
+    covered, slugs = set(), []
+    for rel in outcomes:
+        slug = os.path.basename(rel)[:-3]
+        if not os.path.isfile(os.path.join(wt, rel)):
+            return 'removed %s; a plan only adds outcomes' % rel
+        if os.path.exists(os.path.join(root, rel)):
+            return '%s exists already; a plan adds new outcomes only' % rel
+        try:
+            o = Outcome.load(wt, slug)
+            ids = cover_ids(o.get('covers'))
+        except Fail as e:
+            return str(e)
+        if cfg['ambiguity_stop'] and not observable(o.get('outcome')):
+            return '%s: "%s" names nothing a person can observe or check' % (rel, o.get('outcome'))
+        if masked(o.get('proof')):
+            return '%s: %s' % (rel, masked(o.get('proof')))
+        if not re.search(r'(?m)^why:\s*\S', o.notes):
+            return '%s: no "why:" line saying why the outcome is shaped and bounded this way' % rel
+        covered |= {i for t, i in ids if t in (None, ticket)}
+        slugs.append(slug)
+    missing = [k for k in reqs if k not in covered]
+    if missing:
+        return ', '.join('%s is not covered by any planned outcome' % k for k in missing)
+    if len(slugs) > 1 or os.path.isfile(os.path.join(wt, chain)):
+        if not os.path.isfile(os.path.join(wt, chain)):
+            return 'more than one outcome and no build order in %s' % chain
+        try:
+            order = _chain(wt, ticket)[1]
+        except CouldNotRun as e:
+            return str(e)
+        if sorted(order) != sorted(slugs):
+            return '%s lists %s, but the planned outcomes are %s' % (chain, ', '.join(order), ', '.join(sorted(slugs)))
+        at['order'] = order
+    else:
+        at['order'] = slugs
+    at['paths'] = outcomes + ([chain] if os.path.isfile(os.path.join(wt, chain)) else [])
+    return ''
+
+
+def cmd_plan(a, root):
+    """A reasoner (in practice the strongest model) plans a ticket's requirements into outcomes and their build order;
+    odd checks the plan mechanically and brings it back only when it passes. No code and no proof is written here."""
+    cfg = load_config(root)
+    by = a.by or cfg['reasoner'] or ''
+    if not by.strip():
+        raise CouldNotRun('no planner: pass --by "<command>" or set "reasoner" in .odd/config.json')
+    reqs = requirements(root, a.ticket)
+    if not reqs:
+        raise CouldNotRun('no requirements for %s: write .odd/requirements/%s.md, one "R<n>: <requirement>" per line'
+                          % (a.ticket, a.ticket))
+    tries = a.tries if a.tries is not None else cfg['proof_tries']
+    head = rev(root, 'HEAD')
+    if not head:
+        raise CouldNotRun('the planner works from a commit and there is none yet: commit first')
+    fixed = ['.odd/requirements/%s.md' % a.ticket] + (['.odd/config.json'] if os.path.isfile(odd_dir(root, 'config.json')) else [])
+    keep = _keep(root, 'plan', a.ticket)
+    text = PLAN_PROMPT % dict(ticket=a.ticket, reqs='\n'.join('%s: %s' % kv for kv in reqs.items()))
+    print('%s plan %s: %s plans %d requirement(s) into outcomes (at most %d tries)' % (ODD, a.ticket, _who(by), len(reqs), tries))
+    patch, reasons, at = _authored(root, cfg, by, text, head, fixed, tries, keep,
+                                   lambda at: _plan_check(root, cfg, a.ticket, reqs, at),
+                                   lambda at: 'accepted: %s' % ', '.join(at['order']))
+    if not patch:
+        raise Fail('no plan for %s passed the checks in %d tries; the reasons:\n%s\nprompts and logs: %s. Nothing was '
+                   'brought back.' % (a.ticket, tries, '\n'.join(reasons), keep))
+    err = _patch(root, patch, os.path.join(keep, 'plan.patch'))
+    if err:
+        raise Fail('the plan was not brought back (git apply: %s); it is in %s' % (err, keep))
+    print('plan %s: %d outcome(s), built in this order: %s' % (a.ticket, len(at['order']), ', '.join(at['order'])))
+    for slug in at['order']:
+        o = Outcome.load(root, slug)
+        print('  %s: %s (covers %s; in %s)' % (slug, o.get('outcome'), o.get('covers'), o.get('in')))
+    print('next: %s spec <slug> to have the proof written, or %s chain %s to build them in order'
+          % (ODD, ODD, a.ticket))
+
+
 def cmd_spec(a, root):
     cfg = load_config(root)
     tries = a.tries if a.tries is not None else cfg['proof_tries']
     if not 1 <= tries <= 32:
         raise CouldNotRun('--tries must be between 1 and 32')
-    if not a.proof_by.strip():
-        raise CouldNotRun('--proof-by needs the proof author\'s command ({prompt_file} in it becomes the prompt\'s '
-                          'path, else the prompt is on stdin)')
+    proof_by = a.proof_by or cfg['reasoner'] or ''
+    if not proof_by.strip():
+        raise CouldNotRun('no proof author: pass --proof-by "<command>" or set "reasoner" in .odd/config.json ({prompt_file} '
+                          'in it becomes the prompt\'s path, else the prompt is on stdin)')
     try:
         o = Outcome.load(root, a.slug)
     except Fail as e:
@@ -3478,33 +3626,13 @@ def cmd_spec(a, root):
         raise CouldNotRun('the proof author works from a commit and there is none yet: commit first')
     fixed = [o.rel] + (['.odd/config.json'] if os.path.isfile(odd_dir(root, 'config.json')) else [])
     keep = _keep(root, 'spec', o.slug)
-    who = _who(a.proof_by)
+    who = _who(proof_by)
     text = SPEC_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), slug=o.slug,
                               tests=', '.join(cfg['test_globs'])) + (SPEC_DISPUTED % dispute if dispute else '')
     print('%s spec %s: %s writes the proof in its own worktree (at most %d tries); it must fail before the code'
           % (ODD, o.slug, who, tries))
-    run, reasons, patch, done, p = _run_dir(root), [], '', queue.Queue(), None
-    try:
-        for i in range(1, tries + 1):
-            at = dict(cmd=a.proof_by, wt=_worktree(root, run, str(i), head, fixed), prompt=os.path.join(
-                keep, 'prompt-%d.md' % i), log=os.path.join(keep, 'agent-%d.log' % i))
-            at['start'] = rev(at['wt'], 'HEAD')
-            with open(at['prompt'], 'w', encoding='utf-8') as f:
-                f.write(text + (SPEC_BEFORE % '\n'.join(reasons) if reasons else ''))
-            p = _launch(at, cfg['race_timeout'], done)
-            _next(done)
-            why = _proof_check(root, cfg, o, at, fixed)
-            print('  try %d: the author ended after %ss; %s' % (i, at['agent_s'], ('refused: ' + why.split('\n')[0])
-                                                                  if why else 'red: ' + at['red']))
-            if not why:
-                git(at['wt'], 'add', '-A', '--', *at['tests'])
-                patch = git(at['wt'], 'diff', '--cached', '--binary', '--no-renames', at['start'], '--', *at['tests'])
-                break
-            reasons.append('- try %d: %s' % (i, why[:1500]))
-    finally:
-        if p is not None:
-            _killpg(p)
-        _drop_run(root, run)
+    patch, reasons, at = _authored(root, cfg, proof_by, text, head, fixed, tries, keep,
+                                   lambda at: _proof_check(root, cfg, o, at, fixed), lambda at: 'red: ' + at['red'])
     if not patch:
         o.f['parked'] = ' '.join(('odd spec: no proof that fails before the code after %d tries by %s (%s): %s' % (
             tries, who, now()[:10], '; '.join(r[2:].split('\n')[0] for r in reasons))).split())
@@ -4126,10 +4254,14 @@ def main(argv=None):
     s.add_argument('--cascade', action='store_true', help='attempt each outcome as odd cascade does: the agents in order')
     s.add_argument('--agents', help='agent commands, comma-separated (default: "agents" in .odd/config.json)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('plan')
+    s.add_argument('ticket')
+    s.add_argument('--by', metavar='CMD', help='the planner\'s agent command (default: "reasoner" in .odd/config.json)')
+    s.add_argument('--tries', type=int, help='tries for a plan that passes the checks (default: "proof_tries", 3)')
     s = sub.add_parser('spec')
     s.add_argument('slug')
-    s.add_argument('--proof-by', required=True, metavar='CMD', help='the agent command that writes only the proof '
-                   '(in practice a stronger model); {prompt_file} becomes the prompt\'s path, else stdin')
+    s.add_argument('--proof-by', metavar='CMD', help='the agent command that writes only the proof (in practice a '
+                   'stronger model; default: "reasoner"); {prompt_file} becomes the prompt\'s path, else stdin')
     s.add_argument('--tries', type=int, help='tries for a proof that fails before the code (default: "proof_tries", 3)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('gate')

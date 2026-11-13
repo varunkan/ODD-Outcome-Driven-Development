@@ -62,6 +62,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd challenge <slug> [--agent CMD] [--base REF]` | advisory: one agent starts from the verified change and tries to make it wrong while the proof still passes; nothing is applied (section 3i); needs a tool newer than 0.4.0 | 0 the proof withstood it, 1 a variant passed (read the claim), 2 could not run (not verified, a skip, no agent) |
 | `odd ship <artifact> [--base REF] [--note FILE]` | the artifact's sha256 bound to the commit it was built from and that commit's recomputed gate; prints (and with `--note` writes) what was not run and what is owed (section 5f); needs a tool newer than 0.4.0 | 0 shippable, 1 the gate fails, 2 could not run (uncommitted work, no artifact) |
 | `odd owed <slug> "<step>" --evidence FILE` | closes one owed step against an evidence file (section 5f); needs a tool newer than 0.4.0 | 0, 1 no such step or no such file |
+| `odd plan <ticket> [--by CMD] [--tries N]` | the reasoner plans the ticket's requirements into outcomes and their build order in its own clone; brought back only when every requirement is covered and every outcome is checkable (section 3j); needs a tool newer than 0.4.0 | 0 plan brought back, 1 no plan passed, 2 could not run (no requirements, no planner) |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
 | `odd ask <slug> "<question>"` | records one open question as `asked:`; the gate reports the outcome as waiting for an answer (section 4b); needs a tool newer than 0.4.0 | 0, 1 not a question or no such outcome |
@@ -389,6 +390,32 @@ recorded for cost (section 3h, `odd-cost:`) but never as a failed attempt, so it
 the claimed case (there is no reference to run it against), so a wrong claim is possible, and a challenger that finds
 nothing shows only that this one did not. Whether it finds weak proofs on the harness is not measured (the research
 rejected 19.7% of passing patches with such checks, arXiv 2603.00520).
+
+### 3j. The reasoner, and `odd plan`
+
+Needs a tool newer than 0.4.0 (backlog item 35). odd calls no model; the judgement-heavy roles take one agent command,
+`"reasoner"` in the settings, in practice the strongest model available, for example
+
+```json
+{"reasoner": "claude -p --model claude-fable-5-2 --effort high --fallback-model claude-opus-5-5"}
+```
+
+It is the default proof author of `odd spec` (when `--proof-by` is not given), the default challenger of `odd
+challenge` (before the first of `"agents"`), and the planner of `odd plan`. Cheap agents do the coding through race,
+cascade and chain; the reasoner writes what they are judged against. Every output it makes is checked mechanically,
+never trusted: a proof must fail before the code (section 3d), a plan must pass the checks below.
+
+`odd plan <ticket>` reads `.odd/requirements/<ticket>.md` and gives the reasoner, in its own clone outside the
+repository, the requirements and the outcome format; it writes outcome files and, when it splits the ticket, the build
+order in `.odd/chains/<ticket>.md`. odd brings the plan back (`_authored()`, the author loop `odd spec` uses) only when
+`_plan_check()` holds: only outcome files and that chain file changed; each outcome is new, parses, names something
+observable (section 4b), has a proof that shows its own exit code (section 5f), and carries a `why:` line; the chain
+lists exactly the new outcomes; and every requirement is covered (section 5a). A refused plan goes back with the
+reasons, up to `--tries` (default `"proof_tries"`), and nothing is brought back if none passes. Why: in the comparison
+the first session's decomposition, done by the cheap model, caused about 23 runs to end with no attempt verified
+(outcomes out of order, boundaries too narrow; [16](docs/evidence/16-new-arms.md)). Limits: the checks show a plan is
+complete and checkable, not that it is the best split; whether a stronger planner improves delivery is not measured
+yet.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 

@@ -11,6 +11,12 @@ Claude Code, Cursor, Copilot, Codex or anything else that can run a shell comman
 git.
 
 
+**A reasoner for the hard parts** (a tool newer than 0.4.0; [DESIGN.md](DESIGN.md) section 3j). Set one agent
+command for judgement, `"reasoner": "claude -p --model claude-fable-5-2 --effort high"` for example: it plans a ticket
+into checkable outcomes and their build order (`odd plan <ticket>`), writes proofs (`odd spec`) and challenges them
+(`odd challenge`), while cheap agents write the code. Nothing it writes is trusted: a plan must cover every
+requirement with observable outcomes, and a proof must fail before the code.
+
 **The proof, in one page:** [docs/PROOF.md](docs/PROOF.md) lists every claim odd makes with the tests that show it
 (all of them, run on Linux and macOS on every push), grouped by what they prove, and what the measurements show and do not show. It is generated from the test suite,
 and CI fails when it is out of date.

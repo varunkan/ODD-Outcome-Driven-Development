@@ -4524,5 +4524,50 @@ class Background(Repo):
         self.assertIn('FAIL', self.no('gate'))
 
 
+GOOD_PLAN = (
+    'mkdir -p .odd/outcomes .odd/chains\n'
+    'printf -- "---\\noutcome: A caller of add(2, 3) receives 5.\\nproof: python3 -m unittest -q tests.test_calc\\n'
+    'in: calc.py\\ncovers: R1\\n---\\nwhy: one function, one proof.\\n" > .odd/outcomes/sum.md\n'
+    'printf -- "---\\noutcome: A caller of add(-1, 1) receives 0.\\nproof: python3 -m unittest -q tests.test_signs\\n'
+    'in: calc.py\\ncovers: R2\\n---\\nwhy: signs after the sum is right.\\n" > .odd/outcomes/signs.md\n'
+    'printf "sum\\nsigns\\n" > .odd/chains/T-9.md\n')
+
+
+class Plan(ProofAuthors, Agents):
+    """A reasoner role ("reasoner": one agent command, in practice the strongest model) plans a ticket into outcomes and
+    their build order; odd accepts the plan only when every requirement is covered and every outcome is checkable."""
+
+    def setUp(self):
+        Agents.setUp(self)
+        os.remove(self.path('.odd/outcomes/add.md'))
+        self.write('.odd/requirements/T-9.md', 'R1: add returns the sum.\nR2: add handles signs.\n')
+        self.commit('the ticket')
+
+    def test_a_valid_plan_is_brought_back_with_its_build_order(self):
+        self.config([], reasoner=self.agent('wise', GOOD_PLAN))
+        self.commit('settings')
+        out = self.ok('plan', 'T-9')
+        self.assertIn('plan T-9: 2 outcome(s), built in this order: sum, signs', out)
+        self.assertIn('covers: R1', self.read('.odd/outcomes/sum.md'))
+        self.assertEqual(self.read('.odd/chains/T-9.md'), 'sum\nsigns\n')
+        self.assertIn('next: ', out)
+
+    def test_a_plan_missing_a_requirement_or_an_observable_goes_back_and_then_parks_nothing(self):
+        half = GOOD_PLAN.replace('covers: R2', 'covers: R1')
+        lazy = self.agent('lazy', 'n=$(( $(cat %s/lazy.n 2>/dev/null || echo 0) + 1 )); echo $n > %s/lazy.n\n'
+                                  'cp "$1" %s/lazy.prompt.$n\n' % (self.bin, self.bin, self.bin) + half)
+        out = self.no('plan', 'T-9', '--by', lazy, '--tries', '2')
+        self.assertIn('R2 is not covered by any planned outcome', out)
+        self.assertFalse(os.path.exists(self.path('.odd/outcomes/sum.md')), 'a refused plan brings nothing back')
+        self.assertIn('R2 is not covered', self.prompt('lazy', 2), 'the next try is told why the plan was refused')
+
+    def test_the_reasoner_is_the_default_proof_author_and_challenger(self):
+        self.config([], reasoner=self.author('wise', TEST))
+        self.write('.odd/outcomes/add.md', '---\noutcome: %s\nproof: %s\nin: calc.py\n---\n' % (SENTENCE, PROOF))
+        os.remove(self.path('tests/test_calc.py'))
+        self.commit('an outcome')
+        self.assertIn('sealed', self.ok('spec', 'add'))
+
+
 if __name__ == '__main__':
     unittest.main()

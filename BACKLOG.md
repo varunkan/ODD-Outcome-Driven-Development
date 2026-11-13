@@ -675,3 +675,13 @@ cost to build.
 - **Outcome:** `odd ship <artifact>` records the artifact's hash with the commit and that commit's gate verdict, and
   lists every check not run.
 - **Done** in the commit "B34: odd ship" (`cmd_ship`; tests `Ship`; [DESIGN 5f](DESIGN.md)).
+
+### 35. A reasoner role, and `odd plan`
+- **Outcome:** one `"reasoner"` agent command (in practice the strongest model, e.g. Claude Fable 5.2) for the
+  judgement-heavy roles: the default proof author and challenger, and `odd plan <ticket>`, which decomposes a ticket's
+  requirements into outcomes and their build order, checked mechanically before anything is brought back.
+- **Evidence:** about 23 runs in [16](docs/evidence/16-new-arms.md) failed on the cheap model's decomposition; 17 of
+  18 blocked runs in the rerun were wrong proofs.
+- **Done** in the commit "B35: a reasoner role and odd plan" (`cmd_plan`, `_plan_check()`, `_authored()`; tests
+  `Plan`; [DESIGN 3j](DESIGN.md)). Measure: the new arms with the reasoner planning and writing proofs, against run C;
+  not yet run.
