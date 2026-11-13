@@ -6,8 +6,10 @@ usage: realtasks.py --rows DIR --out ROOT ID [ID ...]
 DIR holds the SWE-bench Lite rows as fetched from the Hugging Face datasets server (rows*.json). For each instance ID
 this writes ROOT/tasks/<id>/ in the harness's task format: repo/ (the project at the issue's base commit, without its
 git history), ticket.md (the issue text, as its reporter wrote it), hidden/tests_hidden/ (the test file as the real
-fix's test patch leaves it), solution.patch (the real fix) and task.json (grade: pytest on that file, the tests the
-fix makes pass). ROOT/arms/ is copied from this directory, so `run.py --root ROOT` runs the usual arms on these tasks.
+fix's test patch leaves it), solution.patch (the real fix) and task.json (grade: pytest on that whole file, so its
+other tests catch a regression the way SWE-bench's same-file PASS_TO_PASS tests do, less any test the real fix itself
+fails on this machine, such as one needing an optional package that is not installed: a test the reference fix cannot
+pass checks nothing). ROOT/arms/ is copied from this directory, so `run.py --root ROOT` runs the usual arms on these tasks.
 
 Each task is validated here, because validate.py's leak check rejects any real codebase (its code says "result",
 "hidden" and "solution"): the grade must FAIL on repo/ and PASS after solution.patch. A task that does not is left out
@@ -50,8 +52,9 @@ def checkout(repo, commit, dest):
     shutil.rmtree(os.path.join(dest, '.git'))
 
 
-def grade_status(task_dir, grade, patch=None):
-    """The grade's exit status on a copy of repo/ with the hidden tests in, and `patch` applied first if given."""
+def grade_status(task_dir, grade, patch=None, out=None):
+    """The grade's exit status on a copy of repo/ with the hidden tests in, and `patch` applied first if given; with a
+    list as `out`, the names of the tests that failed or errored are appended to it."""
     work = tempfile.mkdtemp(prefix='realtask-')
     try:
         copy = os.path.join(work, 'p')
@@ -59,7 +62,10 @@ def grade_status(task_dir, grade, patch=None):
         if patch:
             sh(['git', 'apply', '--whitespace=nowarn', patch], copy)
         shutil.copytree(os.path.join(task_dir, 'hidden', 'tests_hidden'), os.path.join(copy, 'tests_hidden'))
-        return sh(grade, copy, check=False, timeout=900).returncode
+        r = sh(grade + (' -rfE' if out is not None else ''), copy, check=False, timeout=900)
+        if out is not None:
+            out += re.findall(r'^(?:FAILED|ERROR) \S+::(\w+)', r.stdout, re.M)
+        return r.returncode
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -87,18 +93,23 @@ def build(row, root):
         shutil.copy2(target, os.path.join(task_dir, 'hidden', 'tests_hidden', os.path.basename(files[0])))
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
-    names = [t.split('::')[-1].split('[')[0] for t in json.loads(row['FAIL_TO_PASS'])]
-    grade = 'python3 -m pytest -q -p no:cacheprovider tests_hidden/%s -k "%s"' % (os.path.basename(files[0]), ' or '.join(names))
+    grade = 'python3 -m pytest -q -p no:cacheprovider tests_hidden/%s' % os.path.basename(files[0])
     with open(os.path.join(task_dir, 'solution.patch'), 'w', encoding='utf-8') as f:
         f.write(row['patch'])
     with open(os.path.join(task_dir, 'ticket.md'), 'w', encoding='utf-8') as f:
         f.write(row['problem_statement'].strip() + '\n')
+    fix, broken = os.path.join(task_dir, 'solution.patch'), []
+    if grade_status(task_dir, grade, fix, broken) != 0:
+        target = {t.split('::')[-1].split('[')[0] for t in json.loads(row['FAIL_TO_PASS'])}
+        if not broken or target & set(broken):
+            return 'the grade fails after the real fix (%s)' % (', '.join(broken[:6]) or 'no test named')
+        grade += ' -k "not (%s)"' % ' or '.join(dict.fromkeys(broken))
     with open(os.path.join(task_dir, 'task.json'), 'w', encoding='utf-8') as f:
         json.dump({'id': iid, 'size': 'large', 'kind': 'real', 'grade': grade, 'expect': 'done',
                    'source': 'SWE-bench Lite %s (%s at %s)' % (iid, row['repo'], row['base_commit'][:12])}, f, indent=2)
     if grade_status(task_dir, grade) == 0:
         return 'the grade passes before the fix'
-    if grade_status(task_dir, grade, os.path.join(task_dir, 'solution.patch')) != 0:
+    if grade_status(task_dir, grade, fix) != 0:
         return 'the grade fails after the real fix'
     return ''
 
@@ -126,7 +137,9 @@ def main(argv=None):
         if why:
             shutil.rmtree(os.path.join(a.out, 'tasks', iid), ignore_errors=True)
             bad += 1
-        print('%s: %s' % (iid, why or 'ok (fails before the real fix, passes after it)'))
+        grade = '' if why else json.load(open(os.path.join(a.out, 'tasks', iid, 'task.json')))['grade']
+        print('%s: %s' % (iid, why or 'ok (fails before the real fix, passes after it; grades %s)' % (
+            'the whole test file' if ' -k ' not in grade else 'the test file less ' + grade.split('-k ', 1)[1])))
     return 1 if bad else 0
 
 
