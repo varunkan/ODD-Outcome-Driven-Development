@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 bench/realtasks.py *)",
+      "Bash(python3 bench/run.py *)"
+    ]
+  }
+}
