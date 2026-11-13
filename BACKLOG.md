@@ -677,7 +677,7 @@ cost to build.
 - **Done** in the commit "B34: odd ship" (`cmd_ship`; tests `Ship`; [DESIGN 5f](DESIGN.md)).
 
 ### 35. A reasoner role, and `odd plan`
-- **Outcome:** one `"reasoner"` agent command (in practice the strongest model, e.g. Claude Fable 5.2) for the
+- **Outcome:** one `"reasoner"` agent command (any agent command; odd names no model) for the
   judgement-heavy roles: the default proof author and challenger, and `odd plan <ticket>`, which decomposes a ticket's
   requirements into outcomes and their build order, checked mechanically before anything is brought back.
 - **Evidence:** about 23 runs in [16](docs/evidence/16-new-arms.md) failed on the cheap model's decomposition; 17 of
@@ -694,3 +694,10 @@ cost to build.
   build); a proof that fails for an unrelated reason passed the take-out check.
 - **Done** in the commit "B36: reasoning made checkable" (`because()`, `premises()`; tests `Reasoning`; [DESIGN
   3k](DESIGN.md)).
+
+### 37. Finish the turn, and no duplicated code
+- **Evidence:** Anthropic's published notes on its frontier models: a finishing instruction halved sessions that ended
+  with doable work left, but endings that list what remains and stop persisted; without being told it owns the code, a
+  model repeats code (merged duplicates in about three quarters of tries when told, under a tenth otherwise).
+- **Done** in the commit "B37: finish the turn, and no duplicated code" (`open_work()`, `repeats()`; tests
+  `FinishTurn`, `Duplication`; [DESIGN 5f](DESIGN.md)).

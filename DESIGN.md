@@ -397,7 +397,7 @@ Needs a tool newer than 0.4.0 (backlog item 35). odd calls no model; the judgeme
 `"reasoner"` in the settings, in practice the strongest model available, for example
 
 ```json
-{"reasoner": "claude -p --model claude-fable-5-2 --effort high --fallback-model claude-opus-5-5"}
+{"reasoner": "<an agent command: any agent CLI, any model>"}
 ```
 
 It is the default proof author of `odd spec` (when `--proof-by` is not given), the default challenger of `odd
@@ -436,7 +436,9 @@ hold for any model, strong or weak, present or future:
 
 Both are in the method text (`AGENTS.md`, still within its 2,600-character limit) and in `odd plan`'s outcome format,
 so a planner writes them from the start. Both are present-only in the verification's identity. Limits: a predicted
-reason is matched as text, so a vague one ("Error") checks little; a premise is only as good as its command.
+reason is matched as text, so a vague one ("Error") checks little; a premise is only as good as its command. No
+measured study shows that stating the predicted failure first improves agents (the nearest evidence is indirect); the
+check rests on reasoning: a red for another reason shows nothing about the change.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
@@ -837,6 +839,17 @@ All need a tool newer than 0.4.0 (backlog items 24 to 29, with the evidence, in 
 - **Masked pipes.** `odd new` and `done` refuse a proof that pipes into a stage that succeeds on any input (`tail`,
   `head`, `tee`, `cat`, `sort`, `sed`, `awk`, `wc`, `grep -q .` and the like) without `pipefail`, since the pipe's
   status is that stage's. This closes the `| grep -q .` case section 4 named as not detected.
+- **Finish the turn (`"finish_turn"`, item 37).** Off by default (an interactive user is not interrupted mid-work).
+  On, the Claude Code Stop hook blocks once, never twice in a row, when the turn changed files and work in the change
+  is still open: an active outcome never verified, or a requirement of a ticket in the change that no outcome covers;
+  the reason lists them and names the honest exits (`park`, `ask`). Why: Anthropic measured that a finishing
+  instruction halved sessions ending with doable work left but did not remove endings that list what remains and
+  stop; a check does not depend on the model following text.
+- **Duplication (`"duplication"`, item 37).** Off, report or enforce. Each run of 5 changed non-blank lines (whitespace
+  ignored, at least 40 characters) that repeats a block already in a product file is named `file:a-b repeats
+  other:c-d`; enforce fails, and the auto lane will not take it. Why: Anthropic reports that a model adds to existing
+  structure and repeats code unless told it owns the codebase. Limits: renamed variables or reordered lines are not
+  seen; files over 200 kB are skipped.
 - **Text-reading proofs (item 30).** A changed test file that names a changed product file inside the boundary as a
   quoted path (`open("calc.py")`, `source('src/x.tsx')`) reads source as text: it kills every small break and shows no
   behaviour. The result says `the proof reads <file> as text (<test>)`, its strength score does not count, the auto

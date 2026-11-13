@@ -72,6 +72,8 @@ DEFAULTS = {
     'max_attempts': 0,     # backlog item 15: park an outcome after this many failed attempts (done, race, cascade, chain); 0 is off
     'inert': 'off',        # R7: each changed file taken out on its own; off, report, or enforce (a file the proof does not need fails)
     'held_out': [],        # R8: proofs the agent never sees, [{"name", "proof", "in"}], run only by gate --recompute
+    'finish_turn': False,  # the Stop hook blocks once while work in this change is open (unattended agents)
+    'duplication': 'off',  # changed blocks that repeat existing code: off, report, or enforce (fails)
     'reasoner': None,      # one agent command for judgement-heavy roles (plan, the proof author, the challenger)
     'max_cost': 0,         # backlog 28: park an outcome once its attempts' reported cost reaches this many dollars; 0 is off
     'owed': 'report',      # backlog 27: steps owed on the real system: report (never the auto lane) or enforce (fail)
@@ -96,7 +98,7 @@ WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
 RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint', 'target',
-          'lookalikes', 'premises', 'red_because')  # what --json says of a verified outcome
+          'lookalikes', 'premises', 'red_because', 'repeats')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -233,7 +235,9 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'repeat': lambda v: type(v) is int and 1 <= v <= 10,
             'owed': lambda v: v in ('report', 'enforce'),
             'max_cost': lambda v: type(v) in (int, float) and 0 <= v < float('inf'),
-            'reasoner': lambda v: v is None or (isinstance(v, str) and bool(v.strip()))}
+            'reasoner': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
+            'finish_turn': lambda v: type(v) is bool,
+            'duplication': lambda v: v in ('off', 'report', 'enforce')}
 
 
 def load_config(root, at=None):
@@ -1609,6 +1613,55 @@ def _same(path, data):
         return f.read() == data
 
 
+DUP_WINDOW = 5  # lines in a repeated block
+
+
+def _windows(lines):
+    """{hash: first line number} of every run of DUP_WINDOW non-blank lines (whitespace ignored) long enough to mean
+    something (at least 40 characters)."""
+    kept = [(n, ''.join(l.split())) for n, l in enumerate(lines, 1) if l.strip()]
+    out = {}
+    for i in range(len(kept) - DUP_WINDOW + 1):
+        chunk = kept[i:i + DUP_WINDOW]
+        text = '\n'.join(t for _, t in chunk)
+        if len(text) >= 40:
+            out.setdefault(hashlib.sha256(text.encode()).hexdigest(), (chunk[0][0], chunk[-1][0]))
+    return out
+
+
+def repeats(root, cfg, base, targets):
+    """Backlog item 37: each block of DUP_WINDOW changed, non-blank lines in this outcome's files that repeats a block
+    already in the repository's product files (tracked or untracked; not tests or exempt paths), as 'file:a-b repeats
+    other:c-d'. Files over 200 kB are skipped."""
+    names = sorted(set(zlist(root, 'ls-files', '-z')) | set(zlist(root, 'ls-files', '--others', '--exclude-standard', '-z')))
+    index = {}
+    for p in names:
+        full = os.path.join(root, p)
+        if p.startswith('.odd/') or matches(p, cfg['test_globs']) or matches(p, cfg['exempt']) or not os.path.isfile(full) \
+                or os.path.islink(full) or os.path.getsize(full) > 200000:
+            continue
+        try:
+            text = read_text(full)
+        except ValueError:
+            continue
+        for h, span in _windows(text.split('\n')).items():
+            index.setdefault(h, []).append((p, span))
+    out = []
+    for p in targets:
+        full = os.path.join(root, p)
+        if not os.path.isfile(full) or os.path.getsize(full) > 200000:
+            continue
+        changed = changed_lines(root, base, p)
+        for h, (a, b) in sorted(_windows(read_text(full).split('\n')).items(), key=lambda kv: kv[1]):
+            if changed is not None and not all(n in changed for n in range(a, b + 1)):
+                continue
+            other = [(q, span) for q, span in index.get(h, []) if not (q == p and span == (a, b))]
+            if other:
+                q, (c, d) = other[0]
+                out.append('%s:%d-%d repeats %s:%d-%d' % (p, a, b, q, c, d))
+    return out
+
+
 def lookalikes(root, cfg, o, base, targets):
     """Backlog item 31: every line of a product file (tracked or untracked, not a test or exempt path) that matches the
     outcome's "class:" pattern and that this change did not touch, as 'path:line': the siblings of the bug it fixes."""
@@ -1825,6 +1878,11 @@ def _verify(root, cfg, o, base, changed, say):
         res['premises'] = premised
     if o.get('class'):
         res['lookalikes'] = lookalikes(root, cfg, o, base, targets)
+    if cfg['duplication'] != 'off':
+        res['repeats'] = repeats(root, cfg, base, targets)
+        if res['repeats'] and cfg['duplication'] == 'enforce':
+            raise Fail('the change repeats existing code ("duplication": "enforce"): %s\n  use or extend the existing '
+                       'code instead of copying it.' % '; '.join(res['repeats'][:8]), [('repeats', r) for r in res['repeats']])
     if o.get('same') and targets:
         res['same'] = same_behaviour(root, cfg, o, base, targets, say)
     if o.skip and o.bug:
@@ -2011,6 +2069,8 @@ def _describe(o, res):
     if res.get('premises'):
         pr = res['premises']
         text += '\n          premises: %d checked%s' % (pr['checked'], '; unchecked: ' + '; '.join(pr['unchecked']) if pr['unchecked'] else '')
+    if res.get('repeats'):
+        text += '\n          repeats existing code: ' + '; '.join(res['repeats'][:8])
     if res.get('lookalikes'):
         text += '\n          class "%s": %d match(es) the change did not touch: %s%s' % (
             o.get('class'), len(res['lookalikes']), ', '.join(res['lookalikes'][:12]), ', ...' if len(res['lookalikes']) > 12 else '')
@@ -2112,6 +2172,7 @@ def lane(root, s, facts, skips, allowed):
             why += _strong(cfg, o)
             why += ['%s: steps are owed on the real system (%s)' % (o['slug'], '; '.join(o['owed']))] if o.get('owed') else []
             why += ['%s: %d look-alike(s) of the bug left untouched' % (o['slug'], len(o['lookalikes']))] if o.get('lookalikes') else []
+            why += ['%s: the change repeats existing code' % o['slug']] if o.get('repeats') else []
             why += ['%s: unchecked premise(s): %s' % (o['slug'], '; '.join(o['premises']['unchecked']))] if (
                 o.get('premises') or {}).get('unchecked') else []
         elif o['state'] in ('parked', 'asked'):
@@ -4192,6 +4253,15 @@ def cmd_init(a, root):
 
 # ---------------------------------------------------------------- opt-in Claude Code hooks (internal)
 
+def open_work(root, s, tried):
+    """Backlog item 37: what is still open in this change: each active outcome never verified, then each requirement of
+    a ticket in this change that no outcome covers."""
+    out = ['%s is not verified yet' % o.slug for o in s['active'] if not any(e.get('ok') for e in tried.get(o.slug, []))]
+    for r in coverage(root, s)[2] or []:
+        out += ['%s:%s is covered by no outcome' % (r['ticket'], k) for k in r['text'] if k not in r['covered']]
+    return out
+
+
 def cmd_hook(a, root):
     try:
         ev = json.load(sys.stdin)
@@ -4240,6 +4310,10 @@ def cmd_hook(a, root):
                           'the outcome (`%s new <slug> "<outcome>" --proof "<command>" --in "<globs>"`) and verify it '
                           '(`%s done <slug>`), or, if %s, STOP and explain (`%s park <slug> "<why>"`): that is the '
                           'expected answer then, not a failure.' % (n, run, run, PARK_WHEN, run)}))
+    elif cfg['finish_turn'] and open_work(root, s, tried):
+        print(json.dumps({'decision': 'block', 'reason': 'odd: work in this change is still open: %s. Finish it (`%s done '
+                          '<slug>`), or, if it is blocked, say so: `%s park <slug> "<why>"` or `%s ask <slug> "<question>"`.'
+                          % ('; '.join(open_work(root, s, tried)), run, run, run)}))
     else:
         notes = ['not verified yet: ' + ', '.join(o.slug for o in s['active'] if not any(e.get('ok') for e in tried[o.slug]))]
         if not s['active'] and n > cfg['trivial_lines']:

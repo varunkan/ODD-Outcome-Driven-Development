@@ -4599,5 +4599,55 @@ class Reasoning(Repo):
         self.assertIn('add: unchecked premise(s): nobody else edits calc.py', self.ok('gate'))
 
 
+class FinishTurn(ClaudeHooks):
+    """Opt-in "finish_turn": a turn that changed files cannot end while work in this change is open (an outcome never
+    verified, a requirement no outcome covers): it is blocked once with the list, never twice in a row."""
+    test_turn_end_blocks_only_for_unproven_work_changed_this_turn = None
+    test_an_unverified_outcome_is_a_status_line_and_a_stale_one_blocks = None
+    test_compaction_does_not_reset_the_turn = None
+
+    def test_open_work_blocks_the_end_of_a_turn_once_with_the_list(self):
+        self.write('.odd/config.json', json.dumps({'finish_turn': True}))
+        self.write('.odd/requirements/T-1.md', 'R1: add returns the sum.\nR2: add handles signs.\n')
+        self.hook('session-start')
+        self.outcome()
+        self.add_line('add', 'covers: T-1:R1')
+        self.solve()
+        said = json.loads(self.hook('stop'))['reason']
+        self.assertIn('work in this change is still open: add is not verified yet; T-1:R2 is covered by no outcome', said)
+        self.assertIn('park <slug>', said, 'parking or asking stay the honest exits')
+        self.assertEqual(self.hook('stop', {'stop_hook_active': True}), '', 'never blocks twice in a row')
+        self.ok('done', 'add')
+        self.write('notes.txt', 'a small edit later in the turn\n')
+        self.assertIn('T-1:R2 is covered by no outcome', json.loads(self.hook('stop'))['reason'])
+
+
+class Duplication(Repo):
+    """"duplication": changed lines that repeat a block of existing code are named (report) or fail (enforce)."""
+    HELPER = 'def total(items):\n    s = 0\n    for i in items:\n        s += i.price * i.qty\n    s = round(s, 2)\n    return s\n'
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.git('checkout', '-q', 'main')
+        self.write('cart.py', self.HELPER)
+        self.commit('a helper')
+        self.git('checkout', '-q', '-B', 'feat')
+        self.outcome(in_='calc.py')
+        self.write('tests/test_calc.py', TEST)
+
+    def test_a_changed_block_that_repeats_existing_code_is_named_and_enforce_fails(self):
+        self.write('calc.py', FIXED + '\n\n' + self.HELPER.replace('def total', 'def total2'))
+        self.write('.odd/config.json', json.dumps({'duplication': 'report'}))
+        out = self.ok('done', 'add')
+        self.assertRegex(out, r'repeats existing code: calc\.py:\d+-\d+ repeats cart\.py:2-6')
+        self.write('.odd/config.json', json.dumps({'duplication': 'enforce'}))
+        self.assertIn('repeats existing code', self.no('done', 'add'))
+
+    def test_new_code_that_repeats_nothing_passes_under_enforce(self):
+        self.write('calc.py', FIXED)
+        self.write('.odd/config.json', json.dumps({'duplication': 'enforce'}))
+        self.assertNotIn('repeats', self.ok('done', 'add'))
+
+
 if __name__ == '__main__':
     unittest.main()

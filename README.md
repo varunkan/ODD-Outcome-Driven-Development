@@ -12,7 +12,7 @@ git.
 
 
 **A reasoner for the hard parts** (a tool newer than 0.4.0; [DESIGN.md](DESIGN.md) section 3j). Set one agent
-command for judgement, `"reasoner": "claude -p --model claude-fable-5-2 --effort high"` for example: it plans a ticket
+command for judgement, `"reasoner": "<your agent command, any model>"`: it plans a ticket
 into checkable outcomes and their build order (`odd plan <ticket>`), writes proofs (`odd spec`) and challenges them
 (`odd challenge`), while cheap agents write the code. Nothing it writes is trusted: a plan must cover every
 requirement with observable outcomes, and a proof must fail before the code.
