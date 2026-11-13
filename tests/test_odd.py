@@ -4569,5 +4569,35 @@ class Plan(ProofAuthors, Agents):
         self.assertIn('sealed', self.ok('spec', 'add'))
 
 
+class Reasoning(Repo):
+    """Reasoning made checkable: a proof must fail for the reason it predicts (red-because:), and every premise the work
+    relies on is a command that is run, or is listed as unchecked (assume:)."""
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.outcome()
+        self.solve()
+
+    def test_a_proof_that_fails_for_another_reason_than_predicted_is_not_counted(self):
+        self.add_line('add', 'red-because: 0 != 5')
+        self.assertIn('red for the predicted reason', self.ok('done', 'add'))
+        md = self.read('.odd/outcomes/add.md').replace('red-because: 0 != 5', 'red-because: ZeroDivisionError')
+        self.write('.odd/outcomes/add.md', md)
+        out = self.no('done', 'add')
+        self.assertIn('failed without the change, but not for the predicted reason (ZeroDivisionError)', out)
+        self.assertIn('0 != 5', out, 'what it did say is shown')
+
+    def test_a_false_premise_stops_the_work_and_an_unchecked_one_is_named(self):
+        self.add_line('add', 'assume: calc.py is the module under test :: test -f calc.py ;; the service is up :: false')
+        out = self.no('done', 'add')
+        self.assertIn('premise is false: the service is up (false: exit 1)', out)
+        md = self.read('.odd/outcomes/add.md').replace(' ;; the service is up :: false', ' ;; nobody else edits calc.py')
+        self.write('.odd/outcomes/add.md', md)
+        out = self.ok('done', 'add')
+        self.assertIn('premises: 1 checked; unchecked: nobody else edits calc.py', out)
+        self.write('.odd/config.json', json.dumps({'auto_lane': True}))
+        self.assertIn('add: unchecked premise(s): nobody else edits calc.py', self.ok('gate'))
+
+
 if __name__ == '__main__':
     unittest.main()

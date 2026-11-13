@@ -685,3 +685,12 @@ cost to build.
 - **Done** in the commit "B35: a reasoner role and odd plan" (`cmd_plan`, `_plan_check()`, `_authored()`; tests
   `Plan`; [DESIGN 3j](DESIGN.md)). Measure: the new arms with the reasoner planning and writing proofs, against run C;
   not yet run.
+
+### 36. Reasoning made checkable
+- **Outcome:** the habits of a strong reasoner (predict, name premises, verify) as checks that run, so they hold for
+  any model: `red-because:` (the proof must fail for the predicted reason) and `assume:` (each premise with the command
+  that checks it; unchecked ones named and kept out of the auto lane), in the method text and in `odd plan`.
+- **Evidence:** wrong conclusions in the source projects came from premises taken on trust (the wrong database, an old
+  build); a proof that fails for an unrelated reason passed the take-out check.
+- **Done** in the commit "B36: reasoning made checkable" (`because()`, `premises()`; tests `Reasoning`; [DESIGN
+  3k](DESIGN.md)).

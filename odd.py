@@ -79,7 +79,7 @@ DEFAULTS = {
     'checks': [],          # backlog 24: standing project rules, [{"name", "cmd", "in"}], run by every gate, output shown
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume')
 KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
 REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
 HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
@@ -96,7 +96,7 @@ WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
 RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint', 'target',
-          'lookalikes')  # what --json says of a verified outcome
+          'lookalikes', 'premises', 'red_because')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -719,7 +719,7 @@ def content_hash(root, cfg, o, changed, tests=None):
     h = hashlib.sha256()
     for k in ('proof', 'in', 'counterfactual'):
         h.update((k + '=' + o.get(k) + '\n').encode())
-    for k in ('same', 'target', 'target-is'):  # R8, backlog 26; absent, an earlier outcome's identity is unchanged
+    for k in ('same', 'target', 'target-is', 'red-because', 'assume'):  # present-only: earlier identities unchanged
         if o.get(k):
             h.update((k + '=' + o.get(k) + '\n').encode())
     _hash_paths(h, root, sorted(set(tests) | {p for p in product if o.covers(p)}))
@@ -747,7 +747,7 @@ def verify_key(root, cfg, o, base, changed):
         tool = hashlib.sha256(f.read()).hexdigest()
     h = hashlib.sha256(('odd %s %s\nbase=%s\n' % (VERSION, tool, rev(root, base) if base else '')).encode())
     h.update(json.dumps({k: v for k, v in cfg.items() if k != 'cache_file'}, sort_keys=True).encode())
-    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is')]).encode())
+    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is', 'red-because', 'assume')]).encode())
     _hash_paths(h, root, changed)  # the outcome file and config.json too: changed, or as at the base
     return h.hexdigest()
 
@@ -1702,7 +1702,8 @@ def verify(root, cfg, o, base, changed, say=lambda s: None, recompute=False):
     shown) or CouldNotRun (nothing was established). A verification of byte-identical inputs that passed before is
     reused (backlog item 12): its result, with "cached" set to when it ran."""
     check_seal(root, o)
-    cache = None if o.get('target') else cache_for(root, cfg, recompute)[0]  # a target can change with no edit here
+    outside = o.get('target') or '::' in o.get('assume')  # a target or a checked premise can change with no edit here
+    cache = None if outside else cache_for(root, cfg, recompute)[0]
     key = verify_key(root, cfg, o, base, changed) if cache else None
     hit = cache.get(key) if cache else None
     if hit:
@@ -1745,6 +1746,38 @@ def masked(cmd):
     return ''
 
 
+def premises(root, cfg, o):
+    """An outcome's "assume:" line: premises the work relies on, separated by ' ;; ', each '<claim> :: <command>' (the
+    command exits 0 when the claim holds) or a bare claim. Runs every command before the proof: a false premise is a
+    Fail, one that cannot run is could not run. Returns {'checked': n, 'unchecked': [claims]}."""
+    checked, unchecked = 0, []
+    for item in [x.strip() for x in o.get('assume').split(';;') if x.strip()]:
+        claim, sep, cmd = item.partition('::')
+        claim, cmd = claim.strip(), cmd.strip()
+        if not sep or not cmd:
+            unchecked.append(claim)
+            continue
+        rc, tail, _ = run_proof(root, cmd, cfg['proof_timeout'])
+        if unrunnable(rc):
+            raise CouldNotRun('the check of the premise "%s" could not run (%s): %s\n%s' % (
+                claim, 'timeout' if rc is None else 'exit %d' % rc, cmd, _indent(tail)))
+        if rc:
+            raise Fail('a premise is false: %s (%s: exit %d), so work built on it is not shown. Check the premise, then '
+                       'the outcome.\n%s' % (claim, cmd, rc, _indent(tail)))
+        checked += 1
+    return {'checked': checked, 'unchecked': unchecked}
+
+
+def because(o, tail, where):
+    """The outcome's "red-because:" text must appear in the failing output (case ignored): a proof must fail for the
+    reason it predicts, not for a typo, a missing fixture or another error. Raises Fail."""
+    want = o.get('red-because')
+    if want and want.lower() not in (tail or '').lower():
+        raise Fail('the proof failed %s, but not for the predicted reason (%s); it said:\n%s\n  a proof that fails for '
+                   'another reason shows nothing about the change: fix the proof, or correct the prediction.'
+                   % (where, want, _indent(tail)), [('proof', failing(tail))])
+
+
 def target_check(root, cfg, o):
     """Backlog item 26: the outcome's "target:" command says what the proof runs against (a deployment, an installed
     build, a database); its output must contain the expected text ("target-is:", by default the commit under test,
@@ -1769,6 +1802,7 @@ def _verify(root, cfg, o, base, changed, say):
         raise Fail(hidden)
     _, _, _, product = classify(changed, cfg)
     aimed = target_check(root, cfg, o) if o.get('target') else None
+    premised = premises(root, cfg, o) if o.get('assume') else None
     targets = [p for p in product if o.covers(p)]
     lines = sum(sizes(root, base, targets).values())
     rc, tail, s1 = run_proof(root, o.get('proof'), cfg['proof_timeout'])
@@ -1787,6 +1821,8 @@ def _verify(root, cfg, o, base, changed, say):
     res = {'files': len(targets), 'lines': lines, 'seconds': [s1], 'red_says': '', 'skip': o.skip}
     if aimed is not None:
         res['target'] = aimed
+    if premised is not None:
+        res['premises'] = premised
     if o.get('class'):
         res['lookalikes'] = lookalikes(root, cfg, o, base, targets)
     if o.get('same') and targets:
@@ -1816,6 +1852,9 @@ def _verify(root, cfg, o, base, changed, say):
                    'from an installed dependency or a cache rather than these files; the test lives in a file that '
                    'was taken out (keep it under a test path); this change removes or restructures code (then add '
                    '"counterfactual: skip - <reason>").' % ', '.join(targets[:8]))
+    if not unrunnable(crc):
+        because(o, ctail, 'without the change')
+        res['red_because'] = o.get('red-because') or None
     if unrunnable(crc):
         raise CouldNotRun('with the change taken out the proof did not fail, it could not run (%s). A proof must run '
                           'to completion and exit non-zero.\n%s' % ('timeout' if crc is None else 'exit %d' % crc, _indent(ctail)))
@@ -1967,6 +2006,11 @@ def _describe(o, res):
         text += '\n          ' + res['same']
     if res.get('target'):
         text += '\n          target: ' + res['target']
+    if res.get('red_because'):
+        text += '\n          red for the predicted reason: ' + res['red_because']
+    if res.get('premises'):
+        pr = res['premises']
+        text += '\n          premises: %d checked%s' % (pr['checked'], '; unchecked: ' + '; '.join(pr['unchecked']) if pr['unchecked'] else '')
     if res.get('lookalikes'):
         text += '\n          class "%s": %d match(es) the change did not touch: %s%s' % (
             o.get('class'), len(res['lookalikes']), ', '.join(res['lookalikes'][:12]), ', ...' if len(res['lookalikes']) > 12 else '')
@@ -2068,6 +2112,8 @@ def lane(root, s, facts, skips, allowed):
             why += _strong(cfg, o)
             why += ['%s: steps are owed on the real system (%s)' % (o['slug'], '; '.join(o['owed']))] if o.get('owed') else []
             why += ['%s: %d look-alike(s) of the bug left untouched' % (o['slug'], len(o['lookalikes']))] if o.get('lookalikes') else []
+            why += ['%s: unchecked premise(s): %s' % (o['slug'], '; '.join(o['premises']['unchecked']))] if (
+                o.get('premises') or {}).get('unchecked') else []
         elif o['state'] in ('parked', 'asked'):
             why.append('%s is %s' % (o['slug'], 'parked' if o['state'] == 'parked' else 'waiting for an answer'))
     why += ['%s skipped the take-out check' % k.split(' - ', 1)[0] for k in skips]
@@ -2634,6 +2680,7 @@ def cmd_seal(a, root):
     if rc == 0:
         raise Fail('the proof already passes, so it cannot be sealed red first: %s. Seal it before the change, or '
                    'take the change out first.' % o.get('proof'))
+    because(o, tail, 'before the change')
     o.f['sealed'] = fingerprint(root, o, tests)
     o.save()
     record(root, a.slug, seal=o.f['sealed'], base=base, red=says(tail), **_kind(o))  # what stats counts as sealed
@@ -3501,6 +3548,8 @@ outcome: <one sentence: who observes what, checkable>
 proof: <the narrowest command that exits 0 only when the outcome holds, for a test under a test path>
 in: <comma-separated globs of the product files this outcome may change>
 covers: <the requirement ids it covers, e.g. R1, R3>
+assume: <each premise the work relies on, with the command that checks it: claim :: command ;; claim :: command>
+red-because: <the part of the proof's failure message you predict before the change>
 ---
 why: <one line: why this outcome is shaped and bounded this way>
 
@@ -3984,13 +4033,13 @@ For any change of more than a few lines, on a branch of its own:
 
 1. State the outcome before writing code: one sentence saying who observes what, a command that exits 0 only when
    that is true, and the files the change may touch. If the outcome cannot be made checkable from the ticket, ask
-   one precise question instead of guessing (`odd ask <slug> "<question>"` records it), and stop there. List the ticket's requirements first, one per line, in `.odd/requirements/<ticket>.md`
+   one precise question instead of guessing (`odd ask <slug> "<question>"` records it), and stop there. List the ticket's requirements in `.odd/requirements/<ticket>.md`
    (`R1: ...`), and cover each with an outcome (`--covers R1,R2`).
    `odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated, relative to the repository root>"`
+   Premises (database, build, data): `assume: <claim> :: <check>`.
 2. Write the proof as a test in a file of its own under a test path (`tests/`, `test_*.py`, `*_test.*`, `*.test.*`,
-   `*.spec.*`). Make it the narrowest command that shows the outcome, not the whole suite. Recommended: run
-   `odd seal <slug>` now, before the code; it checks the proof fails and fingerprints the test, so changing the test
-   later fails `done` until it is resealed.
+   `*.spec.*`). Make it the narrowest command that shows the outcome, not the whole suite. Recommended: `odd seal
+   <slug>` now: it checks the proof fails and fingerprints the test. Predict why it fails: `red-because: <text>`.
 3. Make the change, staying inside the files the outcome names. If more are needed, add them to `in:` in
    `.odd/outcomes/<slug>.md`. Work that is not part of this outcome is a later outcome.
 4. Finish with `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change

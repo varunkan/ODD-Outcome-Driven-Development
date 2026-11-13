@@ -417,6 +417,27 @@ the first session's decomposition, done by the cheap model, caused about 23 runs
 complete and checkable, not that it is the best split; whether a stronger planner improves delivery is not measured
 yet.
 
+### 3k. Reasoning made checkable: `red-because:` and `assume:`
+
+Needs a tool newer than 0.4.0 (backlog item 36). A strong reasoner plans, names its premises, predicts what it will
+see, and checks the prediction before it calls work done. odd turns two of those habits into checks that run, so they
+hold for any model, strong or weak, present or future:
+
+- **`red-because: <text>`.** The failure the proof should show before the change. `odd seal` (the red before the code)
+  and the take-out run of `done` and `gate --recompute` require that text, case ignored, in the failing output;
+  otherwise `the proof failed ..., but not for the predicted reason`, with what it did say. A proof that fails for a
+  typo, a missing fixture or an unrelated error shows nothing about the change, yet passed the take-out check before.
+  The result says `red for the predicted reason: <text>`.
+- **`assume: <claim> :: <command> ;; ...`.** The premises the work relies on (which database, which build, which data
+  shape), each with the command that checks it, run before the proof: a false premise stops the work (`a premise is
+  false: <claim>`), one whose check cannot run is could not run. A claim with no command is listed as unchecked, and
+  the auto lane will not take the change. Like a target (section 5f), an outcome with checked premises is never served
+  from the verification cache.
+
+Both are in the method text (`AGENTS.md`, still within its 2,600-character limit) and in `odd plan`'s outcome format,
+so a planner writes them from the start. Both are present-only in the verification's identity. Limits: a predicted
+reason is matched as text, so a vague one ("Error") checks little; a premise is only as good as its command.
+
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
 **The base** is one revision for everything: where this branch left the target branch (the merge-base of HEAD and
