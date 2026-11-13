@@ -21,6 +21,7 @@ documents behind it.
 | 13 | [Verdict so far, and where ODD is useful](13-verdict-and-use.md) | Is it worth using, for whom, and what is not shown? | Both halves of the comparison, the red team and the source project. |
 | 14 | [What research says would make ODD more valuable](14-research.md) | Can anything make ODD 100 times better (no), which augmentations have evidence, and what will not help? | Three research angles over about 30 papers with URLs, each claim re-checked by a skeptic pass; numbers from the papers, none yet measured on our harness. |
 | 15 | [The comparison](15-comparison.md) | Does ODD, Spec Kit, BMAD or Superpowers do better than plain Claude Code? | 480 runs on two models, hidden tests, both grades and every reason verbatim. |
+| 17 | [How frontier models reason](17-how-frontier-models-reason.md) | What do the most capable models do to finish correctly, where do they still fail, and what can odd check? | Anthropic's guidance and system cards and the research literature, measured vs asserted; what was built and what not. |
 | 16 | [The new arms](16-new-arms.md) | Do race, cascade or a strong model's proof make Haiku as good as Sonnet for less? | 432 runs; first no (two defects found), then after the fixes cascade near Sonnet's delivery at a third of its cost and race with no false DONE; neither beat plain Haiku. |
 
 ## Data and tools

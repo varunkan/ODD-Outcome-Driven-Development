@@ -701,3 +701,22 @@ cost to build.
   model repeats code (merged duplicates in about three quarters of tries when told, under a tenth otherwise).
 - **Done** in the commit "B37: finish the turn, and no duplicated code" (`open_work()`, `repeats()`; tests
   `FinishTurn`, `Duplication`; [DESIGN 5f](DESIGN.md)).
+
+### 38. Pre-flight
+- **Done** in the commit "B38: pre-flight, and the research behind this round" (`cmd_start`; premises before any
+  attempt in `_race_start`; tests `PreFlight`; [DESIGN 5f](DESIGN.md); evidence [17](docs/evidence/17-how-frontier-models-reason.md)).
+
+### 39. Passing attempts checked against each other
+- **Outcome:** when two or more attempts pass, each one's proof (and the held-out proofs) runs against the others; if
+  passing attempts disagree, the proof is under-specified: flag it instead of picking a winner.
+- **Evidence:** 29.6% of passing patches behave differently from the reference fix ([17](docs/evidence/17-how-frontier-models-reason.md)).
+
+### 40. Literals copied from the proof
+- **Outcome:** a warning (never a gate) when changed lines contain constants that appear in the proof's expected
+  values, or equality overloads and call counters in the diff, asking for a `dispute` or an `assume`.
+- **Evidence:** special-casing survives read-only tests ([17](docs/evidence/17-how-frontier-models-reason.md)); noisy,
+  so advisory only.
+
+### 41. A proof that reaches the entry point
+- **Outcome:** an outcome may name its entry point (a CLI, a route, a binary); at least one proof run must execute it.
+- **Evidence:** features marked done after unit tests while failing end to end ([17](docs/evidence/17-how-frontier-models-reason.md)).

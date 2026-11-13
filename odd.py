@@ -2947,6 +2947,8 @@ def _race_start(root, cfg, slug, base_arg):
     except Fail as e:
         raise CouldNotRun(str(e))
     refuse_budget_park(o)
+    if o.get('assume'):
+        premises(root, cfg, o)  # a broken task spends no attempt: a false premise is a Fail here, before any agent runs
     if o.asked:
         raise CouldNotRun('%s is waiting for an answer: %s\nanswer it (for a disputed proof: %s spec %s --proof-by '
                           '<cmd>, or correct the proof and reseal it), then delete the "asked:" line of %s'
@@ -3678,6 +3680,26 @@ def _plan_check(root, cfg, ticket, reqs, at):
     return ''
 
 
+def cmd_start(a, root):
+    """Before work on an outcome: its premises are checked, and the proofs of earlier merged outcomes whose boundaries
+    hold any of its files run again (the regression guard, on the files this outcome may change). A red baseline is
+    refused: work started on it could not tell its own breakage from what was broken already."""
+    o, s = Outcome.load(root, a.slug), survey(root, a.base)
+    cfg = s['cfg']
+    pre = premises(root, cfg, o) if o.get('assume') else None
+    mine = [p for p in zlist(root, 'ls-files', '-z') if o.covers(p)]
+    ran = guards(root, dict(s, product=mine, tests=[]), print)
+    red = [(g, c, last) for g, c, rc, last, _, note in ran if rc != 0 and not note]
+    if pre:
+        print('premises: %d checked%s' % (pre['checked'], '; unchecked: ' + '; '.join(pre['unchecked']) if pre['unchecked'] else ''))
+    if red:
+        raise Fail('the baseline is red: %s. Fix or report it before starting %s, or the change could not tell its own '
+                   'breakage from what was broken already.' % ('; '.join('%s (proven in %s) fails before any work: %s'
+                                                                      % (g.slug, c, last) for g, c, last in red), o.slug))
+    print('%s: baseline: %d earlier proof(s) on these files pass' % (o.slug, len(ran)))
+    print(read_first(root, o, s['base']), end='')
+
+
 def cmd_plan(a, root):
     """A reasoner (in practice the strongest model) plans a ticket's requirements into outcomes and their build order;
     odd checks the plan mechanically and brings it back only when it passes. No code and no proof is written here."""
@@ -4376,6 +4398,9 @@ def main(argv=None):
                    'level, default 1)')
     s.add_argument('--cascade', action='store_true', help='attempt each outcome as odd cascade does: the agents in order')
     s.add_argument('--agents', help='agent commands, comma-separated (default: "agents" in .odd/config.json)')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('start')
+    s.add_argument('slug')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('plan')
     s.add_argument('ticket')

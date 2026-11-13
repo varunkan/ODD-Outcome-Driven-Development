@@ -4649,5 +4649,36 @@ class Duplication(Repo):
         self.assertNotIn('repeats', self.ok('done', 'add'))
 
 
+class PreFlight(Repo):
+    """Before work: odd start checks the outcome's premises and reruns the proofs of earlier merged outcomes on the same
+    files, refusing a red baseline; race, cascade and chain check premises before spending any attempt."""
+    merged = RegressionGuard.merged
+
+    def later_outcome(self):
+        self.ok('new', 'sub', 'A caller of add(5, 3) receives 8.', '--proof', PROOF, '--in', 'calc.py')
+
+    def test_a_green_baseline_starts_and_a_red_one_is_refused(self):
+        self.merged()
+        self.later_outcome()
+        self.assertIn('baseline: 1 earlier proof(s) on these files pass', self.ok('start', 'sub'))
+        self.write('calc.py', BROKEN)
+        self.commit('broken on the way in')
+        out = self.no('start', 'sub')
+        self.assertRegex(out, r'the baseline is red: add \(proven in \w+\) fails before any work')
+
+    def test_a_false_premise_stops_start_and_spends_no_attempt(self):
+        self.merged()
+        self.later_outcome()
+        self.add_line('sub', 'assume: the fixture exists :: test -f fixtures/orders.json')
+        self.assertIn('a premise is false: the fixture exists', self.no('start', 'sub'))
+        bin_ = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, bin_, True)
+        mark = os.path.join(bin_, 'ran')
+        self.write('.odd/config.json', json.dumps({'agents': ['touch %s' % mark]}))
+        self.commit('state')
+        self.assertIn('a premise is false: the fixture exists', self.no('race', 'sub', '--n', '1'))
+        self.assertFalse(os.path.exists(mark), 'no attempt is spent on a task whose premise is false')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -62,6 +62,7 @@ files; their sentences and proofs are the specification, and each file is a task
 | `odd challenge <slug> [--agent CMD] [--base REF]` | advisory: one agent starts from the verified change and tries to make it wrong while the proof still passes; nothing is applied (section 3i); needs a tool newer than 0.4.0 | 0 the proof withstood it, 1 a variant passed (read the claim), 2 could not run (not verified, a skip, no agent) |
 | `odd ship <artifact> [--base REF] [--note FILE]` | the artifact's sha256 bound to the commit it was built from and that commit's recomputed gate; prints (and with `--note` writes) what was not run and what is owed (section 5f); needs a tool newer than 0.4.0 | 0 shippable, 1 the gate fails, 2 could not run (uncommitted work, no artifact) |
 | `odd owed <slug> "<step>" --evidence FILE` | closes one owed step against an evidence file (section 5f); needs a tool newer than 0.4.0 | 0, 1 no such step or no such file |
+| `odd start <slug> [--base REF]` | before work: checks the outcome's premises and reruns earlier merged proofs on its files; refuses a red baseline; prints the files to read first (section 5f); needs a tool newer than 0.4.0 | 0 ready, 1 a premise is false or the baseline is red, 2 could not run |
 | `odd plan <ticket> [--by CMD] [--tries N]` | the reasoner plans the ticket's requirements into outcomes and their build order in its own clone; brought back only when every requirement is covered and every outcome is checkable (section 3j); needs a tool newer than 0.4.0 | 0 plan brought back, 1 no plan passed, 2 could not run (no requirements, no planner) |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
@@ -839,6 +840,12 @@ All need a tool newer than 0.4.0 (backlog items 24 to 29, with the evidence, in 
 - **Masked pipes.** `odd new` and `done` refuse a proof that pipes into a stage that succeeds on any input (`tail`,
   `head`, `tee`, `cat`, `sort`, `sed`, `awk`, `wc`, `grep -q .` and the like) without `pipefail`, since the pipe's
   status is that stage's. This closes the `| grep -q .` case section 4 named as not detected.
+- **Pre-flight (`odd start`, item 38).** Before work: the outcome's `assume:` premises run, then the regression guard
+  runs on the files this outcome may change (the proofs of earlier merged outcomes whose boundaries hold any of them);
+  a false premise or a red baseline is refused, so the change can tell its own breakage from what was broken already.
+  Race, cascade and chain also check premises before launching any agent, so a broken task spends no attempt. Why:
+  broken tasks multiply reward hacking, and Anthropic's long-running harness smoke-tests before new work
+  ([17](docs/evidence/17-how-frontier-models-reason.md)).
 - **Finish the turn (`"finish_turn"`, item 37).** Off by default (an interactive user is not interrupted mid-work).
   On, the Claude Code Stop hook blocks once, never twice in a row, when the turn changed files and work in the change
   is still open: an active outcome never verified, or a requirement of a ticket in the change that no outcome covers;
