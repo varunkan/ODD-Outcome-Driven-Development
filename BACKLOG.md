@@ -528,6 +528,12 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   it (part 5 of THE-RULE, a principle, not a measurement). Next, if any: tasks where plain agents fail on what the
   ticket does say.
 
+### 18b. Tasks where plain agents fail on what the ticket says
+- **Outcome:** the claim tested where it can separate the arms: real issues whose tests ask only what the ticket says
+  and that plain agents fail.
+- **Result: not testable here** ([evidence 18](docs/evidence/18-real-repositories.md#the-follow-up-tasks-where-plain-agents-fail-on-what-the-ticket-says-not-testable-here)):
+  the judge's screen left at most 4 tasks (3 sympy, 1 sphinx) of the 6 required; no model ran, $0 spent.
+
 ### 19. New arms for the comparison
 - Haiku x 3 race, Haiku-then-Sonnet cascade, and strong-spec / cheap-code, against plain Sonnet and plain Haiku.
 - **Run** 2026-11-12 ([16](docs/evidence/16-new-arms.md)): 288 runs, $21.81. As built and driven, the new arms
@@ -741,3 +747,10 @@ cost to build.
 - **Evidence:** features marked done after unit tests while failing end to end ([17](docs/evidence/17-how-frontier-models-reason.md)).
 - **Done** in the commit "B39-41: passing attempts cross-checked, copied literals, the entry point" (`entry:`, `reaches()`; tests `EntryPoint`;
   [DESIGN 3l](DESIGN.md)).
+
+### 42. Per-task environments for real tasks
+- **Outcome:** `bench/realtasks.py` builds each task with its project's pinned dependencies in its own virtual
+  environment (the way SWE-bench's harness does), and keeps a hidden test at its original path so the project's own
+  test setup (conftest files, test data) applies.
+- **Evidence:** 28 of 29 pytest, requests, pylint and sphinx candidates could not run their own test file with the real
+  fix on one bare Python 3.13 (docutils, astroid not installed), so item 18b was not testable here.

@@ -113,6 +113,26 @@ to Verified.
 - **Environment.** Python 3.13 with no numpy or scipy; tasks needing them were refused, not trimmed (the refusals
   were not re-checked by the third judge).
 
+## The follow-up: tasks where plain agents fail on what the ticket says (not testable here)
+
+The owner chose the next experiment: tasks where plain agents fail on what the ticket does say, so the claim can be
+tested at all. A judge fixed the design before any run: the hypothesis (odd's cascade makes fewer false DONE than
+plain Haiku), the deciding number, the arms, a $11.59 cap, and a task screen: every target assertion rated IMPLIED by a
+blind judge shown only the ticket and the tests, and the ticket's own example failing before the real fix and passing
+after it. At least 6 such tasks, or "not testable here" and no runs.
+
+- **Sympy, harder issues** (not "<15 min fix", one test file, largest fix first): 33 candidates, 7 build under
+  `--strict` (old sympy versions fail on Python 3.13), 4 pass the blind screen, 3 pass the example check (15349,
+  19040, 20154; 16792's example needs Cython, which is not installed).
+- **Widened, as the judge ruled**, to pytest, requests, pylint and sphinx: 29 candidates, 1 builds (sphinx 8265). The
+  rest cannot run their own test file even with the real fix: their dependencies (docutils, astroid and others) are
+  not installed, and pytest's tests run against the installed pytest, not the project's.
+
+At most 4 tasks qualify, under the 6 required: **not testable here**. No model ran and nothing was spent. The cause
+is the machine, not the method: SWE-bench gives every task its own environment with that project's pinned
+dependencies, and this harness runs every project in one bare Python 3.13. Making the claim testable needs those
+per-task environments (BACKLOG item 42).
+
 ## How it was run
 
 `bench/realtasks.py` (committed) builds the tasks from the dataset rows; the judge ruled the design (arms, a smoke run
