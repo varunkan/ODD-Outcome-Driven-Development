@@ -10,7 +10,7 @@ directory (outside the repository and the bench) as $ARM_HELPER, so nothing an a
                                                  prints its result object and "odd-cost: <usd>" (the line odd reads)
   arm_agent.py summary [--final-file F]          one result object: F's text as "result", figures summed over every
                                                  transcript in $ARM_TRANSCRIPTS
-  arm_agent.py odd race|cascade|spec             the odd flows of the odd-race, odd-cascade and odd-spec arms (their
+  arm_agent.py odd race|cascade|spec|dual        the odd flows of the odd-race, odd-cascade, odd-spec and odd-dual arms (their
                                                  NOTES.md): a first session, then odd's own command with sessions
                                                  started by `session` as its agents, then the gate; prints the summary
 
@@ -21,6 +21,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -183,7 +184,7 @@ def run_caps(flags):
     return flags, None
 
 
-def session(prompt, model, name='session'):
+def session(prompt, model, name='session', cwd=None):
     """One claude session with the plain arm's command line and environment, bounded by ARM_TIMEOUT seconds (it is
     killed at that point, as run.py kills the plain arm's), its turn and budget caps what is left of the run's
     (run_caps). Its stream-json is written to a file of its own in ARM_TRANSCRIPTS, closed by an END line. A session
@@ -203,7 +204,7 @@ def session(prompt, model, name='session'):
         return 1, refused
     with open(path, 'w', encoding='utf-8') as log:
         p = subprocess.Popen(['claude', '-p', prompt, '--model', model] + flags, stdin=subprocess.DEVNULL,
-                             stdout=log, stderr=subprocess.PIPE, env=env, encoding='utf-8', errors='replace')
+                             stdout=log, stderr=subprocess.PIPE, env=env, encoding='utf-8', errors='replace', cwd=cwd)
         try:
             err = p.communicate(timeout=float(os.environ['ARM_TIMEOUT']))[1]
             status = p.returncode
@@ -279,8 +280,55 @@ def commit(message):
     subprocess.run(['git', 'commit', '-q', '--allow-empty', '--no-verify', '-m', message], stdout=subprocess.DEVNULL)
 
 
-def odd_flow(mode, prompt):
-    """Returns the final message (ending in the RESULT line) of the odd-race, odd-cascade or odd-spec arm."""
+BLIND_TEST = 'test_blind_proof.py'
+BLIND_RUN = 'python3 -m pytest -q -p no:cacheprovider ' + BLIND_TEST
+BLIND_PROMPT = """{ticket}
+
+You write ONE test file and nothing else: %s, in the current directory (the root of the project). It is an
+independent check of the request above, written from the request alone: it must fail on the code as it is now and
+pass once the request is done, for every case the request states or clearly implies, not only its literal example.
+Do not change any other file and do not fix the code. Run `%s` to see it fail, then say DONE; if the request cannot
+be checked by a test, say NOT DONE with the reason.
+""" % (BLIND_TEST, BLIND_RUN)
+
+
+def ticket_of(prompt):
+    """The ticket inside an arm's prompt: what stands before the first line of the arm's own instructions, which the
+    arm's agent.sh names in ARM_TICKET_END; '' when the arm names none."""
+    end = os.environ.get('ARM_TICKET_END')
+    return prompt[:prompt.find(end)].strip() if end and end in prompt else ''
+
+
+def blind_proof(ticket, model, said):
+    """The odd-dual arm's second proof: a fresh session, in its own clone of main beside the project, writes one test
+    from the ticket alone. Kept outside the project, so no coding attempt ever sees it. Returns the path of the test,
+    or None when the author wrote none that fails on the code as it is (the arm then runs as odd-cascade does)."""
+    top = os.path.join(os.path.dirname(os.getcwd()), 'blind')
+    clone, kept = os.path.join(top, 'clone'), os.path.join(top, BLIND_TEST)
+    os.makedirs(top, exist_ok=True)
+    if subprocess.run(['git', 'clone', '-q', '--branch', 'main', '.', clone], capture_output=True).returncode:
+        said.append('blind proof: main could not be cloned; none written')
+        return None
+    session(BLIND_PROMPT.replace('{ticket}', ticket), model, 'blind', cwd=clone)
+    path = os.path.join(clone, BLIND_TEST)
+    if not os.path.isfile(path):
+        said.append('blind proof: the author wrote no %s' % BLIND_TEST)
+        return None
+    red = subprocess.run(BLIND_RUN, shell=True, cwd=clone, capture_output=True, text=True, timeout=900)
+    if red.returncode in (0, 2, 3, 4, 5):  # passes already, or pytest could not run or collect it: it shows nothing
+        said.append('blind proof: exit %d on the code as it is, so it is not used' % red.returncode)
+        return None
+    shutil.copy2(path, kept)
+    shutil.rmtree(clone, ignore_errors=True)
+    said.append('blind proof: written by %s, fails on the code as it is' % model)
+    return kept
+
+
+def odd_flow(mode, prompt, ticket=''):
+    """Returns the final message (ending in the RESULT line) of the odd-race, odd-cascade, odd-spec or odd-dual arm.
+    odd-dual is odd-cascade plus a blind second proof (blind_proof): after the gate passes, that test runs on the
+    result; when it fails it becomes a second sealed outcome the same attempts must also satisfy, and the arm says
+    DONE only when both proofs pass."""
     odd = [sys.executable, os.environ['ARM_ODD_PY']]
     cheap, strong = os.environ['ARM_MODEL'], os.environ['ARM_STRONG_MODEL']
     status, result = session(prompt, cheap, 'outcome')
@@ -297,6 +345,8 @@ def odd_flow(mode, prompt):
     def refuse(reason):  # the harness's reason, kept off the RESULT line: no keyword grade may credit it
         return '\n'.join(said + [ARM_REASON + reason, 'RESULT: NOT DONE'])
 
+    blind = blind_proof(ticket, cheap, said) if mode == 'dual' else None
+    mode = 'cascade' if mode == 'dual' else mode
     outcomes = stated_outcomes()
     live = [p for p in outcomes if not outcome_field(p, 'parked')]
     if not live:
@@ -338,6 +388,30 @@ def odd_flow(mode, prompt):
             return refuse('odd done %s after the winner was applied: %s' % (slug, why(out)))
         commit('odd: %s proven' % slug)
     code, out = sh(odd + ['gate', '--recompute', '--base', 'main'], said)
+    if code == 0 and blind:
+        shutil.copy2(blind, BLIND_TEST)
+        if subprocess.run(BLIND_RUN, shell=True, capture_output=True, timeout=900).returncode == 0:
+            os.remove(BLIND_TEST)  # the second reader agrees; the test stays out of the change
+            said.append('blind proof: passes on the result')
+        else:
+            said.append('blind proof: FAILS on the result; it becomes a second outcome')
+            ins = ', '.join(dict.fromkeys(g.strip() for p in live for g in (outcome_field(p, 'in') or '').split(',') if g.strip()))
+            steps = [odd + ['new', 'blind-proof', 'A user gets the behaviour the request asks for in every case of the '
+                            'independent second proof %s.' % BLIND_TEST, '--proof', BLIND_RUN, '--in', ins],
+                     odd + ['seal', 'blind-proof', '--base', 'main']]
+            for step in steps:
+                code, out = sh(step, said)
+                if code:
+                    return refuse('the blind second proof fails on the result and could not be stated: %s' % why(out))
+            commit('odd: blind-proof stated and its proof sealed')
+            levels = ','.join(session_command(m, 'blind%d' % i) for i, m in enumerate((cheap, strong), 1))
+            for step in (odd + ['cascade', 'blind-proof', '--agents', levels, '--base', 'main'],
+                         odd + ['done', 'blind-proof', '--base', 'main']):
+                code, out = sh(step, said)
+                if code:
+                    return refuse('the blind second proof fails on the result: odd %s: %s' % (step[2], why(out)))
+            commit('odd: blind-proof proven')
+            code, out = sh(odd + ['gate', '--recompute', '--base', 'main'], said)
     return '\n'.join(said + ['RESULT: DONE']) if code == 0 else refuse('the odd gate failed: %s' % why(out))
 
 
@@ -350,7 +424,7 @@ def main(argv=None):
     s = sub.add_parser('summary')
     s.add_argument('--final-file')
     s = sub.add_parser('odd')
-    s.add_argument('mode', choices=('race', 'cascade', 'spec'))
+    s.add_argument('mode', choices=('race', 'cascade', 'spec', 'dual'))
     a = ap.parse_args(argv)
     if a.cmd == 'session':
         status, result = session(sys.stdin.read(), a.model, a.name)
@@ -370,7 +444,8 @@ def main(argv=None):
         print(json.dumps(summary(final)))
         return 0
     if a.cmd == 'odd':
-        final = odd_flow(a.mode, sys.stdin.read())
+        prompt = sys.stdin.read()
+        final = odd_flow(a.mode, prompt, ticket_of(prompt))
         print('\n'.join(OUTPUT))  # odd's output, for the contamination audit
         print(json.dumps(summary(final)))
         return 0
