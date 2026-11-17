@@ -133,6 +133,34 @@ is the machine, not the method: SWE-bench gives every task its own environment w
 dependencies, and this harness runs every project in one bare Python 3.13. Making the claim testable needs those
 per-task environments (BACKLOG item 42).
 
+## A first fix tried: a blind second proof (odd-dual), 6 runs
+
+Idea, from applying the "several independent minds" step of Google's AI co-scientist to the requirement rather than to
+the code: a second cheap session writes its own test from the ticket alone, no coding attempt sees it, and the arm
+says DONE only when the result passes both proofs (`bench/arms/odd-dual`). Fixed before the run: it succeeds if it
+makes 0 false DONE in 6 runs on the two tasks that held every pilot failure, where cascade made 5 of 6.
+
+| task | cascade (pilot) | odd-dual |
+|---|---|---|
+| 21930 | f f f | f n f |
+| 23950 | f P f | n* P f |
+
+**Not met: 3 false DONE of 6** (cascade 5 of 6), at a median $0.044 a run against cascade's $0.019; $0.29 in all, harness
+at e6e4d00, none contaminated ([data](data/real-pilot/dual-runs.json)). Six runs: a hint in either direction.
+
+- In every run a blind proof was written and failed on the unchanged code, so the second reader always took part.
+- **It caught one** (23950 run 1): the blind proof failed on the first result and became a second outcome; the
+  attempts then disputed one of its assertions and the arm said NOT DONE. But the hidden tests *passed* that result
+  (n* above): the second reader refused correct work. Its test asked for more than the hidden test did.
+- **It missed three**: in 21930 runs 1 and 3 and 23950 run 2 the blind proof passed on a result the hidden tests
+  fail. In 23950 run 2 the blind proof did test four kinds of set, not only the ticket's `Reals`, and still passed.
+  Two cheap readers of the same ticket mostly read it the same way.
+- 21930 run 2 ended NOT DONE for an unrelated reason: the first proof was disputed twice.
+
+So a second cheap reader is not enough: it lowers false DONE a little, costs about twice as much, and can refuse
+correct work. Not built into odd. What it leaves open: a stronger second reader, and asking about what a ticket
+leaves unsaid before any proof is written.
+
 ## How it was run
 
 `bench/realtasks.py` (committed) builds the tasks from the dataset rows; the judge ruled the design (arms, a smoke run

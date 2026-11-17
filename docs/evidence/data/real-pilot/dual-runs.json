@@ -1,0 +1,109 @@
+[
+ {
+  "task": "sympy__sympy-21930",
+  "arm": "odd-dual",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": false,
+  "claim": "DONE",
+  "false_done": true,
+  "cost_usd": 0.0422,
+  "turns": 41,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "e6e4d00af331526cb209173ae935bea9d124678b",
+  "blind": [
+   "blind proof: written by haiku, fails on the code as it is",
+   "blind proof: passes on the result"
+  ]
+ },
+ {
+  "task": "sympy__sympy-21930",
+  "arm": "odd-dual",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.04519,
+  "turns": 44,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "e6e4d00af331526cb209173ae935bea9d124678b",
+  "blind": [
+   "blind proof: written by haiku, fails on the code as it is"
+  ]
+ },
+ {
+  "task": "sympy__sympy-21930",
+  "arm": "odd-dual",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": false,
+  "claim": "DONE",
+  "false_done": true,
+  "cost_usd": 0.0246,
+  "turns": 25,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "e6e4d00af331526cb209173ae935bea9d124678b",
+  "blind": [
+   "blind proof: written by haiku, fails on the code as it is",
+   "blind proof: passes on the result"
+  ]
+ },
+ {
+  "task": "sympy__sympy-23950",
+  "arm": "odd-dual",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": true,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.10472,
+  "turns": 29,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "e6e4d00af331526cb209173ae935bea9d124678b",
+  "blind": [
+   "blind proof: written by haiku, fails on the code as it is",
+   "blind proof: FAILS on the result; it becomes a second outcome"
+  ]
+ },
+ {
+  "task": "sympy__sympy-23950",
+  "arm": "odd-dual",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "DONE",
+  "false_done": true,
+  "cost_usd": 0.04522,
+  "turns": 48,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "e6e4d00af331526cb209173ae935bea9d124678b",
+  "blind": [
+   "blind proof: written by haiku, fails on the code as it is",
+   "blind proof: passes on the result"
+  ]
+ },
+ {
+  "task": "sympy__sympy-23950",
+  "arm": "odd-dual",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.02734,
+  "turns": 27,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "e6e4d00af331526cb209173ae935bea9d124678b",
+  "blind": [
+   "blind proof: written by haiku, fails on the code as it is",
+   "blind proof: passes on the result"
+  ]
+ }
+]
