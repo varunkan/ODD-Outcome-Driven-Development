@@ -1,0 +1,30 @@
+{
+ "sympy__sympy-21930": {
+  "run 1": {
+   "ruling": "RELATED",
+   "why": "Failing assertion is on the UNPOWERED form: \"assert 't^{ab}_{ij}' == '{t^{ab}_{ij}}'\" (and 'b^\\\\dagger_{i}' == '{b^\\\\dagger_{i}}'). The question asks only about the powered tensor, \"latex(AntiSymmetricTensor('v',(a,),(i,))**2) ... `v^{a}_{i}^{2}` ... or `{v^{a}_{i}}^{2}`\". Either answer leaves open whether the bare tensor/operator gets braces; it only brings AntiSymmetricTensor into scope."
+  },
+  "run 2": {
+   "ruling": "NAMES THE GAP",
+   "why": "Failing assertion \"assert 'b^\\\\dagger_{i}' == '{b^\\\\dagger_{i}}'\". Question 1 asks exactly that: \"latex(Bd(x)) on its own (no power) ... stays \\\"b^\\\\dagger_{x}\\\" ... or becomes \\\"{b^\\\\dagger_{x}}\\\" for every creation operator\". Its answer gives the asserted string (and the Fd/NO/Commutator ones by 'every creation operator'). Does not cover the '{t^{ab}_{ij}}' tensor assertion."
+  },
+  "run 3": {
+   "ruling": "NAMES THE GAP",
+   "why": "Failing assertion \"assert 'b^\\\\dagger_{i}' == '{b^\\\\dagger_{i}}'\". Question: \"for `latex(Bd(i))` with no power ... stays `b^\\\\dagger_{i}` ... or becomes `{b^\\\\dagger_{i}}`\" - the same expression and the same two strings as the assertion. Does not cover the '{t^{ab}_{ij}}' tensor assertion."
+  }
+ },
+ "sympy__sympy-23950": {
+  "run 1": {
+   "ruling": "NAMES THE GAP",
+   "why": "Failing: \"assert Contains(x, S.Reals).as_set() == S.Reals\" with error \"NotImplementedError\". Question: \"for Contains(x, Reals).as_set() ... returns S.Reals ... or keeps raising NotImplementedError\" - the exact fork between the assertion and the observed error."
+  },
+  "run 2": {
+   "ruling": "NAMES THE GAP",
+   "why": "Failing: \"assert Contains(x, S.Reals).as_set() == S.Reals\", error \"NotImplementedError\". Question: \"`Contains(x, Reals).as_set()` with `x` a plain Symbol ... raises `NotImplementedError` ... or returns a set such as `S.Reals`\" - same fork; 'such as' is slightly looser but the answer settles it."
+  },
+  "run 3": {
+   "ruling": "NAMES THE GAP",
+   "why": "Failing: \"assert Contains(x, FiniteSet(y)).as_set() == FiniteSet(y)\", error \"NotImplementedError\". Question: \"for Contains(x, FiniteSet(y)).as_set() ... keep raising NotImplementedError ... or return FiniteSet(y)\" - the asserted expression and value verbatim."
+  }
+ }
+}
