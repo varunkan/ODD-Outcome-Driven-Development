@@ -10,7 +10,7 @@ directory (outside the repository and the bench) as $ARM_HELPER, so nothing an a
                                                  prints its result object and "odd-cost: <usd>" (the line odd reads)
   arm_agent.py summary [--final-file F]          one result object: F's text as "result", figures summed over every
                                                  transcript in $ARM_TRANSCRIPTS
-  arm_agent.py odd race|cascade|spec|dual        the odd flows of the odd-race, odd-cascade, odd-spec and odd-dual arms (their
+  arm_agent.py odd race|cascade|spec|dual|ask    the odd flows of the odd-race, odd-cascade, odd-spec, odd-dual and odd-ask arms (their
                                                  NOTES.md): a first session, then odd's own command with sessions
                                                  started by `session` as its agents, then the gate; prints the summary
 
@@ -299,16 +299,55 @@ def ticket_of(prompt):
     return prompt[:prompt.find(end)].strip() if end and end in prompt else ''
 
 
+def side_clone(name):
+    """A clone of main beside the project (<session>/<name>/clone) for a session that must not touch the project or
+    be seen by a coding attempt; None when git cannot make it."""
+    clone = os.path.join(os.path.dirname(os.getcwd()), name, 'clone')
+    os.makedirs(os.path.dirname(clone), exist_ok=True)
+    done = subprocess.run(['git', 'clone', '-q', '--branch', 'main', '.', clone], capture_output=True)
+    return None if done.returncode else clone
+
+
+ASK = re.compile(r'(?m)^odd-ask:[ \t]*(\S.*?)[ \t]*\|[ \t]*(\S.*?)[ \t]*\|[ \t]*(\S.*?)[ \t]*$')
+ASK_MOST = 2
+ASK_PROMPT = """{ticket}
+
+Do NOT change any file. Before anyone writes a test or a fix for the request above, find what it leaves open. Read
+the code and the existing tests it concerns. A gap counts only if you can name ONE concrete input and TWO different
+results for it that are both consistent with the request as written (for example: must the change also apply to a
+closely related case the request does not mention, where an existing test pins today's behaviour?). A detail any
+careful reader would settle the same way is not a gap.
+
+End with at most %d lines of exactly this form, the most important first, or the single line `odd-ask: none`:
+odd-ask: <the concrete input> | <one result consistent with the request> | <a different result also consistent with it>
+""" % ASK_MOST
+
+
+def open_questions(ticket, model, said):
+    """The odd-ask arm's first step: a fresh session, in its own clone, names what the ticket leaves open. Returns the
+    material gaps as (input, one reading, another reading), at most ASK_MOST; a line whose two readings are the same
+    is no gap."""
+    clone = side_clone('ask')
+    if not clone:
+        said.append('ask: main could not be cloned; no question asked')
+        return []
+    _, result = session(ASK_PROMPT.replace('{ticket}', ticket), model, 'ask', cwd=clone)
+    shutil.rmtree(clone, ignore_errors=True)
+    text = result.get('result') if result and isinstance(result.get('result'), str) else ''
+    gaps = [g for g in ASK.findall(text) if g[1].strip().lower() != g[2].strip().lower()][:ASK_MOST]
+    said.append('ask: %d open question(s)' % len(gaps))
+    return gaps
+
+
 def blind_proof(ticket, model, said):
     """The odd-dual arm's second proof: a fresh session, in its own clone of main beside the project, writes one test
     from the ticket alone. Kept outside the project, so no coding attempt ever sees it. Returns the path of the test,
     or None when the author wrote none that fails on the code as it is (the arm then runs as odd-cascade does)."""
-    top = os.path.join(os.path.dirname(os.getcwd()), 'blind')
-    clone, kept = os.path.join(top, 'clone'), os.path.join(top, BLIND_TEST)
-    os.makedirs(top, exist_ok=True)
-    if subprocess.run(['git', 'clone', '-q', '--branch', 'main', '.', clone], capture_output=True).returncode:
+    clone = side_clone('blind')
+    if not clone:
         said.append('blind proof: main could not be cloned; none written')
         return None
+    kept = os.path.join(os.path.dirname(clone), BLIND_TEST)
     session(BLIND_PROMPT.replace('{ticket}', ticket), model, 'blind', cwd=clone)
     path = os.path.join(clone, BLIND_TEST)
     if not os.path.isfile(path):
@@ -331,6 +370,13 @@ def odd_flow(mode, prompt, ticket=''):
     DONE only when both proofs pass."""
     odd = [sys.executable, os.environ['ARM_ODD_PY']]
     cheap, strong = os.environ['ARM_MODEL'], os.environ['ARM_STRONG_MODEL']
+    asked = []
+    if mode == 'ask':  # odd-cascade, unless the ticket leaves something material open: then an honest question
+        gaps = open_questions(ticket, cheap, asked)
+        if gaps:
+            return '\n'.join(asked + ['open question: for %s, should the result be %s, or %s?' % g for g in gaps] +
+                             ['RESULT: NOT DONE: the request leaves %d question(s) open; they are listed above' % len(gaps)])
+        mode = 'cascade'
     status, result = session(prompt, cheap, 'outcome')
     if result is None:
         sys.exit('the first claude session printed no result object (exit %s)' % status)
@@ -340,7 +386,7 @@ def odd_flow(mode, prompt, ticket=''):
     # ends the arm as plain's only session would: its own final message is graded, nothing carries on from it.
     if claim != 'DONE' or result.get('subtype') in CAPS or result.get('is_error'):
         return first
-    said = ['first session (%s): claim %s' % (cheap, claim)]
+    said = asked + ['first session (%s): claim %s' % (cheap, claim)]
 
     def refuse(reason):  # the harness's reason, kept off the RESULT line: no keyword grade may credit it
         return '\n'.join(said + [ARM_REASON + reason, 'RESULT: NOT DONE'])
@@ -424,7 +470,7 @@ def main(argv=None):
     s = sub.add_parser('summary')
     s.add_argument('--final-file')
     s = sub.add_parser('odd')
-    s.add_argument('mode', choices=('race', 'cascade', 'spec', 'dual'))
+    s.add_argument('mode', choices=('race', 'cascade', 'spec', 'dual', 'ask'))
     a = ap.parse_args(argv)
     if a.cmd == 'session':
         status, result = session(sys.stdin.read(), a.model, a.name)

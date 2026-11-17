@@ -31,7 +31,7 @@ prompt, model = argv[argv.index('-p') + 1], argv[argv.index('--model') + 1]
 flags = argv[:argv.index('-p')] + argv[argv.index('-p') + 2:]
 flags = flags[:flags.index('--model')] + flags[flags.index('--model') + 2:]
 role = ('attempt' if 'You are one attempt' in prompt else 'proof' if 'You write the PROOF' in prompt else
-        'blind' if 'You write ONE test file' in prompt else 'plain' if 'odd new' not in prompt else 'outcome')
+        'blind' if 'You write ONE test file' in prompt else 'ask' if 'odd-ask:' in prompt else 'plain' if 'odd new' not in prompt else 'outcome')
 mode = os.environ.get('FAKE_CLAUDE', 'good')
 peeked = []  # peeklog: what an attempt finds by walking up its tree (earlier sessions' transcripts)
 if mode == 'peeklog' and role == 'attempt':
@@ -68,6 +68,9 @@ if role == 'outcome':
         text = 'Outcome stated.\nRESULT: DONE'
 elif role == 'proof':
     open('tests/test_sum.py', 'w').write(PROOF)
+elif role == 'ask':
+    text = ('Read it.\nodd-ask: add(2.5, 1) | 3.5 | an error, since the request says integers' if mode == 'gap'
+            else 'Nothing open.\nodd-ask: none')
 elif role == 'blind':  # the second reader's test: a case the first proof does not have
     open('test_blind_proof.py', 'w').write('from calc import add\n\n\ndef test_other_sums():\n    assert add(1, 1) == 2\n')
     text = 'Written.\nRESULT: DONE'
@@ -86,7 +89,7 @@ elif role in ('attempt', 'plain'):
         open('calc.py', 'w').write('def add(a, b):\n    return %s\n' % ('a * b' if wrong else '5' if narrow else 'a + b'))
         text = 'Fixed.\nRESULT: DONE' if role == 'plain' else 'Fixed.'
 name = 'claude-%s-fake' % model
-cost = {'haiku': 0.01, 'sonnet': 0.1}[model] * {'outcome': 1, 'proof': 2, 'attempt': 3, 'plain': 1, 'blind': 1}[role]
+cost = {'haiku': 0.01, 'sonnet': 0.1}[model] * {'outcome': 1, 'proof': 2, 'attempt': 3, 'plain': 1, 'blind': 1, 'ask': 1}[role]
 for event in ({'type': 'system', 'subtype': 'init', 'model': name},
               {'type': 'assistant', 'message': {'id': 'm-%d' % os.getpid(), 'model': name, 'content': [tool],
                                                 'usage': {'input_tokens': 5, 'output_tokens': 7}}},
@@ -98,7 +101,7 @@ for event in ({'type': 'system', 'subtype': 'init', 'model': name},
     print(json.dumps(event), flush=True)
 '''
 
-NEW_ARMS = ('odd-040', 'odd-race', 'odd-cascade', 'odd-spec', 'odd-dual')
+NEW_ARMS = ('odd-040', 'odd-race', 'odd-cascade', 'odd-spec', 'odd-dual', 'odd-ask')
 
 
 class ArmAgentTest(unittest.TestCase):
@@ -189,6 +192,22 @@ class ArmAgentTest(unittest.TestCase):
         self.assertEqual((r['passed'], r['claim'], r['arm_check']), (True, 'DONE', 0), r['final'])
         self.assertFalse(os.path.exists(os.path.join(r['session_dir'], 'test_blind_proof.py')))
         self.assertEqual(sorted(c['role'] for c in self.calls()), ['attempt', 'blind', 'outcome'])
+
+    def test_ask_a_material_gap_ends_with_the_question_and_not_done_and_no_code_is_written(self):
+        done, recs = self.run_arms(['odd-ask'], mode='gap', extra=['--keep'])
+        r = recs['odd-ask']
+        self.assertEqual((r['claim'], r['error']), ('NOT DONE', None), r['final'])
+        self.assertIn('open question: for add(2.5, 1), should the result be 3.5, or an error', r['final'])
+        self.assertEqual([c['role'] for c in self.calls()], ['ask'], 'no outcome, proof or attempt is paid for')
+        self.assertIn('return a - b', read(os.path.join(r['session_dir'], 'calc.py')), 'the project is as it was')
+        self.assertFalse(r['contaminated'], r['contaminated_by'])
+
+    def test_ask_without_a_gap_runs_as_cascade(self):
+        done, recs = self.run_arms(['odd-ask'])
+        r = recs['odd-ask']
+        self.assertEqual((r['passed'], r['claim'], r['arm_check']), (True, 'DONE', 0), r['final'])
+        self.assertIn('ask: 0 open question(s)', r['final'])
+        self.assertEqual(sorted(c['role'] for c in self.calls()), ['ask', 'attempt', 'outcome'])
 
     def test_a_disputed_proof_goes_back_to_its_author_once_and_the_race_runs_again(self):
         done, recs = self.run_arms(['odd-race'], mode='dispute')
@@ -310,6 +329,7 @@ class ArmFilesTest(unittest.TestCase):
             self.assertEqual(prompt.count('{ticket}'), 1)
             self.assertNotIn('RESULT:', prompt, 'the common ending is run.py\'s')
         end = re.search(r"ARM_TICKET_END='([^']+)'", read(os.path.join(BENCH, 'arms', 'odd-dual', 'agent.sh'))).group(1)
+        self.assertIn("ARM_TICKET_END='%s'" % end, read(os.path.join(BENCH, 'arms', 'odd-ask', 'agent.sh')))
         self.assertTrue(read(os.path.join(BENCH, 'arms', 'odd-dual', 'prompt.md')).split('{ticket}')[1].strip().startswith(end),
                         'the blind author\'s ticket ends where the arm\'s own instructions begin')
 
