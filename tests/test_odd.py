@@ -3659,7 +3659,7 @@ class StopWhenProven(Repo):
         self.outcome()
         self.solve()
         out = self.ok('done', 'add')
-        self.assertEqual(out.rstrip('\n').split('\n')[-1], 'next: report the outcome as done (odd gate passed)', out)
+        self.assertEqual(out.rstrip('\n').split('\n')[-1], 'next: report with `odd claim` (odd gate passed)', out)
 
     def test_done_ends_with_the_gates_problems_when_the_gate_fails(self):
         self.outcome()
@@ -3667,7 +3667,7 @@ class StopWhenProven(Repo):
         self.write('other.py', ''.join('x%d = %d\n' % (i, i) for i in range(40)))
         out = self.ok('done', 'add')
         self.assertIn('add: verified.', out)
-        self.assertNotIn('report the outcome as done', out)
+        self.assertNotIn('report with `odd claim`', out)
         tail = out.rstrip('\n').split('\n')
         fail = tail.index('FAIL')
         self.assertIn('outside every outcome', '\n'.join(tail[fail:]))
@@ -4485,6 +4485,58 @@ class Owed(Repo):
         self.assertIn('no owed step "fly to the moon"', self.no('owed', 'add', 'fly to the moon', '--evidence', 'evidence/tablet.log'))
         self.ok('owed', 'add', 'owner signs in with the real account', '--evidence', 'evidence/tablet.log')
         self.assertNotIn('owed:', self.read('.odd/outcomes/add.md'))
+
+
+class Claim(Repo):
+    """The claim is generated, not written: `odd claim` states what the checks proved and, as plainly, what they did
+    not, so a report cannot say more than the evidence. Open questions travel with the claim without stopping work."""
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.outcome()
+        self.solve()
+        self.ok('done', 'add')
+
+    def test_a_proven_change_is_claimed_with_its_proof_and_what_it_said_without_the_change(self):
+        out = self.ok('claim')
+        self.assertIn('PROVEN\n  add: A caller of add(2, 3) receives 5.', out)
+        self.assertIn('proof: ' + PROOF, out)
+        self.assertRegex(out, r'fails without the change: .*0 != 5')
+        self.assertIn('NOT PROVEN\n  nothing: every check that ran is listed above', out)
+        self.assertEqual(out.rstrip().split('\n')[-1], 'VERDICT: DONE')
+
+    def test_an_open_question_does_not_stop_the_work_and_is_stated_as_not_proven(self):
+        self.ok('ask', 'add', 'Should add() also accept strings of digits, as the old form did?', '--open')
+        self.ok('done', 'add')
+        out = self.ok('gate')
+        self.assertIn('open    add: 1 question(s) left open: Should add() also accept strings of digits', out)
+        self.assertNotIn('waiting for an answer', out)
+        out = self.ok('claim')
+        self.assertIn('  - add: open question: Should add() also accept strings of digits, as the old form did?', out)
+        self.assertEqual(out.rstrip().split('\n')[-1], 'VERDICT: DONE, WITH 1 POINT NOT PROVEN (listed above)')
+        self.write('.odd/config.json', json.dumps({'auto_lane': True}))
+        self.assertRegex(self.ok('gate'), r'lane +review: .*add: open question')
+
+    def test_owed_steps_and_a_weak_proof_are_stated_as_not_proven(self):
+        self.add_line('add', 'owed: install on the tablet')
+        self.write('calc.py', FIXED + '\n\ndef sub(a, b):\n    return a - b\n')  # sub is never run by the proof
+        self.ok('done', 'add')
+        out = self.ok('claim')
+        self.assertIn('  - add: steps are owed on the real system (install on the tablet)', out)
+        self.assertRegex(out, r'  - add: .*(did not run|survived|not run)')
+        self.assertRegex(out.rstrip().split('\n')[-1], r'^VERDICT: DONE, WITH \d+ POINTS NOT PROVEN \(listed above\)$')
+
+    def test_a_failing_gate_is_claimed_as_not_done_with_the_reason(self):
+        self.write('other.py', 'x = 1\n' * 30)
+        out = self.no('claim')
+        self.assertIn('outside every outcome', out)
+        self.assertEqual(out.rstrip().split('\n')[-1], 'VERDICT: NOT DONE (the gate did not pass; the reasons are above)')
+
+    def test_a_parked_outcome_is_never_claimed_as_proven(self):
+        self.ok('park', 'add', 'the ticket contradicts itself')
+        out = self.odd('claim')[1]
+        self.assertNotIn('PROVEN\n  add:', out)
+        self.assertIn('add is parked', out)
 
 
 class MaskedPipe(Repo):
