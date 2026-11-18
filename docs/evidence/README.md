@@ -23,6 +23,7 @@ documents behind it.
 | 15 | [The comparison](15-comparison.md) | Does ODD, Spec Kit, BMAD or Superpowers do better than plain Claude Code? | 480 runs on two models, hidden tests, both grades and every reason verbatim. |
 | 17 | [How frontier models reason](17-how-frontier-models-reason.md) | What do the most capable models do to finish correctly, where do they still fail, and what can odd check? | Anthropic's guidance and system cards and the research literature, measured vs asserted; what was built and what not. |
 | 18 | [Real repositories](18-real-repositories.md) | Does odd get more correct work done on real open-source issues? | 90 runs on ten SWE-bench Verified sympy issues, design ruled by a judge, failures read from each tree and ruled blind: not shown; a hint: plain agents claimed done three times with no code change on one stale ticket, odd's arm did not. |
+| 19 | [A calculator, odd and Spec Kit](19-calculator-head-to-head.md) | Asked to build the same calculator with Haiku 4.5, which framework does a blind judge pick? | 6 runs, hidden tests, side-by-side terminal captures, a judge who did not know which was which: odd 3 of 3 for $0.68, Spec Kit 1 of 3 for $1.42; one task, a hint. |
 | 16 | [The new arms](16-new-arms.md) | Do race, cascade or a strong model's proof make Haiku as good as Sonnet for less? | 576 runs; first no (two defects found); after the fixes and disputed proofs, cascade delivered 41 of 42 with no false DONE at a quarter of Sonnet's cost; plain Haiku still delivered all 42. |
 
 ## Data and tools
