@@ -1,0 +1,46 @@
+[
+ {
+  "run": 1,
+  "first_cost_usd": 0.12419690000000003,
+  "first_seconds": 59.5,
+  "continues": [
+   {
+    "round": 1,
+    "cost_usd": 0.6654649,
+    "turns": 62,
+    "seconds": 276.9,
+    "last": "RESULT: DONE"
+   }
+  ],
+  "continue_cost_usd": 0.6655,
+  "continue_seconds": 276.9,
+  "claim": "DONE",
+  "passed": true,
+  "hidden": [
+   "Ran 6 tests in 1.611s",
+   "OK"
+  ]
+ },
+ {
+  "run": 3,
+  "first_cost_usd": 0.1515323,
+  "first_seconds": 65.8,
+  "continues": [
+   {
+    "round": 1,
+    "cost_usd": 0.559282,
+    "turns": 66,
+    "seconds": 230.5,
+    "last": "RESULT: DONE"
+   }
+  ],
+  "continue_cost_usd": 0.5593,
+  "continue_seconds": 230.5,
+  "claim": "DONE",
+  "passed": true,
+  "hidden": [
+   "Ran 6 tests in 1.996s",
+   "OK"
+  ]
+ }
+]
