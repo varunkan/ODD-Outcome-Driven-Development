@@ -47,7 +47,9 @@ Free notes: questions asked and answered, decisions and why.
   refusal by an older one), `entry: <command or .py file>` (where a user reaches the outcome; the proof must execute
   it, section 3l; the same tool version and the same refusal by an older one), `open: <question> ;; <question>`
   (written by `odd ask --open`: questions left open while the work goes on, stated with the claim, section 3m; the
-  same tool version and the same refusal by an older one).
+  same tool version and the same refusal by an older one), `reject: <exit code>` (with `entry:`: the exit code for
+  invalid input; the entry point is run on inputs odd makes from the proof's examples, section 3o; the same tool
+  version and the same refusal by an older one).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -529,6 +531,42 @@ With `"cases": "require"`:
 Limits: naming a case in a test shows where it is meant to be tested, not that the test checks it; the take-out
 check and proof strength still judge the test. Which cases get listed is the author's judgement, so a boundary nobody
 thought of is still untested. The setting costs the work of writing the list.
+
+### 3o. Inputs the tool makes: `reject:` and `"reach": "require"`
+
+Needs a tool newer than 0.4.0 (backlog item 45). A proof holds the inputs its author thought of, and the author of
+the tests is usually the author of the code, so a misreading sits in both and the proof passes. With edge cases
+required (3n), all three calculators of the rerun still answered `1/0+` with "division by zero" where the ticket says
+"invalid expression": each test file had `2+` rejected and `1/0` as a division by zero, and none had the two
+together ([evidence 19](docs/evidence/19-calculator-head-to-head.md)). Here the tool makes the inputs and a declared
+exit code is the oracle, so neither comes from the reading under test.
+
+- **`reject: <exit code>`** (a check, with `entry:`). The exit code the entry point ends with on invalid input, 1 to
+  255. `rejects()` runs the entry point with one argument for each string and number in the proof's test files (at
+  most 200; none with a backslash, whose meaning depends on the test's language; `python3 <file>` for a `.py` entry,
+  the command itself otherwise). An **ending** is what a rejected example adds to one that is not rejected, up to 3
+  characters (`2+` and `2` give `+`); the 8 shortest are used. Every other example that is not rejected, an example
+  that ends in another error included, followed by each ending, is a **generated input** (at most 200, never one of
+  the proof's own examples). Each must exit with the declared code, and no run of the entry point may end in a
+  Python traceback. A failure prints the command, the exit code, and the two examples the input was made from.
+  Verified says `rejection is stable: n generated inputs (...) all exit <code>`; when the proof's examples hold no
+  ending it says `nothing was generated` instead, and does not claim stability.
+- **`"reach": "require"`** (`.odd/config.json`, default `off`). `odd done` fails, before the proof is run, an outcome
+  that has no `entry:` or no `reject:`; the failure prints both lines' formats (`REACH_HOW`), so an agent that was
+  told nothing learns them from the tool. Where one does not apply the outcome says so, `entry: none - <why>` or
+  `reject: none - <why>`; the reason is printed with the verification and `odd claim` lists it under what is not
+  proven (`unreached()`, `caveats()`).
+
+Measured with no model on the nine calculators kept from evidence 19, every test file against every program (81
+pairs): the check fails the four programs that have the defect, from every test file but one pair (35 of 36), and
+none of the five that do not (0 of 45, 80 to 200 generated inputs each).
+
+Limits. The rule "an ending rejected after one example is rejected after every other" holds for inputs read left to
+right as one expression; a program where it does not hold must not declare `reject:` (or answers the failure by
+changing the example). Only programs that take their input as one argument fit. The entry point is run in the
+working tree with inputs it was not written for: do not declare `reject:` for a command that changes files named by
+its argument. It reaches only one step beyond the proof's examples, and it judges the exit code, never the value: a
+wrong number that exits 0 passes. Tracebacks are recognised for Python only. All of it is measured on one task.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 

@@ -19,7 +19,7 @@ THEMES = [
     ('A false "done" is refused',
      'Each test is a way an agent could report done without the outcome holding; each must end non-zero.',
      ['Attacks', 'RedTeam', 'FailClosed', 'InPlaceCheck', 'GitShapes', 'Files', 'MaskedPipe', 'TextualProof', 'Flaky',
-      'SealedProof', 'ReproduceFirst', 'HeldOut', 'SameBehaviour', 'Successive', 'EntryPoint']),
+      'SealedProof', 'ReproduceFirst', 'HeldOut', 'SameBehaviour', 'Successive', 'EntryPoint', 'RejectStable']),
     ('CI cannot be talked out of it',
      'In CI the tool, its settings and the base come from the target branch, and nothing recorded is trusted.',
      ['HappyPath', 'Exemptions', 'Checks', 'RegressionGuard', 'Distribution', 'ReviewSummary']),

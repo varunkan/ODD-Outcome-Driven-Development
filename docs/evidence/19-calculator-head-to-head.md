@@ -99,6 +99,72 @@ nobody tested. That is the limit evidence 18 found on real code, seen again on a
 as the cases it holds. Spec Kit's longer process cost about four times as much and, on this task, left more careful
 code.
 
+## Third round: odd with edge cases required
+
+The second ruling turned on defects in inputs nobody tested, and Spec Kit's runs had written requirements with an
+edge-case section first. odd got that as a setting, `"cases": "require"` (backlog 44), and the task was run three
+more times (arm `odd-cases`, same ticket, model and limits; target fixed before the run: no calculator with a defect
+of its own, at a cost under Spec Kit's).
+
+| | odd | odd, edge cases required | Spec Kit, continued |
+|---|---|---|---|
+| hidden tests pass | 3 of 3 | 3 of 3 | 3 of 3 |
+| calculators with a defect of their own | 3 of 3 | **3 of 3** | 0 of 3 |
+| needed a person | 0 | 0 | 2 runs |
+| cost, three runs | $0.68 | $0.82 ($0.21, $0.23, $0.38) | $2.65 |
+| time a run | 76 s, 89 s, 574 s | 86 s, 99 s, 147 s | 336 s, 394 s, 296 s |
+
+**The target was not met.** The runs wrote 8 to 11 requirements and 33 to 36 edge cases each, and the two defects of
+the first round did not come back (the corrupted exponent, the lone `.`). But all three calculators report division
+by zero for `1/0+`, which the ticket calls an invalid expression, and two of them for `(1/0` and `1/0)` as well.
+Each test file had `2+` rejected and `1/0` as a division by zero; none had the two together. The author of the
+cases is the author of the code, so the case nobody thought of is still missing. The harness recorded odd's own
+gate as failing after run 3; run again on the kept files it passes, and that difference is not explained.
+
+### How a defect is counted from here on
+
+The judges' probes were not kept, so the count could not be repeated. It is now a file:
+[probes.py](data/calculator/probes.py) holds 143 expressions, and [probes.json](data/calculator/probes.json) the
+expected exit code and output of the 142 on which four programs written apart agree (a reference using exact
+fractions, and the three Spec Kit calculators). The one left out is listed in the file. Where the ticket does not fix
+the notation (a result of 1e10 or more that is not whole), the output is read as a number. Counted this way the nine
+kept calculators give what the judges found: odd 1, 1 and 8 probes wrong; Spec Kit 0, 0, 0; odd with edge cases 7,
+2 and 7, all of them an error after a division by zero.
+
+### A check for it, replayed with no model
+
+odd now has a check where the tool makes the inputs: an outcome declares `reject: <exit code>` beside its entry
+point, and odd runs the entry point on each example of the proof that is not rejected, followed by each ending the
+proof's own examples show rejected (backlog 45, [DESIGN 3o](../../DESIGN.md)). It came out of a research loop on
+this evidence: three sets of hypotheses (the literature, odd's own evidence, other fields), 19 in all, ranked by
+measuring each on copies of the kept calculators. The checks where the agent writes the oracle lost to their
+tool-owned neighbours, and two candidates were dropped because they fired as often on the correct calculators.
+
+Replayed on the nine kept calculators, every test file against every program
+([replay.py](data/calculator/replay.py), [replay.json](data/calculator/replay.json)):
+
+| | pairs failed by the check |
+|---|---|
+| the 4 calculators with the defect (odd 3; edge cases 1, 2, 3) | 35 of 36 |
+| the 5 without it (odd 1, 2; Spec Kit 1, 2, 3) | 0 of 45 |
+
+With its own tests, each of the four fails and each of the five passes. The check does not see the corrupted
+exponent of odd runs 1 and 2: that is a wrong value with exit 0, and the check judges exit codes only.
+
+This is a replay on finished programs, not a run. It shows the check tells these defective calculators from the
+correct ones; it does not show an agent, told nothing, will declare `reject:` and fix what the check finds.
+
+### Fourth round, fixed before it is run
+
+Arm `odd-reach`: the `odd-cases` arm plus `"reach": "require"`, which makes `odd done` fail until the outcome names
+its entry point and its reject code, or says why not. Three runs, same ticket, model and limits. Shown only if all
+of these hold; one calculator with a defect counts as partly; anything else as not shown:
+
+- 0 of 3 calculators differ on any frozen probe;
+- 3 of 3 pass the hidden tests, no false DONE, nobody answers anything;
+- the three runs cost at most $1.36 (twice the first round);
+- in at least 2 of 3 runs the outcome declares `reject:` with an exit code, not `none`.
+
 ## What to keep in mind
 
 - **Three runs each, one task, one model.** 3 of 3 against 1 of 3 is not statistically significant.
@@ -110,4 +176,4 @@ code.
   2 to 5 times a plain agent's cost.
 - **odd's own check is not what made the difference here**: nothing claimed done falsely in either arm. The
   difference was that one process finished and the other stopped.
-- The whole comparison cost $2.10.
+- The first round cost $2.10, the two continued Spec Kit runs $1.22 and the edge-case rerun $0.82.
