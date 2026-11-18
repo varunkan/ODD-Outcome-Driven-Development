@@ -506,6 +506,30 @@ but stopping on every question blocked half of the work that was fine (12 of 24 
 longer hides it. Limits: the claim is exactly as complete as the checks that ran; whether agents' reports follow it,
 and whether readers are misled less, is not measured yet.
 
+### 3n. Requirements with their edge cases: `"cases": "require"`
+
+Needs a tool newer than 0.4.0 (backlog item 44). Off by default. A proof written from a ticket's examples passes work
+that is wrong on inputs nobody tested: on the calculator task every odd calculator passed its proof and the hidden
+tests and still had a defect of its own, while the runs that first wrote 14 to 18 requirements and an edge-case
+section had none ([evidence 19](docs/evidence/19-calculator-head-to-head.md)). The idea, writing requirements and
+edge cases down before the code, is Spec Kit's; odd makes it a check.
+
+With `"cases": "require"`:
+
+- **Edge cases are lines of the requirements file**: under `R1: ...`, one or more `R1.1: <a boundary input and what
+  must happen>` (`CASE_LINE`, `req_cases()`).
+- **`odd new` refuses** until there is a requirements file, the outcome names what it covers (`--covers`), and each
+  requirement it covers has at least one case. The refusal prints the format (`CASES_HOW`), so an agent that was told
+  nothing learns it from the tool.
+- **The gate fails** (`coverage()`) when the change records no requirements, an outcome in play covers none, a
+  requirement is covered by no outcome or has no case, or a case id is named in no changed test file. A case is named
+  by its id standing alone in the test (`# R1.1`, a docstring, a test name); `R1.10` does not name `R1.1`. The gate
+  reports `cases <ticket>: n of m named in a test`.
+
+Limits: naming a case in a test shows where it is meant to be tested, not that the test checks it; the take-out
+check and proof strength still judge the test. Which cases get listed is the author's judgement, so a boundary nobody
+thought of is still untested. The setting costs the work of writing the list.
+
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
 **The base** is one revision for everything: where this branch left the target branch (the merge-base of HEAD and

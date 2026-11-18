@@ -30,7 +30,7 @@ THEMES = [
     ('More correct work, not only checked work',
      'Aids that catch weak proofs, missing requirements, wrong proofs and leftovers before review.',
      ['ProofStrength', 'Coverage', 'AmbiguityStop', 'KindTemplates', 'FailureFeedback', 'AttemptFeedback', 'InertFiles',
-      'InertHunks', 'LookAlikes', 'Challenge', 'Disputes', 'Probe', 'CopiedLiterals', 'Spec', 'Plan', 'Reasoning', 'Duplication', 'FinishTurn', 'PreFlight']),
+      'InertHunks', 'LookAlikes', 'Challenge', 'Disputes', 'Probe', 'CopiedLiterals', 'Cases', 'Spec', 'Plan', 'Reasoning', 'Duplication', 'FinishTurn', 'PreFlight']),
     ('Cheaper and faster',
      'Cheap models first, parallel attempts, no repeated work, no waiting, and a budget that stops spending.',
      ['Race', 'Cascade', 'Chain', 'Isolation', 'VerifyCache', 'AffectedGuards', 'RaceCache', 'StopWhenProven',
@@ -56,7 +56,7 @@ repeats per arm, every reason read by a person; then ten real sympy issues. Full
 | a wrong proof no longer blocks correct work | in 18 runs a disputed proof went back to its author: 17 then delivered, none claimed DONE falsely | [16](evidence/16-new-arms.md#with-disputed-proofs) |
 | running the method found real defects | the gate refused correct work proven in steps (34 runs), fixed and shown on agents: refused correct work 11-13 per arm, then 0 | [16](evidence/16-new-arms.md) |
 | holds for any model by construction | a proof that fails without the change means the same whichever model wrote the code; the measured gains above are Claude's | [THE-RULE](../THE-RULE.md) |
-| a head-to-head with Spec Kit on one task | building a calculator with Haiku 4.5, three runs each: odd delivered 3 of 3 for $0.68, Spec Kit 1 of 3 for $1.42 (two runs stopped after the specification); a blind judge chose odd; one task, a hint | [19](evidence/19-calculator-head-to-head.md) |
+| a head-to-head with Spec Kit on one task | building a calculator with Haiku 4.5, three runs each. Nobody answering: odd delivered 3 of 3 for $0.68, Spec Kit 1 of 3, and a blind judge chose odd. With Spec Kit told to continue: both 3 of 3, and a blind judge chose Spec Kit narrowly, because each odd calculator had a defect of its own on inputs no test covered; odd cost $0.68 against $2.65. One task, a hint | [19](evidence/19-calculator-head-to-head.md) |
 | more correct work on real repositories | **not shown**: ten sympy issues, 90 runs: cascade 24 of 30, plain Haiku 25, plain Sonnet 25; 5 false DONE each | [18](evidence/18-real-repositories.md) |
 | no change, no done | by construction `odd done` refuses when nothing changed (test FailureFeedback); on real issues plain agents claimed done with no source change 3 times, odd's arm 0, all on one stale ticket: a hint, the check was not triggered | [18](evidence/18-real-repositories.md) |
 '''
