@@ -773,3 +773,17 @@ cost to build.
   had none ([evidence 19](docs/evidence/19-calculator-head-to-head.md)). The idea is Spec Kit's; odd enforces it.
 - **Done** in the commit "B44: requirements with their edge cases" (`req_cases()`, `coverage()`, `cmd_new`; tests
   `Cases`; [DESIGN 3n](DESIGN.md); arm `bench/arms/odd-cases`). Measured next on the same calculator task.
+
+### 45. Inputs the tool makes: rejection is stable
+- **Outcome:** an outcome that declares `reject: <exit code>` beside `entry:` is verified only if the entry point also
+  rejects inputs odd makes from the proof's own examples (an example that is not rejected, plus an ending the proof
+  shows rejected) and never crashes; `"reach": "require"` makes every outcome declare both or say why not.
+- **Evidence:** with edge cases required, 3 of 3 calculators still reported division by zero for `1/0+`; a research
+  loop (three generators, one measured tournament) ranked tool-made inputs first because every check where the agent
+  writes the oracle repeats the agent's reading ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B45: inputs the tool makes" (`rejects()`, `unreached()`; tests `RejectStable`;
+  [DESIGN 3o](DESIGN.md); arm `bench/arms/odd-reach`). Replayed with no model: fails the 4 kept calculators with the
+  defect, none of the 5 without. Run (3 runs, Haiku 4.5): the defect it targets went from 3 of 3 to 0 of 3; 1 of 3
+  calculators still wrong on a frozen probe (rounding, a value the check does not judge), so the fixed target was
+  met partly. Not built from the same design: deletion mutants (report mode) and comparing a
+  race's attempts on generated inputs.

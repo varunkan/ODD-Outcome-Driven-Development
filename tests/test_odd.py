@@ -4377,6 +4377,92 @@ class EntryPoint(Repo):
         self.assertIn('"entry:" must be', self.no('done', 'add', code=2))
 
 
+class RejectStable(Repo):
+    """Backlog item 45: "reject: <exit code>" with "entry:". Each example of the proof the entry point does not reject,
+    followed by an ending the proof's own examples show rejected, must be rejected too, and nothing may crash."""
+
+    GOOD = ('import sys\ns = sys.argv[1]\nparts = s.split("+")\n'
+            'if not all(p.isdigit() for p in parts):\n    sys.exit(2)\nprint(sum(map(int, parts)))\n')
+    LOOSE = GOOD.replace('if not all', 'if len(parts) > 2 and parts[-1] == "":\n    parts.pop()\nif not all')
+    CRASH = GOOD.replace('if not all', 'if len(parts) > 2 and parts[-1] == "":\n    parts[9]\nif not all')
+    CASES = ('import subprocess, sys, unittest\n\n\ndef run(x):\n'
+             '    return subprocess.run([sys.executable, "sum.py", x], capture_output=True, text=True)\n\n\n'
+             'class T(unittest.TestCase):\n    def test_sums(self):\n'
+             '        self.assertEqual(run("2+3").stdout, "5\\n")\n        self.assertEqual(run("7").stdout, "7\\n")\n'
+             '    def test_rejects(self):\n        self.assertEqual(run("7+").returncode, 2)\n')
+    PROOF = sys.executable + ' -m unittest -q tests.test_sum'
+
+    def stable(self, product, cases=CASES, reject='2', entry='sum.py'):
+        self.write('tests/test_sum.py', cases)
+        self.write('sum.py', product)
+        self.outcome(proof=self.PROOF, in_='sum.py')
+        for line in (entry and 'entry: ' + entry, reject and 'reject: ' + reject):
+            if line:
+                self.add_line('add', line)
+
+    def test_an_ending_rejected_after_one_example_and_accepted_after_another_is_refused_with_the_input(self):
+        self.stable(self.LOOSE)
+        out = self.no('done', 'add')
+        self.assertIn('sum.py 2+3+ exited 0, not 2', out)
+        self.assertIn('shows 7+ rejected', out, 'the example of the proof the ending came from is named')
+
+    def test_stable_rejection_passes_and_counts_the_generated_inputs(self):
+        self.stable(self.GOOD)
+        self.assertRegex(self.ok('done', 'add'), r'rejection is stable: 2 generated inputs ')
+
+    def test_a_crash_on_a_generated_input_is_refused(self):
+        self.stable(self.CRASH)
+        out = self.no('done', 'add')
+        self.assertIn('sum.py 2+3+ crashed', out)
+        self.assertIn('IndexError', out)
+
+    def test_an_example_ending_in_another_error_followed_by_an_ending_must_be_rejected_too(self):
+        early = self.GOOD.replace('if not all', 'if "13" in parts:\n    sys.exit(1)\nif not all')
+        self.stable(early, cases=self.CASES + '        self.assertEqual(run("13").returncode, 1)\n')
+        self.assertIn('sum.py 13+ exited 1, not 2', self.no('done', 'add'))
+
+    def test_examples_of_the_proof_are_never_generated_inputs(self):
+        self.stable(self.LOOSE, cases=self.CASES + '        self.assertEqual(run("2+3+").stdout, "5\\n")\n')
+        out = self.ok('done', 'add')
+        self.assertIn('rejection is stable', out)
+        self.assertNotIn('2+3+ exited', out)
+
+    def test_no_ending_among_the_examples_is_said_and_not_counted_as_stable(self):
+        self.stable(self.GOOD, cases=self.CASES.replace('run("7+")', 'run("7+abc")'))  # four characters: too long to be an ending
+        out = self.ok('done', 'add')
+        self.assertIn('nothing was generated', out)
+        self.assertNotIn('rejection is stable', out)
+
+    def test_reject_without_an_entry_or_with_no_exit_code_cannot_be_checked(self):
+        self.stable(self.GOOD, entry='')
+        self.assertIn('"reject:" needs "entry:"', self.no('done', 'add', code=2))
+        self.add_line('add', 'entry: sum.py')
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('reject: 2', 'reject: two'))
+        self.assertIn('"reject:" must be an exit code', self.no('done', 'add', code=2))
+
+    def test_under_reach_require_an_outcome_names_both_or_says_why_and_the_claim_carries_the_why(self):
+        self.write('.odd/config.json', json.dumps({'reach': 'require'}))
+        self.stable(self.GOOD, entry='', reject='')
+        out = self.no('done', 'add')
+        self.assertIn('add names no "entry:" and no "reject:"', out)
+        self.assertIn('entry: none - <why>', out)
+        self.add_line('add', 'entry: sum.py')
+        self.assertIn('add names no "reject:"', self.no('done', 'add'))
+        self.add_line('add', 'reject: none')
+        self.assertIn('"reject: none" needs its reason', self.no('done', 'add', code=2))
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('reject: none', 'reject: none - it takes no input'))
+        out = self.ok('done', 'add')
+        self.assertIn("not shown to reject invalid input beyond the proof's examples (it takes no input)", out)
+        self.assertIn('add: not shown to reject invalid input', self.ok('claim'))
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('reject: none - it takes no input', 'reject: 2'))
+        self.assertIn('rejection is stable', self.ok('done', 'add'))
+
+    def test_a_setting_other_than_off_or_require_is_refused(self):
+        self.stable(self.GOOD)
+        self.write('.odd/config.json', json.dumps({'reach': 'yes'}))
+        self.assertIn('"reach" has the wrong kind of value', self.no('done', 'add', code=2))
+
+
 class Checks(Repo):
     """Backlog item 24: standing project rules as commands every gate runs, read from the target in CI."""
 
