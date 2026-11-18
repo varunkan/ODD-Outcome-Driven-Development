@@ -63,6 +63,7 @@ DEFAULTS = {
     'race_seal': False,    # odd race: refuse an outcome that is not sealed
     'proof_tries': 3,      # odd spec: tries for the proof author to write a proof that fails before the code
     'coverage': 'report',  # requirements no outcome in the change covers: off, report, or enforce (an uncovered one fails)
+    'cases': 'off',        # backlog 44: require: every requirement lists its edge cases, each named in a test
     'ambiguity_stop': True,  # odd new refuses an outcome sentence with no observable (an English word list)
     'guard': 'enforce',    # earlier merged outcomes whose in: holds a touched file: proofs run again (off, report, enforce)
     'auto_lane': False,    # odd gate says "lane": "auto" or "review" (backlog item 11); odd itself never merges
@@ -223,6 +224,7 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'race_seal': lambda v: type(v) is bool,
             'proof_tries': lambda v: type(v) is int and 1 <= v <= 32,
             'coverage': lambda v: v in ('off', 'report', 'enforce'),
+            'cases': lambda v: v in ('off', 'require'),
             'ambiguity_stop': lambda v: type(v) is bool,
             'guard': lambda v: v in ('off', 'report', 'enforce'),
             'auto_lane': lambda v: type(v) is bool,
@@ -497,6 +499,14 @@ def all_outcomes(root):
 
 REQ_FILE = re.compile(r'^\.odd/requirements/([A-Za-z0-9][A-Za-z0-9._-]{0,63})\.md$')
 REQ_LINE = re.compile(r'^\s*(?:[-*]\s+)?(R\d+)\s*:\s*(\S.*)$')   # "R1: ...", also as a list item
+CASE_LINE = re.compile(r'^\s*(?:[-*]\s+)?(R\d+\.\d+)\s*:\s*(\S.*)$')   # "R1.1: ...": an edge case of R1
+CASES_HOW = ('"cases": "require": before the work, list every requirement of the ticket with its edge cases in '
+             '.odd/requirements/<ticket>.md, and name each case in the test that checks it:\n'
+             '  R1: <one requirement, in the ticket\'s words>\n'
+             '  R1.1: <an edge case of R1: a boundary input (largest, smallest, empty, malformed, repeated) and what must happen>\n'
+             '  R1.2: <another>\n'
+             'then: %s new <slug> "<outcome>" --proof "<command>" --in "<globs>" --covers R1,R2,...\n'
+             'and in the test file write each case id where it is tested, e.g. `def test_empty(self):  # R1.1`.')
 COVER_ID = re.compile(r'^(?:([A-Za-z0-9][A-Za-z0-9._-]{0,63}):)?(R\d+)$')  # R1, or <ticket>:R1
 
 
@@ -512,18 +522,28 @@ def cover_ids(value):
     return out
 
 
+def _req_text(root, ticket, at=None):
+    """The text of .odd/requirements/<ticket>.md (at a revision when `at` is given), or None when it is not there."""
+    rel = '.odd/requirements/%s.md' % ticket
+    if at:
+        r = sh(['git', 'show', '%s:%s' % (at, rel)], root)
+        return None if r.returncode else r.stdout
+    return read_text(os.path.join(root, rel)) if os.path.isfile(os.path.join(root, rel)) else None
+
+
+def req_cases(root, ticket):
+    """Backlog item 44: {case id: text} from the "R<n>.<m>: ..." lines of .odd/requirements/<ticket>.md: the edge
+    cases of requirement R<n>."""
+    return collections.OrderedDict((m.group(1), m.group(2).strip())
+                                   for m in map(CASE_LINE.match, (_req_text(root, ticket) or '').split('\n')) if m)
+
+
 def requirements(root, ticket, at=None):
     """{id: text} from .odd/requirements/<ticket>.md, in file order (at a revision when `at` is given; None when
     the file is not there). A repeated id raises Fail."""
     rel = '.odd/requirements/%s.md' % ticket
-    if at:
-        r = sh(['git', 'show', '%s:%s' % (at, rel)], root)
-        if r.returncode:
-            return None
-        text = r.stdout
-    elif os.path.isfile(os.path.join(root, rel)):
-        text = read_text(os.path.join(root, rel))
-    else:
+    text = _req_text(root, ticket, at)
+    if text is None:
         return None
     reqs = collections.OrderedDict()
     for line in text.split('\n'):
@@ -539,11 +559,17 @@ def coverage(root, s):
     """(report lines, problems, facts) for the requirements of the tickets this change records: each id in a
     changed .odd/requirements/<ticket>.md and the outcomes in the change that cover it. A covers: id that names no
     requirement is always a problem; an uncovered requirement is one only under "coverage": "enforce"."""
-    mode = s['cfg']['coverage']
-    if mode == 'off':
+    mode, need = s['cfg']['coverage'], s['cfg']['cases'] == 'require'
+    if mode == 'off' and not need:
         return [], [], []
     tickets = [m.group(1) for m in map(REQ_FILE.match, s['changed']) if m]
     lists, problems = collections.OrderedDict(), []
+    live = [o for o in s['inplay'] if not o.parked and not o.asked]
+    if need and live and not tickets:
+        problems.append('this change records no requirements. ' + CASES_HOW % ODD)
+    if need:
+        problems += ['%s covers no requirement ("cases": "require"): add "covers: R<number>, ..." to %s'
+                     % (o.slug, o.rel) for o in live if not o.get('covers')]
     for t in tickets:
         try:
             reqs = requirements(root, t)
@@ -598,7 +624,24 @@ def coverage(root, s):
             t, len(reqs) - len(missing), len(reqs),
             '; not covered: ' + ', '.join('%s (%s)' % (r, reqs[r][:80]) for r in missing) if missing else '',
             '; removed in this change: ' + ', '.join(dropped) if dropped else ''))
-        if mode == 'enforce':
+        if need:  # backlog 44: each requirement has an edge case, and each case is named in a test of this change
+            cases, tests = req_cases(root, t), []
+            for path in s['tests']:
+                full = os.path.join(root, path)
+                if os.path.isfile(full) and os.path.getsize(full) <= 2 * 10 ** 6:
+                    try:
+                        tests.append(read_text(full))
+                    except ValueError:
+                        pass
+            named = [c for c in cases if any(re.search(r'(?<![\w.])%s(?![\w.])' % re.escape(c), x) for x in tests)]
+            lines.append('  cases %s: %d of %d named in a test' % (t, len(named), len(cases)))
+            problems += ['%s %s has no edge case: add at least one "%s.1: <a boundary input and what must happen>" line '
+                         'under it in .odd/requirements/%s.md' % (t, r, r, t)
+                         for r in reqs if not any(c.startswith(r + '.') for c in cases)]
+            problems += ['%s %s (%s) is named in no test of this change: test it, and write "%s" where it is tested '
+                         '(the test\'s name, a comment or its docstring)' % (t, c, cases[c][:120], c)
+                         for c in cases if c not in named]
+        if mode == 'enforce' or need:
             problems += ['%s %s is covered by no outcome in this change: %s. Cover it (an outcome with covers: %s, '
                          '%s new ... --covers %s), or take it out of .odd/requirements/%s.md if it is not part of '
                          'this ticket.' % (t, r, reqs[r][:120], r, ODD, r, t) for r in missing]
@@ -2734,6 +2777,20 @@ def cmd_new(a, root):
             raise Fail('%s.\ngive the command yourself: %s new %s "<outcome>" --proof "<command>" --in "<globs>"' % (said, ODD, a.slug))
         print(said)
     covers = ', '.join('%s:%s' % (k, r) if k else r for k, r in cover_ids(a.covers or ''))
+    if load_config(root)['cases'] == 'require':  # backlog 44: the requirements and their edge cases come first
+        known = sorted(m.group(1) for m in map(REQ_FILE.match, zlist(root, 'ls-files', '-z', '-co', '--exclude-standard',
+                                                                   '--', '.odd/requirements')) if m)
+        if not covers or not known:
+            raise Fail(CASES_HOW % ODD)
+        for t, r in cover_ids(a.covers):
+            if t is None and len(known) != 1:
+                raise Fail('covers: %s is ambiguous: there are requirements for %s; write <ticket>:%s' % (r, ' and '.join(known), r))
+            t = t or known[0]
+            if r not in (requirements(root, t) or {}):
+                raise Fail('covers: %s, but .odd/requirements/%s.md has no %s' % (r, t, r))
+            if not any(c.startswith(r + '.') for c in req_cases(root, t)):
+                raise Fail('%s has no edge case in .odd/requirements/%s.md: add at least one "%s.1: <a boundary input '
+                           'and what must happen>" line under it.\n%s' % (r, t, r, CASES_HOW % ODD))
     hidden = masked(a.proof)
     if hidden:
         raise Fail(hidden)

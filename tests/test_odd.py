@@ -4487,6 +4487,70 @@ class Owed(Repo):
         self.assertNotIn('owed:', self.read('.odd/outcomes/add.md'))
 
 
+class Cases(Repo):
+    """Backlog item 44: under "cases": "require" every requirement of the ticket is written down with its edge cases
+    before the work, and each case is named in the test that checks it; a proof built from the ticket's examples alone
+    passed calculators that were wrong on inputs nobody tested (evidence 19)."""
+    REQS = '# CALC-1\n\nR1: a caller of add(2, 3) receives 5\nR1.1: negative numbers: add(-2, -3) is -5\n- R1.2: zero: add(0, 0) is 0\n'
+    NAMED = TEST + '\n    def test_negative(self):  # R1.1\n        self.assertEqual(add(-2, -3), -5)\n'
+
+    def setUp(self):
+        Repo.setUp(self)
+        self.write('.odd/config.json', json.dumps({'cases': 'require'}))
+
+    def new(self, *more):
+        return self.odd('new', 'add', SENTENCE, '--proof', PROOF, '--in', 'calc.py', *more)
+
+    def test_new_refuses_without_requirements_and_says_how_to_write_them(self):
+        rc, out = self.new()
+        self.assertEqual(rc, 1, out)
+        self.assertIn('.odd/requirements/<ticket>.md', out)
+        self.assertIn('R1.1:', out)
+        self.assertFalse(os.path.exists(self.path('.odd/outcomes/add.md')))
+
+    def test_new_refuses_a_requirement_with_no_edge_case(self):
+        self.write('.odd/requirements/CALC-1.md', 'R1: a caller of add(2, 3) receives 5\n')
+        rc, out = self.new('--covers', 'R1')
+        self.assertEqual(rc, 1, out)
+        self.assertIn('R1 has no edge case', out)
+
+    def test_every_case_named_in_a_test_passes_and_is_reported(self):
+        self.write('.odd/requirements/CALC-1.md', self.REQS)
+        self.assertEqual(self.new('--covers', 'R1')[0], 0)
+        self.write('tests/test_calc.py', self.NAMED + '\n    def test_zero(self):\n        """R1.2"""\n        self.assertEqual(add(0, 0), 0)\n')
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+        self.assertIn('cases CALC-1: 2 of 2 named in a test', self.ok('gate'))
+
+    def test_a_case_no_test_names_fails_the_gate(self):
+        self.write('.odd/requirements/CALC-1.md', self.REQS)
+        self.assertEqual(self.new('--covers', 'R1')[0], 0)
+        self.write('tests/test_calc.py', self.NAMED)  # R1.2 is named nowhere; R1.20 or xR1.2 would not count
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+        out = self.no('gate')
+        self.assertIn('CALC-1 R1.2 (zero: add(0, 0) is 0) is named in no test', out)
+        self.assertNotIn('R1.1 (', out)
+
+    def test_an_outcome_that_covers_nothing_fails_the_gate(self):
+        self.write('.odd/requirements/CALC-1.md', self.REQS)
+        self.write('.odd/outcomes/add.md', '---\noutcome: %s\nproof: %s\nin: calc.py\n---\n' % (SENTENCE, PROOF))
+        self.write('tests/test_calc.py', self.NAMED)
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add')
+        self.assertIn('add covers no requirement', self.no('gate'))
+
+    def test_off_by_default_case_lines_change_nothing(self):
+        self.write('.odd/config.json', '{}')
+        self.write('.odd/requirements/CALC-1.md', self.REQS)
+        self.assertEqual(self.new('--covers', 'R1')[0], 0)
+        self.solve()
+        self.ok('done', 'add')
+        out = self.ok('gate')
+        self.assertNotIn('cases CALC-1', out)
+        self.assertIn('requirements CALC-1: 1 of 1 covered', out)
+
+
 class Claim(Repo):
     """The claim is generated, not written: `odd claim` states what the checks proved and, as plainly, what they did
     not, so a report cannot say more than the evidence. Open questions travel with the claim without stopping work."""

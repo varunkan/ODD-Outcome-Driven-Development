@@ -764,3 +764,12 @@ cost to build.
   ([evidence 18](docs/evidence/18-real-repositories.md)).
 - **Done** in the commit "B43: the claim is generated, not written" (`cmd_claim`, `caveats()`, `open:`; tests `Claim`;
   [DESIGN 3m](DESIGN.md)). Not measured: whether agents' reports follow the generated claim.
+
+### 44. Requirements with their edge cases
+- **Outcome:** under `"cases": "require"` the ticket's requirements are written down with their edge cases before the
+  work (`R1.1: ...`), and the gate fails until each case is named in a test.
+- **Evidence:** on the calculator task every odd calculator passed its proof and the hidden tests and had a defect
+  of its own on inputs nobody tested; Spec Kit's runs wrote 14 to 18 requirements and an edge-case section first and
+  had none ([evidence 19](docs/evidence/19-calculator-head-to-head.md)). The idea is Spec Kit's; odd enforces it.
+- **Done** in the commit "B44: requirements with their edge cases" (`req_cases()`, `coverage()`, `cmd_new`; tests
+  `Cases`; [DESIGN 3n](DESIGN.md); arm `bench/arms/odd-cases`). Measured next on the same calculator task.
