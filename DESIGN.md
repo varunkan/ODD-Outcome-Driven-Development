@@ -45,7 +45,9 @@ Free notes: questions asked and answered, decisions and why.
   version and the same refusal by an older one), `probe: <command>` (run in every passing attempt of a race or a
   cascade level; passing attempts must agree on its output, section 3b step 4; the same tool version and the same
   refusal by an older one), `entry: <command or .py file>` (where a user reaches the outcome; the proof must execute
-  it, section 3l; the same tool version and the same refusal by an older one).
+  it, section 3l; the same tool version and the same refusal by an older one), `open: <question> ;; <question>`
+  (written by `odd ask --open`: questions left open while the work goes on, stated with the claim, section 3m; the
+  same tool version and the same refusal by an older one).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -475,6 +477,34 @@ Needs a tool newer than 0.4.0 (backlog items 40 and 41).
   change general or to say with `odd-dispute:` or `assume:` that the proof forces it; the auto lane will not take
   such a change. Why: special-casing survives sealed and read-only tests (evidence 17, item 4). Not a gate, because
   a correct fix can share a constant with its test; it is a pointer for review.
+
+### 3m. The claim is generated, not written: `odd claim` and open questions
+
+Needs a tool newer than 0.4.0 (backlog item 43). An agent's own summary can say more than its checks showed; odd's
+answer is to take the summary away from the agent. `odd claim` runs the gate and prints three parts, all from the
+gate's own facts and none from anything the worker wrote down:
+
+- **PROVEN**: each verified outcome with its sentence, its proof command, and what the proof said with the change taken
+  out (or that the take-out check was skipped), and its strength.
+- **NOT PROVEN**: `caveats()`, one line each: a weak proof (surviving breaks, changed lines the proof never ran), steps
+  owed on the real system, open questions, look-alikes left untouched, repeated code, possible special-casing,
+  unchecked premises, outcomes parked or waiting, skipped take-out checks; and, when the gate fails, its problems.
+  These are the same lines that send a change to review in the auto lane (`lane()` calls `caveats()`), so the claim
+  and the lane cannot disagree.
+- **VERDICT**: `DONE`, `DONE, WITH n POINT(S) NOT PROVEN (listed above)`, or `NOT DONE (...)`. The exit code is the
+  gate's.
+
+The method text tells agents to report `odd claim`'s output and nothing beyond it; after a passing
+`done` the hint is `next: report with odd claim`.
+
+**Open questions.** `odd ask <slug> "<question>" --open` records a question in `open:` without stopping the outcome
+(plain `odd ask` still stops it). The gate prints it, the claim lists it under NOT PROVEN, and the auto lane sends
+the change to review until the line is answered and deleted. Why: on real issues every false "done" odd let through
+fitted one reading of a ticket that left the other open; the questions could be found before any code (5 of 6 runs),
+but stopping on every question blocked half of the work that was fine (12 of 24 runs;
+[evidence 18](docs/evidence/18-real-repositories.md)). So the question no longer stops the work, and the claim no
+longer hides it. Limits: the claim is exactly as complete as the checks that ran; whether agents' reports follow it,
+and whether readers are misled less, is not measured yet.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 

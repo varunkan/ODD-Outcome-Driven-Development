@@ -754,3 +754,13 @@ cost to build.
   test setup (conftest files, test data) applies.
 - **Evidence:** 28 of 29 pytest, requests, pylint and sphinx candidates could not run their own test file with the real
   fix on one bare Python 3.13 (docutils, astroid not installed), so item 18b was not testable here.
+
+### 43. The claim is generated, not written
+- **Outcome:** a report cannot say more than the checks showed: `odd claim` prints what is proven, what is not, and
+  one verdict line, from the gate's facts; `odd ask --open` leaves a question open without stopping the work, and the
+  claim carries it.
+- **Evidence:** on real issues odd's false "done"s fitted one reading of a ticket that left another open; asking first
+  found those questions (5 of 6 runs) but stopping on each blocked work that was fine (12 of 24 runs)
+  ([evidence 18](docs/evidence/18-real-repositories.md)).
+- **Done** in the commit "B43: the claim is generated, not written" (`cmd_claim`, `caveats()`, `open:`; tests `Claim`;
+  [DESIGN 3m](DESIGN.md)). Not measured: whether agents' reports follow the generated claim.

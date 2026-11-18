@@ -81,7 +81,7 @@ DEFAULTS = {
     'checks': [],          # backlog 24: standing project rules, [{"name", "cmd", "in"}], run by every gate, output shown
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume', 'probe', 'entry')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume', 'probe', 'entry', 'open')
 KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
 REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
 HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
@@ -2273,6 +2273,26 @@ def _strong(cfg, o):
     return why
 
 
+def caveats(cfg, outs, skips=()):
+    """What the checks of a change did NOT show, one line each: per verified outcome its weak proof, owed steps, open
+    questions, look-alikes, repeated code, possible special-casing and unchecked premises; outcomes parked or waiting;
+    skipped take-out checks. The auto lane sends a change with any of these to review, and `odd claim` states them."""
+    why = []
+    for o in outs:
+        if o['state'] == 'ok':
+            why += _strong(cfg, o)
+            why += ['%s: steps are owed on the real system (%s)' % (o['slug'], '; '.join(o['owed']))] if o.get('owed') else []
+            why += ['%s: open question: %s' % (o['slug'], q) for q in o.get('open', [])]
+            why += ['%s: %d look-alike(s) of the bug left untouched' % (o['slug'], len(o['lookalikes']))] if o.get('lookalikes') else []
+            why += ['%s: the change repeats existing code' % o['slug']] if o.get('repeats') else []
+            why += ['%s: the change may special-case the proof (%s)' % (o['slug'], '; '.join(o['copied'][:3]))] if o.get('copied') else []
+            why += ['%s: unchecked premise(s): %s' % (o['slug'], '; '.join(o['premises']['unchecked']))] if (
+                o.get('premises') or {}).get('unchecked') else []
+        elif o['state'] in ('parked', 'asked'):
+            why.append('%s is %s' % (o['slug'], 'parked' if o['state'] == 'parked' else 'waiting for an answer'))
+    return why + ['%s skipped the take-out check' % k.split(' - ', 1)[0] for k in skips]
+
+
 def lane(root, s, facts, skips, allowed):
     """Backlog item 11, the auto-merge lane: [] when the change may merge with its outcomes and proofs read, else
     each reason it goes to review. A disqualifier is never weighed against the rest. odd only says; it never merges."""
@@ -2281,18 +2301,7 @@ def lane(root, s, facts, skips, allowed):
         why.append('the gate did not pass')
     if not any(o['state'] == 'ok' for o in outs):
         why.append('no verified outcome in this change')
-    for o in outs:
-        if o['state'] == 'ok':
-            why += _strong(cfg, o)
-            why += ['%s: steps are owed on the real system (%s)' % (o['slug'], '; '.join(o['owed']))] if o.get('owed') else []
-            why += ['%s: %d look-alike(s) of the bug left untouched' % (o['slug'], len(o['lookalikes']))] if o.get('lookalikes') else []
-            why += ['%s: the change repeats existing code' % o['slug']] if o.get('repeats') else []
-            why += ['%s: the change may special-case the proof (%s)' % (o['slug'], '; '.join(o['copied'][:3]))] if o.get('copied') else []
-            why += ['%s: unchecked premise(s): %s' % (o['slug'], '; '.join(o['premises']['unchecked']))] if (
-                o.get('premises') or {}).get('unchecked') else []
-        elif o['state'] in ('parked', 'asked'):
-            why.append('%s is %s' % (o['slug'], 'parked' if o['state'] == 'parked' else 'waiting for an answer'))
-    why += ['%s skipped the take-out check' % k.split(' - ', 1)[0] for k in skips]
+    why += caveats(cfg, outs, skips)
     n = sum(min(v, BIG) for v in sizes(root, s['base'], s['product']).values())
     if n > cfg['auto_max_lines']:
         why.append('%s changed product line(s), more than "auto_max_lines" %d'
@@ -2502,8 +2511,12 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
                 if cfg['owed'] == 'enforce':
                     problems.append('%s owes %d step(s) on the real system ("owed": "enforce"): %s\n    close each with '
                                     'its evidence: %s owed %s "<step>" --evidence <file>' % (o.slug, len(owed), '; '.join(owed), ODD, o.slug))
+            opens = [x.strip() for x in o.get('open').split(' ;; ') if x.strip()]
+            if opens:  # asked with --open: the work goes on, and the question travels with the claim
+                lines.append('  open    %s: %d question(s) left open: %s' % (o.slug, len(opens), ' | '.join(opens)))
             fact(o, 'ok', **dict({k: res[k] for k in RESULT if k in res}, **dict(
-                {'kind_was': 'bug'} if o.slug in changed_kind else {}, **({'owed': owed} if owed else {}))))
+                {'kind_was': 'bug'} if o.slug in changed_kind else {}, **dict({'owed': owed} if owed else {},
+                                                                              **({'open': opens} if opens else {})))))
         except Fail as e:
             problems.append('%s: %s' % (o.slug, e))
             fact(o, 'fail', why=str(e))
@@ -2588,6 +2601,7 @@ def gate(root, base_arg=None, recompute=False, say=lambda s: None, facts=None):
     tail += ' (%d changed kind from bug: %s)' % (len(changed_kind), ', '.join(changed_kind)) if changed_kind else ''
     waiting = [o.slug for o in s['inplay'] if o.asked and not o.parked]
     tail += ' (%d waiting for an answer: %s)' % (len(waiting), ', '.join(waiting)) if waiting else ''
+    facts['not_proven'] = caveats(cfg, outs, skips)
     if cfg['auto_lane']:
         reasons = lane(root, s, facts, skips, allowed)
         facts.update(lane='review' if reasons else 'auto', lane_reasons=reasons)
@@ -4090,11 +4104,55 @@ def cmd_ask(a, root):
     if len(q) < 15 or not q.endswith('?'):
         raise Fail('ask one precise question, ending in "?", that someone can answer without asking you back')
     o = Outcome.load(root, a.slug)
+    if a.open:
+        o.f['open'] = ' ;; '.join([x for x in o.get('open').split(' ;; ') if x.strip()] + [q.replace(' ;; ', '; ')])
+        o.save()
+        print('%s: question left open; carry on with the reading you chose. It is stated with the claim (%s claim) '
+              'and keeps the change out of the auto lane until its "open:" line in %s is answered and deleted.'
+              % (a.slug, ODD, o.rel))
+        return
     o.f['asked'] = q
     o.save()
     print('%s: asked, waiting for an answer. Put the question in your report and stop work on this outcome: the gate '
           'reports it as waiting, not failed, and it covers no files until answered. To answer: write the answer into '
           'the outcome (its sentence, proof or notes), then delete the "asked:" line of %s.' % (a.slug, o.rel))
+
+
+def cmd_claim(a, root):
+    """The claim, generated from the checks that ran instead of written by whoever did the work: what is proven (each
+    outcome with its proof and what the proof said without the change), what is not (caveats), and one verdict line.
+    Exit code and verdict are the gate's; a report that pastes this cannot say more than the evidence."""
+    facts = {}
+    try:
+        code, lines = gate(root, a.base, a.recompute, lambda s: None, facts)
+        problems = [l.strip() for l in lines[lines.index(next(x for x in lines if x.startswith('FAIL'))) + 1:]] if code else []
+    except (Fail, CouldNotRun) as e:
+        if isinstance(e, CouldNotRun):
+            raise
+        code, problems = 1, [str(e)]
+    outs = facts.get('outcomes', [])
+    print('%s claim: generated from the checks that ran. Report this, and nothing it does not say.' % ODD)
+    print('PROVEN')
+    proven = [o for o in outs if o['state'] == 'ok']
+    for o in proven:
+        st = o.get('strength') or {}
+        print('  %s: %s\n      proof: %s\n      %s%s' % (
+            o['slug'], o['outcome'], o['proof'],
+            'the take-out check was skipped (%s)' % o['skip'] if o.get('skip') else
+            'fails without the change: %s' % o.get('red_says', ''),
+            '; strength %d of %d' % (st['killed'], st['killed'] + len(st.get('survivors', []))) if st else ''))
+    if not proven:
+        print('  nothing')
+    print('NOT PROVEN')
+    missing = facts.get('not_proven', []) + problems
+    for m in missing:
+        print('  - ' + m.replace('\n', '\n    '))
+    if not missing:
+        print('  nothing: every check that ran is listed above')
+    n = len(facts.get('not_proven', []))
+    print('VERDICT: ' + ('NOT DONE (the gate did not pass; the reasons are above)' if code else
+                         'DONE, WITH %d POINT%s NOT PROVEN (listed above)' % (n, '' if n == 1 else 'S') if n else 'DONE'))
+    return code
 
 
 def cmd_owed(a, root):
@@ -4272,7 +4330,7 @@ For any change of more than a few lines, on a branch of its own:
 3. Make the change, staying inside the files the outcome names. If more are needed, add them to `in:` in
    `.odd/outcomes/<slug>.md`. Work that is not part of this outcome is a later outcome.
 4. Finish with `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change
-   taken out, and passes again. Report done only when both exit 0, with what they printed. Once `done` passes with
+   taken out, and passes again. Report `odd claim`'s output and nothing beyond it. Once `done` passes with
    full proof strength and `odd gate` passes, stop and report; do not plan, review or refactor further in this outcome.
 5. When you are blocked, or {park_when}
    (a test contradicts the outcome, or a pass would take special-casing the test's inputs or editing, weakening or
@@ -4285,7 +4343,7 @@ Decisions only the owner can make (credentials, billing, deploys, releases, dele
 the owner; decide the rest yourself and note why in the outcome file. Do not edit `.odd/odd.py` or
 `.odd/config.json`.
 '''.replace('{park_when}', PARK_WHEN)
-DONE_NEXT = 'next: report the outcome as done (odd gate passed)'  # step 4 of METHOD: stop when proven
+DONE_NEXT = 'next: report with `odd claim` (odd gate passed)'  # step 4 of METHOD: stop when proven
 BEGIN, END = '<!-- odd:begin -->', '<!-- odd:end -->'
 CI_HELP = '''
 To make the gate count, add it as the last step of your existing test job. On GitHub Actions, one step:
@@ -4570,6 +4628,11 @@ def main(argv=None):
     s = sub.add_parser('ask')
     s.add_argument('slug')
     s.add_argument('question', help='one precise question; delete the "asked:" line once it is answered')
+    s.add_argument('--open', action='store_true', help='leave the question open and carry on: it is stated with the '
+                   'claim instead of stopping the outcome')
+    s = sub.add_parser('claim')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s.add_argument('--recompute', action='store_true', help='recompute every check, as CI does')
     s = sub.add_parser('ship')
     s.add_argument('artifact')
     s.add_argument('--base', help='measure from this revision instead of the target branch')

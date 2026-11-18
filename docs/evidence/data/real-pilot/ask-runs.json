@@ -1,0 +1,462 @@
+[
+ {
+  "task": "sympy__sympy-21930",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.01144,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for latex(AntiSymmetricTensor('v',(a,),(i,))**2), should the result be leave it as `v^{a}_{i}^{2}` (the request is dagger-only), or print `{v^{a}_{i}}^{2}` (the fix covers any double-script operator in the module)?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-21930",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.0086,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for latex(Bd(x)) on its own (no power), should the result be stays \"b^\\dagger_{x}\" as test_create pins, and only powers get braces, or becomes \"{b^\\dagger_{x}}\" for every creation operator, and test_create is updated?",
+   "open question: for latex(Fd(x)**2), should the result be becomes \"{a^\\dagger_{x}}^{2}\", matching the boson fix across the module, or stays \"a^\\dagger_{x}^{2}\", fixing only the boson operator?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-21930",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00647,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `latex(Bd(i))` with no power, should the result be stays `b^\\dagger_{i}`, as test_create pins it, or becomes `{b^\\dagger_{i}}` because the braces move into `CreateBoson._latex`?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-23950",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00472,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for Contains(x, Reals).as_set(), should the result be returns S.Reals (the set of x satisfying the Contains, so Piecewise's c.as_set().as_relational(x) works), or keeps raising NotImplementedError, as test_as_set pins for the related Contains(x, FiniteSet(y)), and Piecewise is fixed separately?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-23950",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00576,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `Contains(x, Reals).as_set()` with `x` a plain Symbol, should the result be raises `NotImplementedError`, as `test_as_set` pins for the related `Contains(x, FiniteSet(y))`, or returns a set such as `S.Reals`, changing that test?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-23950",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00457,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for Contains(x, FiniteSet(y)).as_set() (existing test_as_set pins NotImplementedError), should the result be keep raising NotImplementedError for this case, so test_as_set still passes, or return FiniteSet(y), the set of x satisfying the condition, and update test_as_set?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-20590",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.02829,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-20590",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00687,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for sympy.Matrix([1, 2]).__dict__ (Matrix, Vector and other non-Basic Printable classes share the Printable base), should the result be AttributeError, because the fix goes on Printable and every Printable class loses __dict__, or the attribute still exists for these classes, because the request only covers Symbol and only Basic subclasses are in scope?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-20590",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00774,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `sympy.Integer(2).__dict__` (a non-Symbol Basic instance), should the result be AttributeError, as in 1.6.2, because the fix is at the `Printable` root, or `{}` still returned, because only `Symbol` is fixed?",
+   "open question: for `Matrix([1]).__dict__` (a Printable that is not Basic), should the result be `{}` unchanged, because only Basic-side classes are in scope, or AttributeError, because the fix at `Printable` also removes `__dict__` from Matrix, Vector and Dyadic?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-21847",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": false,
+  "claim": "DONE",
+  "false_done": true,
+  "cost_usd": 0.02646,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-21847",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00905,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for itermonomials([x, y], 3, [1, 1]), should the result be TypeError, unchanged, since the request does not cover this input, or ValueError('Argument sizes do not match' or similar), matching the existing list-max/int-min validation in test_monomials.py:102-107?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-21847",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.0233,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-22456",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.01041,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for String('foo').args, should the result be ('foo',) raw text, breaking atoms() on Type('MyType'), or a Basic wrapper of the text, keeping args Basic-only?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-22456",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00735,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for String('foo').args, should the result be ('foo',) as a plain str, so func(*args) == String('foo') with args non-Basic, or (Symbol('foo'),) Basic args, which changes the atoms() result pinned by test_cnodes.py:81?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-22456",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.01188,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `sizeof('unsigned int').atoms()` after `String.args` changes, should the result be `{String('unsigned int'), String('sizeof')}` still, as test_cnodes.py:81 pins, or the wrapper's Atom instances also appear in `atoms()`, breaking that test?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-22714",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.01009,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `with sp.evaluate(False): sp.S('Point2D(Rational(1,2),Integer(2))')`, should the result be returns a Point2D without error (the \"crashes unexpectedly\" wording covers any Point2D under evaluate(False)), or still raises `TypeError: invalid input: 2*1` (only the Imaginary message is fixed)?",
+   "open question: for `with sp.evaluate(False): Point2D(Integer(1),Integer(2))` (direct constructor, no parser), should the result be returns a Point2D, same as the S() path, or still raises `Imaginary coordinates are not permitted.` (the fix is only in the parser path)?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-22714",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.01318,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `with evaluate(False): S('Point2D(1/2,3)')`, should the result be returns Point2D with first coordinate unevaluated Mul(1, Pow(2,-1)), no crash, or returns Point2D with first coordinate Rational(1,2), same as without evaluate(False)?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-22714",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00828,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `with evaluate(False): Point2D(x, 2)`, should the result be no error, the fix covers symbolic coordinates too, or still raises `Imaginary coordinates are not permitted.`, the fix is limited to the Integer case?",
+   "open question: for `with evaluate(False): Point2D(I, 2)`, should the result be raises `ValueError: Imaginary coordinates are not permitted.` as in default mode, or returns a Point2D without error because the check is skipped under `evaluate(False)`?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-23534",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.03494,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-23534",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.01802,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-23534",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.02001,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-23824",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.03543,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-23824",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.02853,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-23824",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.02993,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-24443",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.03504,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-24443",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.04229,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-24443",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.03035,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": []
+ },
+ {
+  "task": "sympy__sympy-24539",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 1,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00434,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `f.as_expr(U)` on the 3-generator ring (symbols x,y,z), should the result be `ValueError: not enough symbols, expected 3 got 1` (what the existing test pins), or an expression using `u` for x and the ring's own `y`, `z` for the remaining generators?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-24539",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 2,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00611,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `f.as_expr(X)` with f in ZZ[x,y,z] and X=Symbol(\"u\"), should the result be raises ValueError (as pinned by test_rings.py:268 and test_fields.py:95), or returns 3*u**2*y - u*y*z + 7*z**3 + 1 by filling missing symbols from the ring?"
+  ]
+ },
+ {
+  "task": "sympy__sympy-24539",
+  "arm": "odd-ask",
+  "model": "haiku",
+  "repeat": 3,
+  "passed": false,
+  "claim": "NOT DONE",
+  "false_done": false,
+  "cost_usd": 0.00837,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "44b27a591a20eef744117351f3eff12378205670",
+  "questions": [
+   "open question: for `f = x*y` in `ring(\"x,y\", ZZ)`, call `f.as_expr(X, X)` with `X = Symbol(\"u\")`, should the result be `u**2` (repeated symbols are substituted and the monomials combine), or `ValueError` (symbols must be distinct, as the ring's generators are)?"
+  ]
+ }
+]

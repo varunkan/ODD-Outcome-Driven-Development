@@ -133,6 +133,69 @@ is the machine, not the method: SWE-bench gives every task its own environment w
 dependencies, and this harness runs every project in one bare Python 3.13. Making the claim testable needs those
 per-task environments (BACKLOG item 42).
 
+## A first fix tried: a blind second proof (odd-dual), 6 runs
+
+Idea, from applying the "several independent minds" step of Google's AI co-scientist to the requirement rather than to
+the code: a second cheap session writes its own test from the ticket alone, no coding attempt sees it, and the arm
+says DONE only when the result passes both proofs (`bench/arms/odd-dual`). Fixed before the run: it succeeds if it
+makes 0 false DONE in 6 runs on the two tasks that held every pilot failure, where cascade made 5 of 6.
+
+| task | cascade (pilot) | odd-dual |
+|---|---|---|
+| 21930 | f f f | f n f |
+| 23950 | f P f | n* P f |
+
+**Not met: 3 false DONE of 6** (cascade 5 of 6), at a median $0.044 a run against cascade's $0.019; $0.29 in all, harness
+at e6e4d00, none contaminated ([data](data/real-pilot/dual-runs.json)). Six runs: a hint in either direction.
+
+- In every run a blind proof was written and failed on the unchanged code, so the second reader always took part.
+- **It caught one** (23950 run 1): the blind proof failed on the first result and became a second outcome; the
+  attempts then disputed one of its assertions and the arm said NOT DONE. But the hidden tests *passed* that result
+  (n* above): the second reader refused correct work. Its test asked for more than the hidden test did.
+- **It missed three**: in 21930 runs 1 and 3 and 23950 run 2 the blind proof passed on a result the hidden tests
+  fail. In 23950 run 2 the blind proof did test four kinds of set, not only the ticket's `Reals`, and still passed.
+  Two cheap readers of the same ticket mostly read it the same way.
+- 21930 run 2 ended NOT DONE for an unrelated reason: the first proof was disputed twice.
+
+So a second cheap reader is not enough: it lowers false DONE a little, costs about twice as much, and can refuse
+correct work. Not built into odd. What it leaves open: a stronger second reader, and asking about what a ticket
+leaves unsaid before any proof is written.
+
+## A second fix tried: ask before proving (odd-ask), 30 runs
+
+Ruled by the judge after odd-dual: the missed blind proofs sided with the other reading rather than under-testing, and
+the pilot had already shown a stronger reader (plain Sonnet) reading these tickets the same way; but both gaps could
+be put as questions before any code. `bench/arms/odd-ask` runs a cheap session first that names what the ticket leaves
+open. A gap counts only with one concrete input and two different results both consistent with the ticket, at most
+two; with a gap the arm ends with the questions and NOT DONE, and no code is written; without one it runs as
+odd-cascade. Two targets, fixed before the runs.
+
+**Target 1, the two failing tasks (6 runs): met.** At most 1 false DONE: 0 (cascade 5, odd-dual 3). At least 4 runs
+asking a question that names the gap the hidden tests turn on, rated by a judge shown only the ticket, the questions
+and the failing assertions: 5; the other run asked about a nearby case. Caveat: on 23950 two of those questions ask
+whether `as_set()` should return the set at all, which the ticket already says; they were rated as naming the gap
+because earlier fixes failed that very assertion.
+
+**Target 2, the other eight tasks (24 runs; cascade passed 23): not met.** Asks at most 2: **12**. Passed at least 22:
+**11**. False DONE 0: **1**.
+
+| task | odd-ask (P passed, a asked, f false DONE) |
+|---|---|
+| 20590 | P a a |
+| 21847 | f a P |
+| 22456, 22714, 24539 | a a a (each) |
+| 23534, 23824, 24443 | P P P (each) |
+
+By the wording fixed in advance: **it asks too often to use: not built.** A cheap session told to look for gaps finds
+one in half the runs on tasks a plain agent simply gets right; the materiality rule did not hold it back. All 30 runs
+cost $0.50 (harness at 44b27a5, none contaminated, [data](data/real-pilot/ask-runs.json),
+[blind rulings](data/real-pilot/ask-blind-rulings.json)); a run that asks costs a median $0.008.
+
+What the two attempts show together: the questions that would have prevented the false DONEs can be found before any
+code, cheaply (5 of 6), but not yet told apart from questions that do not matter (12 of 24). Stopping on every
+question trades false DONE for undelivered work. Open: asking without stopping, so the work is delivered and the
+open questions travel with the claim.
+
 ## How it was run
 
 `bench/realtasks.py` (committed) builds the tasks from the dataset rows; the judge ruled the design (arms, a smoke run

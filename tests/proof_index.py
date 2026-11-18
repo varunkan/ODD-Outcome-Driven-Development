@@ -24,9 +24,9 @@ THEMES = [
      'In CI the tool, its settings and the base come from the target branch, and nothing recorded is trusted.',
      ['HappyPath', 'Exemptions', 'Checks', 'RegressionGuard', 'Distribution', 'ReviewSummary']),
     ('Honest about the real system',
-     'A proof says what it ran against, steps owed on a device or by a person keep work open, and a release is bound '
-     'to the gated commit.',
-     ['Target', 'Owed', 'Ship', 'EscapedDefects']),
+     'The claim is generated from the checks that ran and states what is not proven; a proof says what it ran against, '
+     'steps owed on a device or by a person keep work open, and a release is bound to the gated commit.',
+     ['Claim', 'Target', 'Owed', 'Ship', 'EscapedDefects']),
     ('More correct work, not only checked work',
      'Aids that catch weak proofs, missing requirements, wrong proofs and leftovers before review.',
      ['ProofStrength', 'Coverage', 'AmbiguityStop', 'KindTemplates', 'FailureFeedback', 'AttemptFeedback', 'InertFiles',
