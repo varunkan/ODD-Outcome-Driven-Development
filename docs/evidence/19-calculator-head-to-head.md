@@ -5,6 +5,10 @@ head-to-head on a calculator with Haiku 4.5 and an LLM judge to decide. Data: [d
 
 ## Answer
 
+**Latest (fourth round):** with edge cases and tool-made inputs both required, 2 of 3 odd calculators match Spec
+Kit's on all 142 frozen probes and 1 has a rounding defect; $1.19 for three, nobody answering
+([the fourth round](#fourth-round-as-run)).
+
 **Two rulings, and they differ.** Left alone, odd won on delivery and cost. With a person saying "continue" to Spec Kit,
 a second blind judge chose Spec Kit, narrowly, for the better software, and odd for cost and for finishing unaided
 ([the second round](#second-round-spec-kit-told-to-continue)).
@@ -165,6 +169,37 @@ of these hold; one calculator with a defect counts as partly; anything else as n
 - the three runs cost at most $1.36 (twice the first round);
 - in at least 2 of 3 runs the outcome declares `reject:` with an exit code, not `none`.
 
+### Fourth round, as run
+
+Three runs of arm `odd-reach` on Haiku 4.5, nobody answering ([later-rounds.json](data/calculator/later-rounds.json)).
+
+| | odd | edge cases required | **edge cases and reach required** | Spec Kit, continued |
+|---|---|---|---|---|
+| hidden tests pass | 3 of 3 | 3 of 3 | 3 of 3 | 3 of 3 |
+| calculators wrong on a frozen probe | 3 of 3 | 3 of 3 | **1 of 3** | 0 of 3 |
+| false DONE | 0 | 0 | 0 | 0 |
+| needed a person | 0 | 0 | 0 | 2 runs |
+| cost, three runs | $0.68 | $0.82 | $1.19 ($0.45, $0.32, $0.41) | $2.65 |
+| time a run | 76, 89, 574 s | 86, 99, 147 s | 176, 138, 205 s | 336, 394, 296 s |
+
+**By the numbers fixed beforehand: partly.** Three of the four conditions hold: the hidden tests pass in all three
+runs with no false DONE and nobody answering, the cost is under $1.36, and all three runs declared
+`entry: calc.py` and `reject: 2` after the tool's refusal told them how. The first does not: one calculator of three
+is wrong on a frozen probe.
+
+- **The defect the check was built for is gone in 3 of 3** (it was in 3 of 3 the round before). In runs 1 and 3 the
+  check failed first, on `5 / 0)` and on `1 / 0)`, and passed after the agent fixed the program; run 2's calculator
+  never had the defect. Each run ended with 108 to 141 generated inputs rejected.
+- **Runs 2 and 3 differ on none of the 142 probes**, the same as the Spec Kit calculators.
+- **Run 1 has a different defect**: it rounds to 10 decimal places where the ticket says 10 significant digits
+  (`22/7` prints `3.1428571429`, not `3.142857143`; four probes). It is a wrong value with exit 0, which this check
+  does not judge and its design section says so. No earlier odd run had it; with three runs each, that it appeared
+  here says nothing about the setting.
+
+What this supports: on this task, making the tool supply the inputs removed the one defect that writing more edge
+cases had not, at $0.40 a calculator against Spec Kit's $0.88, with no person. What it does not: that odd's
+calculators are now free of defects (one of three is not), or anything beyond this task and three runs.
+
 ## What to keep in mind
 
 - **Three runs each, one task, one model.** 3 of 3 against 1 of 3 is not statistically significant.
@@ -176,4 +211,4 @@ of these hold; one calculator with a defect counts as partly; anything else as n
   2 to 5 times a plain agent's cost.
 - **odd's own check is not what made the difference here**: nothing claimed done falsely in either arm. The
   difference was that one process finished and the other stopped.
-- The first round cost $2.10, the two continued Spec Kit runs $1.22 and the edge-case rerun $0.82.
+- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82 and the fourth round $1.19.

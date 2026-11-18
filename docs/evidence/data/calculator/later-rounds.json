@@ -1,0 +1,88 @@
+[
+ {
+  "arm": "odd-cases",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "cost_usd": 0.21025970000000005,
+  "wall_seconds": 86.4,
+  "arm_check": 0,
+  "contaminated": false
+ },
+ {
+  "arm": "odd-cases",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "cost_usd": 0.22913120000000006,
+  "wall_seconds": 98.8,
+  "arm_check": 0,
+  "contaminated": false
+ },
+ {
+  "arm": "odd-cases",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "cost_usd": 0.3824244000000001,
+  "wall_seconds": 147.2,
+  "arm_check": 1,
+  "contaminated": false
+ },
+ {
+  "arm": "odd-reach",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "cost_usd": 0.45444249999999997,
+  "wall_seconds": 175.6,
+  "arm_check": 0,
+  "contaminated": false,
+  "entry": "calc.py",
+  "reject": "2",
+  "check_failed_first": "calc.py '5 / 0)' exited 1, not 2",
+  "generated_inputs_at_the_end": 108,
+  "frozen_probes_wrong": [
+   "22/7 -> 3.1428571429",
+   "1/4096 -> 0.0002441406",
+   "1000000/3 -> 333333.333333333",
+   "3.14159265358979 -> 3.1415926536"
+  ]
+ },
+ {
+  "arm": "odd-reach",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "cost_usd": 0.3235267000000001,
+  "wall_seconds": 138.4,
+  "arm_check": 0,
+  "contaminated": false,
+  "entry": "calc.py",
+  "reject": "2",
+  "check_failed_first": null,
+  "generated_inputs_at_the_end": 117,
+  "frozen_probes_wrong": []
+ },
+ {
+  "arm": "odd-reach",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "cost_usd": 0.4123185999999999,
+  "wall_seconds": 205.1,
+  "arm_check": 0,
+  "contaminated": false,
+  "entry": "calc.py",
+  "reject": "2",
+  "check_failed_first": "calc.py '1 / 0)' exited 1, not 2",
+  "generated_inputs_at_the_end": 141,
+  "frozen_probes_wrong": []
+ }
+]
