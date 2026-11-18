@@ -1,0 +1,122 @@
+[
+ {
+  "arm": "odd",
+  "label": "B1",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "models_served": [
+   "claude-haiku-4-5"
+  ],
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.2956,
+  "turns": 1,
+  "seconds": 573.5,
+  "changed_lines": 506,
+  "files_changed": 3,
+  "contaminated": true,
+  "error": null,
+  "bench_commit": "c17e96106e194a2fee1e064817a283940f10f795"
+ },
+ {
+  "arm": "odd",
+  "label": "B2",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "models_served": [
+   "claude-haiku-4-5"
+  ],
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.2205,
+  "turns": 34,
+  "seconds": 89.1,
+  "changed_lines": 488,
+  "files_changed": 3,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "c17e96106e194a2fee1e064817a283940f10f795"
+ },
+ {
+  "arm": "odd",
+  "label": "B3",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "models_served": [
+   "claude-haiku-4-5"
+  ],
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 0.163,
+  "turns": 21,
+  "seconds": 75.5,
+  "changed_lines": 479,
+  "files_changed": 3,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "c17e96106e194a2fee1e064817a283940f10f795"
+ },
+ {
+  "arm": "speckit",
+  "label": "A1",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "models_served": [
+   "claude-haiku-4-5"
+  ],
+  "passed": false,
+  "claim": "none",
+  "false_done": false,
+  "cost_usd": 0.1242,
+  "turns": 19,
+  "seconds": 59.5,
+  "changed_lines": 221,
+  "files_changed": 2,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "c17e96106e194a2fee1e064817a283940f10f795"
+ },
+ {
+  "arm": "speckit",
+  "label": "A2",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "models_served": [
+   "claude-haiku-4-5"
+  ],
+  "passed": true,
+  "claim": "DONE",
+  "false_done": false,
+  "cost_usd": 1.1442,
+  "turns": 94,
+  "seconds": 394.4,
+  "changed_lines": 2773,
+  "files_changed": 22,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "c17e96106e194a2fee1e064817a283940f10f795"
+ },
+ {
+  "arm": "speckit",
+  "label": "A3",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "models_served": [
+   "claude-haiku-4-5"
+  ],
+  "passed": false,
+  "claim": "none",
+  "false_done": false,
+  "cost_usd": 0.1515,
+  "turns": 20,
+  "seconds": 65.8,
+  "changed_lines": 235,
+  "files_changed": 3,
+  "contaminated": false,
+  "error": null,
+  "bench_commit": "c17e96106e194a2fee1e064817a283940f10f795"
+ }
+]
