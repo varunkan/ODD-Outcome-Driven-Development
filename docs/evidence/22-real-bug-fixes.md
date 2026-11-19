@@ -111,3 +111,33 @@ What four runs can and cannot say:
 
 **What it would take to answer the question.** First, the cause of the grade that does not reproduce; then about
 $20 for the 26 pairs with the money limit raised to where runs finish, or about $9 for the first 12.
+
+## Second attempt, amended before it is run
+
+The owner approved continuing, with a hard cap of $9.00 for this attempt. The same judge amended the design
+([ruling-2.md](data/real/ruling-2.md)) before any further run. What changes:
+
+- **Limits.** `--max-budget-usd 0.50` (it was 0.40: both sphinx runs were cut off at $0.41, already passing, before
+  they could report), `--jobs 2` throughout, $0.53 reserved for every run. Turns and time are unchanged.
+- **Tasks 1 and 2 are run again** as pairs 1 and 2. The first attempt's four runs stay as reported above and are
+  never pooled: the money limit an agent sees has changed, and one of them carries the grade that does not
+  reproduce.
+- **Every run is graded twice.** The harness now grades in a temporary folder of its own and keeps the grade's last
+  lines; after all runs, [regrade.py](../../bench/regrade.py) grades each kept tree once more. The run-time grade
+  is the grade of record. A run whose two grades differ is a disputed run: every count is computed under both
+  readings, a verdict of shown needs every condition under both, and where the readings disagree the weaker verdict
+  stands. Three or more disputed runs: *not tested: this harness's grade does not reproduce*.
+- **What $9.00 buys.** It guarantees 8 pairs. Twelve are likely and not certain: pair 12 starts only if the first
+  11 cost $7.94 or less. With fewer than 12 the verdict is *not tested* and counts only are reported; the minimum
+  of 12 pairs and 5 false DONEs from `plain-tests` stands.
+- **Two threats are added:** the limits were raised after the first attempt's costs were seen, and the cause of the
+  grade that did not reproduce was never found, so the new safeguards guard against it without explaining it.
+
+Nothing else changes: the hypothesis, the deciding number, the 26 tasks and their order, the arms, the model, the
+verdict wordings and the take-out number are as first ruled. The judge's expectation, again as an inference: *not
+tested* is still the likeliest outcome.
+
+### Results of the second attempt
+
+Not run yet.
+
