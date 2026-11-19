@@ -363,6 +363,36 @@ def blind_proof(ticket, model, said):
     return kept
 
 
+SETTLE = '''An earlier session in this directory finished the request below and its checks passed. `odd second` then had a
+second implementation written apart, from the same outcome and tests, and ran both on inputs made from the tests'
+examples. Both pass the tests, and they do not behave the same:
+
+%s
+
+For each input above, decide from the request which result is right. Add it, with the right result, to the tests the
+proof runs; fix the program if it is the one that is wrong; then run `python3 .odd/odd.py done <slug>` and `python3
+.odd/odd.py gate` again. "attempt yours" is the program in this directory. The request:
+
+'''
+
+
+def second_flow(odd, model, prompt, first, said):
+    """The odd-second arm after its first session said DONE: `odd second` for each outcome that names an entry point;
+    where the two implementations differ, one more session in this directory settles the differing inputs. Returns
+    the final message: the settling session's when one ran, else the first session's."""
+    final = first
+    for path in stated_outcomes():
+        slug = os.path.basename(path)[:-3]
+        if outcome_field(path, 'parked') or not outcome_field(path, 'entry'):
+            continue
+        code, out = sh(odd + ['second', slug, '--agent', session_command(model, 'second'), '--base', 'main'], said)
+        if code == 1:
+            found = '\n'.join(l.strip() for l in out.splitlines() if 'passing attempts differ on' in l)
+            _, result = session(SETTLE % found + prompt, model, 'settle')
+            final = result.get('result') if result and isinstance(result.get('result'), str) else final
+    return final
+
+
 def odd_flow(mode, prompt, ticket=''):
     """Returns the final message (ending in the RESULT line) of the odd-race, odd-cascade, odd-spec or odd-dual arm.
     odd-dual is odd-cascade plus a blind second proof (blind_proof): after the gate passes, that test runs on the
@@ -387,6 +417,8 @@ def odd_flow(mode, prompt, ticket=''):
     if claim != 'DONE' or result.get('subtype') in CAPS or result.get('is_error'):
         return first
     said = asked + ['first session (%s): claim %s' % (cheap, claim)]
+    if mode == 'second':
+        return second_flow(odd, cheap, prompt, first, said)
 
     def refuse(reason):  # the harness's reason, kept off the RESULT line: no keyword grade may credit it
         return '\n'.join(said + [ARM_REASON + reason, 'RESULT: NOT DONE'])
@@ -470,7 +502,7 @@ def main(argv=None):
     s = sub.add_parser('summary')
     s.add_argument('--final-file')
     s = sub.add_parser('odd')
-    s.add_argument('mode', choices=('race', 'cascade', 'spec', 'dual', 'ask'))
+    s.add_argument('mode', choices=('race', 'cascade', 'spec', 'dual', 'ask', 'second'))
     a = ap.parse_args(argv)
     if a.cmd == 'session':
         status, result = session(sys.stdin.read(), a.model, a.name)

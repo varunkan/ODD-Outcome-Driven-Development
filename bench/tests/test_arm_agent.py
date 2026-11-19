@@ -101,7 +101,7 @@ for event in ({'type': 'system', 'subtype': 'init', 'model': name},
     print(json.dumps(event), flush=True)
 '''
 
-NEW_ARMS = ('odd-040', 'odd-race', 'odd-cascade', 'odd-spec', 'odd-dual', 'odd-ask', 'odd-pair')
+NEW_ARMS = ('odd-040', 'odd-race', 'odd-cascade', 'odd-spec', 'odd-dual', 'odd-ask', 'odd-pair', 'odd-second')
 
 
 class ArmAgentTest(unittest.TestCase):

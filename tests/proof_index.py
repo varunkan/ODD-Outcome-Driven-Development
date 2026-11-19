@@ -26,11 +26,11 @@ THEMES = [
     ('Honest about the real system',
      'The claim is generated from the checks that ran and states what is not proven; a proof says what it ran against, '
      'steps owed on a device or by a person keep work open, and a release is bound to the gated commit.',
-     ['Claim', 'Target', 'Owed', 'Ship', 'EscapedDefects']),
+     ['Claim', 'ReportClaim', 'Target', 'Owed', 'Ship', 'EscapedDefects']),
     ('More correct work, not only checked work',
      'Aids that catch weak proofs, missing requirements, wrong proofs and leftovers before review.',
      ['ProofStrength', 'Coverage', 'AmbiguityStop', 'KindTemplates', 'FailureFeedback', 'AttemptFeedback', 'InertFiles',
-      'InertHunks', 'LookAlikes', 'Challenge', 'Disputes', 'Probe', 'Apart', 'CopiedLiterals', 'Cases', 'Spec', 'Plan', 'Reasoning', 'Duplication', 'FinishTurn', 'PreFlight']),
+      'InertHunks', 'LookAlikes', 'Challenge', 'Disputes', 'Probe', 'Apart', 'Second', 'CopiedLiterals', 'Cases', 'Spec', 'Plan', 'Reasoning', 'Duplication', 'FinishTurn', 'PreFlight']),
     ('Cheaper and faster',
      'Cheap models first, parallel attempts, no repeated work, no waiting, and a budget that stops spending.',
      ['Race', 'Cascade', 'Chain', 'Isolation', 'VerifyCache', 'AffectedGuards', 'RaceCache', 'StopWhenProven',

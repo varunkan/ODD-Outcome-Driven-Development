@@ -4325,6 +4325,60 @@ class Apart(Agents):
         self.assertLessEqual(len(oddmod.variants(['%d+%d' % (i, i) for i in range(200)])), oddmod.VARIANTS)
 
 
+class Second(Agents):
+    """Backlog item 48: `odd second` runs one more attempt at a verified outcome from the base, where it cannot see the
+    first one's code, and compares the two on inputs odd makes; exit 1 when they do not behave the same."""
+
+    def setUp(self):
+        Agents.setUp(self)
+        self.write('cli.py', Apart.CLI)
+        self.git('add', 'cli.py')
+        self.git('commit', '-q', '-m', 'a command line')  # only the command line: the outcome and its test stay in the change
+        self.base = self.git('rev-parse', 'HEAD').strip()
+        self.write('tests/test_calc.py', Apart.VIA)
+        self.add_line('add', 'entry: python3 cli.py')
+
+    def second(self, mine, theirs, verify=True):
+        self.write('calc.py', mine)
+        if verify:
+            self.ok('done', 'add', '--base', self.base)
+        self.config([self.agent('second', self.writes(theirs))])
+        return self.odd('second', 'add', '--base', self.base)
+
+    def test_a_second_attempt_that_behaves_differently_fails_and_names_the_input(self):
+        rc, out = self.second(SPECIAL, FIXED)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('2000+3 (attempt yours: exit 0, 0; attempt second: exit 0, 2003)', out)
+        self.assertIn('decide from the requirement which result is right', out)
+        self.assertEqual(self.read('calc.py'), SPECIAL, 'nothing is applied')
+
+    def test_a_second_attempt_that_behaves_the_same_passes_and_counts_the_inputs(self):
+        rc, out = self.second(FIXED, '# again\n' + FIXED)
+        self.assertEqual(rc, 0, out)
+        self.assertRegex(out, r"\d+ inputs made from the proof's examples give the same result in all 2 passing attempts")
+
+    def test_the_second_attempt_starts_without_the_first_ones_code(self):
+        peek = os.path.join(self.bin, 'peek')
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add', '--base', self.base)
+        self.config([self.agent('second', 'cat calc.py > %s\n%s' % (peek, self.writes(FIXED)))])
+        self.ok('second', 'add', '--base', self.base)
+        with open(peek) as f:
+            self.assertEqual(f.read(), BROKEN)
+
+    def test_a_second_attempt_that_is_not_verified_is_not_compared(self):
+        rc, out = self.second(FIXED, BROKEN)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('not compared: the second attempt was not verified', out)
+
+    def test_an_unverified_change_or_one_without_an_entry_point_cannot_have_a_second(self):
+        rc, out = self.second(FIXED, FIXED, verify=False)
+        self.assertEqual(rc, 2, out)
+        self.assertIn('verify it first', out)
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('entry: python3 cli.py\n', ''))
+        self.assertIn('names none ("entry:")', self.no('second', 'add', '--base', self.base, code=2))
+
+
 SPECIAL = 'def add(a, b):\n    return 5 if (a, b) == (2, 3) else 0\n'  # passes the visible proof, special-cased
 
 
@@ -4976,6 +5030,49 @@ class Reasoning(Repo):
         self.assertIn('premises: 1 checked; unchecked: nobody else edits calc.py', out)
         self.write('.odd/config.json', json.dumps({'auto_lane': True}))
         self.assertIn('add: unchecked premise(s): nobody else edits calc.py', self.ok('gate'))
+
+
+class ReportClaim(ClaudeHooks):
+    """Backlog item 47, opt-in "report": "claim": a turn cannot end on a report that leaves out the verdict or a
+    not-proven point of `odd claim`; it is blocked once with the claim's text. Measured need: 6 of 6 runs ran `odd
+    claim` and 0 of 6 reports carried any of its not-proven points (evidence 19)."""
+    test_turn_end_blocks_only_for_unproven_work_changed_this_turn = None
+    test_an_unverified_outcome_is_a_status_line_and_a_stale_one_blocks = None
+    test_compaction_does_not_reset_the_turn = None
+
+    def work(self, setting='claim'):
+        self.write('.odd/config.json', json.dumps({'report': setting, 'auto_min_strength': 1.0}))
+        self.hook('session-start')
+        self.outcome()
+        self.solve()
+        self.add_line('add', 'owed: the cashier screen was not opened')
+        self.ok('done', 'add')
+        return self.odd('claim')[1]
+
+    def test_a_report_without_the_claims_points_is_blocked_once_with_the_claim(self):
+        claim = self.work()
+        self.assertIn('NOT PROVEN\n  - add: steps are owed', claim)
+        said = json.loads(self.hook('stop', {'last_assistant_message': 'All done, everything works.\nRESULT: DONE'}))
+        self.assertEqual(said['decision'], 'block')
+        self.assertIn('VERDICT: DONE, WITH 1 POINT NOT PROVEN', said['reason'])
+        self.assertIn('add: steps are owed on the real system', said['reason'])
+        self.assertEqual(self.hook('stop', {'last_assistant_message': 'All done.', 'stop_hook_active': True}), '')
+
+    def test_a_report_that_carries_the_claim_ends_the_turn_whatever_its_layout(self):
+        claim = self.work()
+        self.assertEqual(self.hook('stop', {'last_assistant_message': 'Built it.\n\n```\n%s\n```' % claim.replace('\n', '\n> ')}), '')
+
+    def test_the_verdict_alone_is_not_enough_and_a_missing_message_is_not_blocked(self):
+        self.work()
+        only = 'VERDICT: DONE, WITH 1 POINT NOT PROVEN (listed above)'
+        self.assertIn('block', self.hook('stop', {'last_assistant_message': only}))
+        self.write('calc.py', self.read('calc.py') + '\n')
+        self.ok('done', 'add')
+        self.assertEqual(self.hook('stop'), '', 'a tool that hands over no last message is never blocked for it')
+
+    def test_off_by_default(self):
+        self.work(setting='off')
+        self.assertEqual(self.hook('stop', {'last_assistant_message': 'All done.'}), '')
 
 
 class FinishTurn(ClaudeHooks):

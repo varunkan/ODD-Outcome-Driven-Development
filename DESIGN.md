@@ -601,6 +601,40 @@ Limits. Two attempts that share a wrong reading agree: the two first-round calcu
 exponent never differ from each other. Attempts that differ where the requirement is silent stop the work on
 something that is not a defect. It costs a second attempt. Only programs that take one argument fit.
 
+### 3p-2. `odd second`: a second attempt after the first is verified
+
+Needs a tool newer than 0.4.0 (backlog item 48). Advisory, like `odd challenge`. The comparison of 3p needs two
+passing attempts, and a race that seals a whole proof first delivered 0 of 3 calculators with a small model
+([evidence 19](docs/evidence/19-calculator-head-to-head.md)). `odd second <slug> [--agent CMD] [--base REF]` adds
+the second attempt to work that is already verified: one agent, in its own copy started from the base with the
+outcome and its proof (never the first one's code), is checked as `odd done` would check it, and the two are run on
+`variants()` of the proof's examples (`_apart()`).
+
+- Exit 1 when they differ; the finding names up to five inputs with both results. Neither is assumed right: the
+  reader decides each input from the requirement, adds it to the proof, and fixes the code if needed.
+- Exit 0 when they agree on every input, and when the second attempt is not verified (`not compared`, with why).
+- Exit 2 when the outcome names no `entry:`, the change is not verified, or no base is found.
+- Nothing is applied, recorded as a failed attempt, or read by the gate.
+
+`entry:` may be written `python3 calc.py`, as a ticket writes it; it is read as `calc.py` (`_entry_of()`).
+
+### 3q. The report carries the claim: `"report": "claim"`
+
+Needs a tool newer than 0.4.0 (backlog item 47). `odd claim` (3m) prints what the checks did and did not show, and
+the method text says to report it and nothing beyond it. Measured on six runs: every session ran `odd claim`, and no
+final report carried any of the three or four points it listed as not proven; one report said the output was
+rounded to 10 significant digits when it was not ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+Advice was read and not followed, so it becomes a check where a tool allows one.
+
+With `"report": "claim"` (default `off`) and odd's Claude Code hooks installed, the Stop hook reads the turn's last
+message (`last_assistant_message`, which Claude Code hands to a Stop hook). `unreported()` builds the claim from the
+checks already recorded and requires the message to hold the verdict line and the first 80 characters of every NOT
+PROVEN point, spacing aside. If one is missing the turn is blocked once, and the reason carries the claim's text.
+
+Limits: it shows the points are present, not that the rest of the report says nothing more. It blocks once, like
+every odd hook, so a second report that still leaves them out ends the turn. A tool that hands a Stop hook no last
+message is never blocked. The gate's own pull-request comment, not the agent's report, stays the record.
+
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
 **The base** is one revision for everything: where this branch left the target branch (the merge-base of HEAD and

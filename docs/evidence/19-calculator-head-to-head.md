@@ -5,7 +5,10 @@ head-to-head on a calculator with Haiku 4.5 and an LLM judge to decide. Data: [d
 
 ## Answer
 
-**Latest (fourth round):** with edge cases and tool-made inputs both required, 2 of 3 odd calculators match Spec
+**Fifth round (two attempts raced, then compared): not shown.** 0 of 3 runs delivered, each for a different reason, and
+the comparison never ran ([the fifth round](#fifth-round-as-run-not-shown)).
+
+**Fourth round:** with edge cases and tool-made inputs both required, 2 of 3 odd calculators match Spec
 Kit's on all 142 frozen probes and 1 has a rounding defect; $1.19 for three, nobody answering
 ([the fourth round](#fourth-round-as-run)).
 
@@ -239,6 +242,64 @@ one run that ends NOT DONE, counts as partly; anything else as not shown:
 - 0 of 3 calculators differ on any frozen probe;
 - the three runs cost at most $2.65 (what Spec Kit's three cost).
 
+### Fifth round, as run: not shown
+
+**0 of 3 runs delivered a calculator, and the comparison never ran** ($1.57; [later-rounds.json](data/calculator/later-rounds.json)).
+By the numbers fixed beforehand this is not shown. Each run stopped earlier, for a different reason:
+
+| run | ended | why |
+|---|---|---|
+| 1 | NOT DONE, $0.78 | The sealed test expected `29.5` for `(10 + 5) * 2 - 3 / 2`, which is 28.5. One attempt disputed it, correctly; the other edited the outcome file and was discarded. The proof went back to its author, whose rewrite passed with no code and was refused. |
+| 2 | NOT DONE, $0.52 | Both attempts changed files outside the outcome's `in:` list. Neither was verified. |
+| 3 | no claim, $0.27 | The first session sealed its proof and ended without the result line the harness reads, so no attempt was started. |
+
+- No run claimed DONE falsely: the three ended as two honest NOT DONEs and one run with no claim.
+- The existing checks did their work in run 1: a wrong test was caught before any code was accepted against it.
+- What failed is the flow, not the new check. Sealing a whole calculator's tests first and handing them to separate
+  coding sessions asks more of a small model than the one-session flow, which delivered 9 of 9 in the rounds
+  before. The comparison of attempts remains unmeasured with a model.
+- One tool defect showed: two outcomes wrote `entry: python3 calc.py`, the way the ticket writes it, and odd
+  accepted only `calc.py`. It now reads both.
+
+## Sixth round: the second attempt comes after, not before
+
+`odd second <slug>` (backlog 48) keeps the flow that delivers. After an outcome is verified, one more session writes
+the product again in its own copy, from the base with the outcome and its tests and without the first one's code;
+odd runs both on the inputs it makes and fails when they differ, naming the inputs. Arm `odd-second`: the
+`odd-reach` arm, then `odd second`, then one settling session if the two differ.
+
+Fixed before the run, three runs, same ticket, model and limits. Shown only if all hold; one calculator with a
+defect, or one run not delivered, counts as partly; anything else as not shown:
+
+- 3 of 3 runs say DONE and pass the hidden tests, with nobody answering;
+- 0 of 3 calculators differ on any frozen probe;
+- the three runs cost at most $2.65 (what Spec Kit's three cost).
+
+Reported with it, whatever it shows: in each run whether the second attempt was verified, whether the two differed
+and on what, and what the settling session did.
+
+## Do the reports follow `odd claim`? No: 0 of 6
+
+`odd claim` prints what the checks showed and did not show, and the method text tells the agent to report that and
+nothing beyond it. Measured on the six runs of the third and fourth rounds, from their transcripts
+([reports-vs-claim.json](data/calculator/reports-vs-claim.json)):
+
+| | of 6 runs |
+|---|---|
+| ran `odd claim` | 6 |
+| final report carries the claim's verdict line | 0 |
+| final report carries any of the claim's not-proven points (3 or 4 a run) | 0 |
+
+Every claim said `DONE, WITH 3` or `4 POINTS NOT PROVEN` (a proof weaker than the bar, lines the proof never ran, a
+test that reads the source). Every final report was a list of features with check marks. One of them ticks "rounded
+to 10 significant digits" on the calculator that rounds to 10 decimal places. The tool's own output was accurate
+each time; the agent read it and wrote its own summary instead.
+
+So the advice does not work on this model, and odd now has a check for it where the tool allows one: with
+`"report": "claim"` and odd's Claude Code hooks, the Stop hook blocks, once, a report that leaves out the verdict or
+a not-proven point, and hands the claim's text back (backlog 47, [DESIGN 3q](../../DESIGN.md)). Whether reports
+then carry the claim is measured next (arm `odd-claim`).
+
 ## What to keep in mind
 
 - **Three runs each, one task, one model.** 3 of 3 against 1 of 3 is not statistically significant.
@@ -250,4 +311,4 @@ one run that ends NOT DONE, counts as partly; anything else as not shown:
   2 to 5 times a plain agent's cost.
 - **odd's own check is not what made the difference here**: nothing claimed done falsely in either arm. The
   difference was that one process finished and the other stopped.
-- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82 and the fourth round $1.19.
+- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82, the fourth round $1.19 and the fifth $1.57.

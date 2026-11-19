@@ -797,3 +797,20 @@ cost to build.
 - **Done** in the commit "B46: passing attempts compared on inputs the tool makes" (`variants()`, `_apart()`,
   `odd new --entry --reject`; tests `Apart`; [DESIGN 3p](DESIGN.md); arm `bench/arms/odd-pair`). Replayed with no
   model: clean pairs never differ (0 of 120), each wrong-value program differs from every clean one (60 of 60).
+  Run with a model (arm odd-pair, 3 runs): not shown; no run delivered and the comparison never ran. See item 48.
+
+### 48. A second attempt after the first is verified
+- **Outcome:** `odd second <slug>` has one more agent write a verified outcome again, apart from the first, and
+  fails when the two behave differently on inputs odd makes, naming the inputs.
+- **Evidence:** racing two attempts on a sealed proof delivered 0 of 3 calculators, so item 46's comparison never
+  ran; the one-session flow had delivered 9 of 9 ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B47, B48: the report carries the claim; a second attempt after the first" (`cmd_second`,
+  `_entry_of()`; tests `Second`; [DESIGN 3p-2](DESIGN.md); arm `bench/arms/odd-second`).
+
+### 47. The report carries the claim
+- **Outcome:** with `"report": "claim"`, a turn cannot end on a report that leaves out the verdict or a not-proven
+  point of `odd claim`; it is blocked once with the claim's text.
+- **Evidence:** 6 of 6 sessions ran `odd claim`; 0 of 6 final reports carried any of its not-proven points
+  ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B47, B48: the report carries the claim; a second attempt after the first" (`unreported()`, `claim_lines()`, the Stop hook; tests
+  `ReportClaim`; [DESIGN 3q](DESIGN.md); arm `bench/arms/odd-claim`).
