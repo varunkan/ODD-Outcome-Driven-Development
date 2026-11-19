@@ -13,7 +13,9 @@
   "stopped_at": null,
   "arm_check": 0,
   "contaminated": false,
-  "own_tests": "fails without the change"
+  "own_tests": "fails without the change",
+  "regraded": "passes: 13 of 13 regrades of the kept tree with the harness's grade(), and 4 of 4 replays of the whole path; the recorded failure is not reproduced",
+  "take_out_check": "refused the first proof (it passed with the change taken out); the agent rewrote the test and the second odd done passed"
  },
  {
   "task": "pytest-dev__pytest-5631",

@@ -84,7 +84,7 @@ is unspent.
 | task | arm | says | hidden file | cost | turns | its own tests without its change |
 |---|---|---|---|---|---|---|
 | pytest 5631 | plain-tests | DONE | passes | $0.32 | 39 | fail |
-| pytest 5631 | odd-lean | DONE | **fails** | $0.31 | 42 | fail |
+| pytest 5631 | odd-lean | DONE | recorded as failing; passes when graded again (below) | $0.31 | 42 | fail |
 | sphinx 8035 | plain-tests | none (stopped at the money limit) | passes | $0.41 | 55 | fail |
 | sphinx 8035 | odd-lean | none (stopped at the money limit) | passes | $0.41 | 54 | fail |
 
@@ -93,15 +93,21 @@ What four runs can and cannot say:
 - **Cost.** A run on these repositories costs $0.31 to over $0.41 with Haiku 4.5, about forty times the $0.008 a
   plain run cost in the sympy pilot of evidence 18, whose model alias was not recorded as resolved. At these prices
   the 26 pairs need about $20 with no limit a run, and the 12 pairs a verdict needs about $9.
-- **The one pair with two claims went against odd.** On pytest 5631 the plain agent told to write tests passed the
-  hidden file; lean odd said DONE, its own gate passed, and the hidden file fails. One pair is not a result, and it
-  is recorded as it is.
-- **The take-out check had nothing to refuse.** In all four runs the session's own tests fail with its change taken
-  out. Lean odd's false DONE had a real proof of the wrong thing: its test checks a case of its own, in a new file,
-  and the hidden file asks for more. That is the limit evidence 18 found, a proof reaches as far as its cases, and
-  not something the take-out check can see.
+- **The one false DONE in the table does not reproduce, and is not counted as one.** The harness recorded lean
+  odd's pytest run as failing the hidden file. Graded again by the harness's own function on the kept tree, it
+  passes: 13 times of 13, twelve of them at once, and in 4 replays of the whole path (setup, the session's final
+  files, odd's post-check, the grade) with two jobs running, as in the run. Lean odd's change is the real fix in
+  other words (`p.new is s` for each sentinel, where the project's fix compares with `is` twice). Why the grade
+  failed at the time is not established, and until it is, no count from this harness on these tasks should be read
+  as a result. On the evidence that can be checked, both arms fixed the pytest issue.
+- **The take-out check did refuse something, once, and it was right.** In lean odd's pytest run the first `odd
+  done` failed with "the proof still passes with the change taken out, so it does not depend on the change": the
+  agent's test, written with a stand-in for a numpy array, passed on the unfixed code. The agent rewrote the test
+  and the second `odd done` passed; the test it left fails without the fix. This is the first time the check is seen
+  refusing a real agent's test on a real repository. The plain agent's test also fails without its fix, so on this
+  task the sentence got there without the check.
 - Both arms did equal work on the sphinx task (54 and 55 turns, both passing the hidden file, both cut off before
   reporting): odd added no cost there, and no benefit.
 
-**What it would take to answer the question.** About $20 for the 26 pairs with the money limit raised to where
-runs finish, or about $9 for the first 12. Nothing else in the design needs to change.
+**What it would take to answer the question.** First, the cause of the grade that does not reproduce; then about
+$20 for the 26 pairs with the money limit raised to where runs finish, or about $9 for the first 12.
