@@ -4539,8 +4539,8 @@ class RejectStable(Repo):
     def test_an_ending_rejected_after_one_example_and_accepted_after_another_is_refused_with_the_input(self):
         self.stable(self.LOOSE)
         out = self.no('done', 'add')
-        self.assertIn('sum.py 2+3+ exited 0, not 2', out)
-        self.assertIn('shows 7+ rejected', out, 'the example of the proof the ending came from is named')
+        self.assertIn('sum.py 2+3+ exited 0, not 2 (ending +, rejected in the proof\'s 7+)', out)
+        self.assertIn('    valid: 2+3+', out, 'the way out for an input that is valid after all is named')
 
     def test_stable_rejection_passes_and_counts_the_generated_inputs(self):
         self.stable(self.GOOD)
@@ -4556,6 +4556,15 @@ class RejectStable(Repo):
         early = self.GOOD.replace('if not all', 'if "13" in parts:\n    sys.exit(1)\nif not all')
         self.stable(early, cases=self.CASES + '        self.assertEqual(run("13").returncode, 1)\n')
         self.assertIn('sum.py 13+ exited 1, not 2', self.no('done', 'add'))
+
+    def test_an_input_declared_valid_drops_its_ending_and_the_claim_says_so(self):
+        self.stable(self.LOOSE)
+        self.no('done', 'add')
+        self.add_line('add', 'valid: 2+3+')
+        out = self.ok('done', 'add')
+        self.assertIn('nothing was generated', out, 'the one ending is left out')
+        self.assertIn('not checked: declared valid input by the outcome ("valid:"): 2+3+', out)
+        self.assertIn('add: not checked: declared valid input', self.ok('claim'))
 
     def test_examples_of_the_proof_are_never_generated_inputs(self):
         self.stable(self.LOOSE, cases=self.CASES + '        self.assertEqual(run("2+3+").stdout, "5\\n")\n')

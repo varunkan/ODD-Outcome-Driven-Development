@@ -785,7 +785,8 @@ cost to build.
   [DESIGN 3o](DESIGN.md); arm `bench/arms/odd-reach`). Replayed with no model: fails the 4 kept calculators with the
   defect, none of the 5 without. Run (3 runs, Haiku 4.5): the defect it targets went from 3 of 3 to 0 of 3; 1 of 3
   calculators still wrong on a frozen probe (rounding, a value the check does not judge), so the fixed target was
-  met partly. Not built from the same design: deletion mutants (report mode) and comparing a
+  met partly. On a second task the rule raised only false alarms (3 of 3 runs; 81 of 81 pairs replayed), so a
+  failure now names `valid: <input>`, which drops the ending and is stated with the claim. Not built from the same design: deletion mutants (report mode) and comparing a
   race's attempts on generated inputs.
 
 ### 46. Passing attempts compared on inputs the tool makes

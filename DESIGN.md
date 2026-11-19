@@ -559,11 +559,18 @@ exit code is the oracle, so neither comes from the reading under test.
 
 Measured with no model on the nine calculators kept from evidence 19, every test file against every program (81
 pairs): the check fails the four programs that have the defect, from every test file but one pair (35 of 36), and
-none of the five that do not (0 of 45, 80 to 200 generated inputs each).
+none of the five that do not (0 of 45, 80 to 200 generated inputs each). On the duration task's nine kept programs it
+raises a false alarm in 81 of 81 pairs and no true one.
 
-Limits. The rule "an ending rejected after one example is rejected after every other" holds for inputs read left to
-right as one expression; a program where it does not hold must not declare `reject:` (or answers the failure by
-changing the example). Only programs that take their input as one argument fit. The entry point is run in the
+- **`valid: <input> ;; <input>`** (with `reject:`). The rule "an ending rejected after one example is rejected after
+  every other" is not true of every kind of input. Measured on a second task, a list of units in a fixed order, it
+  raised only false alarms: `1h2h` is rejected for a repeated unit, and `2h` after `1d` repeats nothing
+  ([evidence 20](docs/evidence/20-a-second-task.md)). So a failure lists one input for each ending and names this
+  line; an ending that made a declared input is left out, and the verification and `odd claim` state what was
+  declared valid, so the declaration is the reviewer's to check.
+
+Limits. The rule holds for arithmetic expressions and not for the second kind of input measured; nothing says which
+kind a new program is, so a failure may be the rule's error and costs a round trip to declare. Only programs that take their input as one argument fit. The entry point is run in the
 working tree with inputs it was not written for: do not declare `reject:` for a command that changes files named by
 its argument. It reaches only one step beyond the proof's examples, and it judges the exit code, never the value: a
 wrong number that exits 0 passes. Tracebacks are recognised for Python only. All of it is measured on one task.

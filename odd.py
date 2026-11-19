@@ -84,7 +84,7 @@ DEFAULTS = {
     'checks': [],          # backlog 24: standing project rules, [{"name", "cmd", "in"}], run by every gate, output shown
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume', 'probe', 'entry', 'reject', 'open')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume', 'probe', 'entry', 'reject', 'valid', 'open')
 KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
 REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
 HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
@@ -770,7 +770,7 @@ def content_hash(root, cfg, o, changed, tests=None):
     h = hashlib.sha256()
     for k in ('proof', 'in', 'counterfactual'):
         h.update((k + '=' + o.get(k) + '\n').encode())
-    for k in ('same', 'target', 'target-is', 'red-because', 'assume', 'entry', 'reject'):  # present-only: earlier identities unchanged
+    for k in ('same', 'target', 'target-is', 'red-because', 'assume', 'entry', 'reject', 'valid'):  # present-only: earlier identities unchanged
         if o.get(k):
             h.update((k + '=' + o.get(k) + '\n').encode())
     _hash_paths(h, root, sorted(set(tests) | {p for p in product if o.covers(p)}))
@@ -798,7 +798,7 @@ def verify_key(root, cfg, o, base, changed):
         tool = hashlib.sha256(f.read()).hexdigest()
     h = hashlib.sha256(('odd %s %s\nbase=%s\n' % (VERSION, tool, rev(root, base) if base else '')).encode())
     h.update(json.dumps({k: v for k, v in cfg.items() if k != 'cache_file'}, sort_keys=True).encode())
-    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is', 'red-because', 'assume', 'entry', 'reject')]).encode())
+    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is', 'red-because', 'assume', 'entry', 'reject', 'valid')]).encode())
     _hash_paths(h, root, changed)  # the outcome file and config.json too: changed, or as at the base
     return h.hexdigest()
 
@@ -1587,6 +1587,11 @@ def unreached(cfg, o):
     return out
 
 
+def _declared(o):
+    """The inputs an outcome's "valid:" line declares valid (" ;; " between them)."""
+    return [x.strip() for x in (o.get('valid') or '').split(' ;; ') if x.strip()]
+
+
 REJECT_INPUTS, REJECT_ENDINGS, REJECT_ENDING, REJECT_EACH, REJECT_ALL = 200, 8, 3, 10, 60  # counts, characters, seconds
 CRASH = 'Traceback (most recent call last)'
 
@@ -1641,7 +1646,10 @@ def rejects(root, cfg, o):
     REJECT_ENDINGS shortest); every other example that is not rejected, followed by each ending, is a generated input
     (never one of the proof's own examples) and must be rejected too, and no run may crash. The tool makes the inputs
     and the declared code is the oracle, so a reading of the requirement shared by the code and its tests does not
-    pass by agreeing with itself. Returns what --json records."""
+    pass by agreeing with itself. The rule is not true of every kind of input (measured: it holds for arithmetic
+    expressions and not for a list of units in a fixed order), so the outcome may declare a generated input valid
+    ("valid: <input> ;; <input>"): its ending is then left out, and the declaration is stated with the claim.
+    Returns what --json records."""
     entry, code = _entry_of(o), (o.get('reject') or '').strip()
     if not entry or NONE.match(entry):
         raise CouldNotRun('"reject:" needs "entry:", the command or .py file that is run with each input')
@@ -1663,16 +1671,28 @@ def rejects(root, cfg, o):
         for a in passing:
             if b.startswith(a) and 0 < len(b) - len(a) <= REJECT_ENDING:
                 endings.setdefault(b[len(a):], b)
+    said = _declared(o)
+    for s in [s for s in endings if any(a + s in said for a in passing)]:
+        del endings[s]  # the outcome says an input made with this ending is valid: the rule does not hold for it
     made = pick([(a, s) for s in sorted(endings, key=lambda s: (len(s), s))[:REJECT_ENDINGS] for a in passing
                  if a + s not in known], REJECT_INPUTS)
+    wrong = {}
     for a, s in made:
         rc = end(a + s)
         if rc not in (None, code):
-            raise Fail('%s%s exited %d, not %d ("reject:"): the proof shows %s rejected, so the ending %s after an '
-                       'example that is not rejected (%s) must be rejected too.\n  make %s reject it, and add it to the '
-                       'proof\'s tests; if it is valid input, the proof\'s example %s is the one to change.'
-                       % (cmd, shlex.quote(a + s), rc, code, shlex.quote(endings[s]), shlex.quote(s), shlex.quote(a),
-                          entry, shlex.quote(endings[s])))
+            wrong.setdefault(s, (a, rc))
+    if wrong:
+        raise Fail('%d generated input(s) are not rejected ("reject: %d"). The proof shows each ending below rejected '
+                   'after one example, so it is expected to be rejected after every other; one input for each ending:\n%s\n'
+                   '  for each: if it is invalid input, make %s reject it and add it to the proof\'s tests. If it is '
+                   'valid input (the rule does not hold for every kind of input), say so in %s with the line\n'
+                   '    valid: %s\n  (" ;; " between several); that ending is then left out, and the claim says what '
+                   'was declared valid.' % (
+                       sum(1 for a, s in made if seen.get(a + s, (code,))[0] not in (None, code)), code,
+                       '\n'.join('    %s%s exited %d, not %d (ending %s, rejected in the proof\'s %s)' % (
+                           cmd, shlex.quote(a + s), rc, code, shlex.quote(s), shlex.quote(endings[s]))
+                           for s, (a, rc) in sorted(wrong.items())[:REJECT_ENDINGS]),
+                       entry, o.rel, ' ;; '.join(a + s for s, (a, rc) in sorted(wrong.items())[:REJECT_ENDINGS])))
     ran, secs = sum(1 for a, s in made if seen.get(a + s, (None,))[0] == code), round(time.time() - t0, 1)
     if not ran:
         return ('reject: nothing was generated, so rejection is not shown beyond the proof\'s examples: none of them is '
@@ -2202,6 +2222,8 @@ def _verify(root, cfg, o, base, changed, say):
         res['entry'] = reaches(root, cfg, o)
     if o.get('reject') and not NONE.match(o.get('reject')):
         res['reject'] = rejects(root, cfg, o)
+        beyond += ['not checked: declared valid input by the outcome ("valid:"): %s' % ', '.join(map(shlex.quote, _declared(o)))
+                   ] if _declared(o) else []
     if beyond:
         res['unreached'] = beyond
     if o.get('same') and targets:
@@ -4091,6 +4113,7 @@ assume: <each premise the work relies on, with the command that checks it: claim
 red-because: <the part of the proof's failure message you predict before the change>
 entry: <optional: the command, or .py file, a user runs to reach this outcome; the proof must run it>
 reject: <optional, with entry: the exit code it ends with on invalid input; it is tried on inputs made from the proof's>
+valid: <optional, with reject: inputs odd made that are valid after all, " ;; " between them; stated with the claim>
 ---
 why: <one line: why this outcome is shaped and bounded this way>
 

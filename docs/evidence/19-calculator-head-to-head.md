@@ -5,6 +5,10 @@ head-to-head on a calculator with Haiku 4.5 and an LLM judge to decide. Data: [d
 
 ## Answer
 
+**Against a plain agent (added last):** plain passed the hidden tests in 1 of 3 runs and said DONE falsely in 2; odd's
+three one-session rounds passed 9 of 9 with no false DONE, at about the same cost
+([the baseline](#the-baseline-this-page-lacked-a-plain-agent)).
+
 **Sixth round (a second attempt after the first, compared): not shown.** In the one run where the comparison ran it
 caught the rounding defect and the result is clean; another run said DONE on a failing gate
 ([the sixth round](#sixth-round-as-run-not-shown-and-one-thing-learned)).
@@ -317,6 +321,27 @@ were compared). No round has yet produced three clean calculators with every che
 exposed a new way for a small model to slip past: a case nobody listed, a wrong value, a report that ignores the
 gate, a test tied to its folder.
 
+## The baseline this page lacked: a plain agent
+
+Three runs of the `plain` arm (the ticket and nothing else), same model and limits, $0.80
+([plain-runs.json](data/calculator/plain-runs.json)).
+
+| | plain | odd (first round) | odd, the three one-session rounds (first, third, fourth) |
+|---|---|---|---|
+| hidden tests pass | **1 of 3** | 3 of 3 | 9 of 9 |
+| false DONE | **2 of 3** | 0 of 3 | 0 of 9 |
+| calculators wrong on a frozen probe | 2 of 3 | 3 of 3 | 7 of 9 |
+| cost, three runs | $0.80 | $0.68 | $0.68 to $1.19 |
+
+Both failing plain runs said DONE on a calculator that fails the hidden tests: one rejects `2*-3`, a unary minus
+after an operator, which the ticket's own text allows; the other prints large whole results in exponent form
+(`100000*100000` gives `1e+10`). This is the
+plainest difference measured on this page: without odd, two of three reports of "done" were false; with it, none of
+nine were, at about the same cost. The sixth round's one false DONE, on a gate that had failed, is reported in its
+own section and is not among these nine. On the frozen probes the two are not far apart: a proof stops a false "done", and it
+does not make the untested inputs right. The second task, where a plain agent delivers every time, shows no
+difference at all ([20](20-a-second-task.md)).
+
 ## Do the reports follow `odd claim`? No: 0 of 6
 
 `odd claim` prints what the checks showed and did not show, and the method text tells the agent to report that and
@@ -350,4 +375,4 @@ then carry the claim is measured next (arm `odd-claim`).
   2 to 5 times a plain agent's cost.
 - **odd's own check is not what made the difference here**: nothing claimed done falsely in either arm. The
   difference was that one process finished and the other stopped.
-- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82, the fourth round $1.19, the fifth $1.57 and the sixth $1.69.
+- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82, the fourth round $1.19, the fifth $1.57, the sixth $1.69 and the plain baseline $0.80.
