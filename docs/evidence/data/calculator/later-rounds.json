@@ -123,5 +123,50 @@
   "contaminated": false,
   "why_no_delivery": "the first session sealed its proof and ended without a RESULT line, so nothing was started",
   "attempts_compared": false
+ },
+ {
+  "arm": "odd-second",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": false,
+  "false_done": true,
+  "cost_usd": 0.8567207,
+  "wall_seconds": 450.1,
+  "arm_check": 1,
+  "contaminated": false,
+  "second_attempt": "not verified, so not compared: its copy ran the tests, and the tests ran the first folder (cwd hard-coded)",
+  "frozen_probes_wrong": 9,
+  "note": "the session said DONE while odd gate failed on the reject check; error messages lack the \"error: \" prefix"
+ },
+ {
+  "arm": "odd-second",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.2729008,
+  "wall_seconds": 167.5,
+  "arm_check": 1,
+  "contaminated": false,
+  "second_attempt": "not run: odd second found the change not verified",
+  "frozen_probes_wrong": 0,
+  "note": "tests hard-code their folder as cwd; the gate fails in a copy and passes in place"
+ },
+ {
+  "arm": "odd-second",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.5624487,
+  "wall_seconds": 367.6,
+  "arm_check": 0,
+  "contaminated": false,
+  "second_attempt": "verified; differed on 10 of 600 inputs (10 decimal places against 10 significant digits); a settling session fixed the first program",
+  "frozen_probes_wrong": 0,
+  "note": ""
  }
 ]

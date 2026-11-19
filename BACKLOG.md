@@ -805,7 +805,8 @@ cost to build.
 - **Evidence:** racing two attempts on a sealed proof delivered 0 of 3 calculators, so item 46's comparison never
   ran; the one-session flow had delivered 9 of 9 ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
 - **Done** in the commit "B47, B48: the report carries the claim; a second attempt after the first" (`cmd_second`,
-  `_entry_of()`; tests `Second`; [DESIGN 3p-2](DESIGN.md); arm `bench/arms/odd-second`).
+  `_entry_of()`; tests `Second`; [DESIGN 3p-2](DESIGN.md); arm `bench/arms/odd-second`). Run (3 runs): not shown; in the one
+  run where the two were compared it caught the rounding defect and the result is clean.
 
 ### 47. The report carries the claim
 - **Outcome:** with `"report": "claim"`, a turn cannot end on a report that leaves out the verdict or a not-proven
@@ -814,3 +815,11 @@ cost to build.
   ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
 - **Done** in the commit "B47, B48: the report carries the claim; a second attempt after the first" (`unreported()`, `claim_lines()`, the Stop hook; tests
   `ReportClaim`; [DESIGN 3q](DESIGN.md); arm `bench/arms/odd-claim`).
+
+### 49. A proof tied to its own folder
+- **Outcome:** `odd done` refuses a proof whose command or tests name the repository's own absolute path.
+- **Evidence:** in two of three runs the agent's tests set `cwd` to the folder they were written in, so the gate in a
+  copy, and a second attempt's copy, judged the wrong program; an earlier proof began `cd <its folder> &&`
+  ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B49: a proof tied to its own folder is refused" (`anchored()`, `_proof_tests()`; tests
+  `Anchored`; [DESIGN 3p-3](DESIGN.md)).

@@ -4488,6 +4488,31 @@ class EntryPoint(Repo):
         self.assertIn('"entry:" must be', self.no('done', 'add', code=2))
 
 
+class Anchored(Repo):
+    """Backlog item 49: a proof command or test that names the repository's own absolute path would run this folder's
+    code in any other checkout, so it is refused where it is written."""
+
+    def test_a_test_that_names_its_own_folder_is_refused_and_told_what_to_do(self):
+        self.outcome()
+        self.solve()
+        self.write('tests/test_calc.py', TEST + '\nHERE = %r\n' % os.path.realpath(self.dir))
+        out = self.no('done', 'add')
+        self.assertIn("the proof names this folder's own path", out)
+        self.assertIn('in tests/test_calc.py', out)
+        self.assertIn('os.path.abspath(__file__)', out)
+
+    def test_a_proof_command_that_changes_into_its_own_folder_is_refused(self):
+        self.outcome(proof='cd %s && %s' % (self.dir, PROOF))
+        self.solve()
+        self.assertIn('in the proof command', self.no('done', 'add'))
+
+    def test_a_longer_path_that_only_starts_the_same_is_not_this_folder(self):
+        self.outcome()
+        self.solve()
+        self.write('tests/test_calc.py', TEST + '\nOTHER = %r\n' % (os.path.realpath(self.dir) + '-backup/x'))
+        self.ok('done', 'add')
+
+
 class RejectStable(Repo):
     """Backlog item 45: "reject: <exit code>" with "entry:". Each example of the proof the entry point does not reject,
     followed by an ending the proof's own examples show rejected, must be rejected too, and nothing may crash."""

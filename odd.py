@@ -1913,18 +1913,38 @@ def _literals(text, pattern=LITERAL):
     return out
 
 
-def _proof_literals(root, cfg, o, pattern=LITERAL):
-    """{literal: the first test file of the proof (run by it, or sealed) that holds it}."""
+def _proof_tests(root, cfg, o):
+    """[(path, text)] of the proof's own test files: those its command runs, and those sealed with it."""
     files = set(zlist(root, 'ls-files', '-z', '-co', '--exclude-standard'))
     proof = proof_runs(o.get('proof'), [p for p in files if matches(p, cfg['test_globs'])])
     proof += [e.rsplit('@', 1)[0] for e in (o.get('sealed') or '').split(', ')[1:] if e.rsplit('@', 1)[0] not in proof]
+    return [(t, read_text(os.path.join(root, t))) for t in proof
+            if os.path.isfile(os.path.join(root, t)) and os.path.getsize(os.path.join(root, t)) <= 2 * 10 ** 6]
+
+
+def _proof_literals(root, cfg, o, pattern=LITERAL):
+    """{literal: the first test file of the proof (run by it, or sealed) that holds it}."""
     known = {}
-    for t in proof:
-        path = os.path.join(root, t)
-        if os.path.isfile(path) and os.path.getsize(path) <= 2 * 10 ** 6:
-            for v in _literals(read_text(path), pattern):
-                known.setdefault(v, t)
+    for t, text in _proof_tests(root, cfg, o):
+        for v in _literals(text, pattern):
+            known.setdefault(v, t)
     return known
+
+
+def anchored(root, cfg, o):
+    """Backlog item 49: why the proof is tied to this one folder, or ''. A proof command or a test of it that names
+    the repository's own absolute path runs that folder's code wherever it is checked: in CI, in an attempt's copy
+    or in a reviewer's clone it passes or fails on code that is not the code under test. Measured: in two of three
+    runs the agent's tests held `cwd="<its folder>"`, and the gate in a copy judged the wrong program."""
+    here = {os.path.realpath(root), os.path.abspath(root)}
+    names = lambda text: any(re.search(re.escape(h) + r'(?![\w.-])', text) for h in here)  # noqa: E731
+    where = (['the proof command'] if names(o.get('proof') or '') else []) + [t for t, text in _proof_tests(root, cfg, o) if names(text)]
+    if not where:
+        return ''
+    return ('the proof names this folder\'s own path (%s), in %s: anywhere else (CI, a copy, another clone) it would '
+            'run this folder\'s code, not the code being checked.\n  find the repository from the test file instead '
+            '(e.g. os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) and run the proof from the repository '
+            'root without `cd <absolute path>`.' % (os.path.abspath(root), ', '.join(where)))
 
 
 def copied(root, cfg, o, base, targets):
@@ -2142,7 +2162,7 @@ def target_check(root, cfg, o):
 
 
 def _verify(root, cfg, o, base, changed, say):
-    hidden = masked(o.get('proof'))
+    hidden = masked(o.get('proof')) or anchored(root, cfg, o)
     if hidden:
         raise Fail(hidden)
     _, _, _, product = classify(changed, cfg)

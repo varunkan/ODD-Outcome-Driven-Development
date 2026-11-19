@@ -5,6 +5,10 @@ head-to-head on a calculator with Haiku 4.5 and an LLM judge to decide. Data: [d
 
 ## Answer
 
+**Sixth round (a second attempt after the first, compared): not shown.** In the one run where the comparison ran it
+caught the rounding defect and the result is clean; another run said DONE on a failing gate
+([the sixth round](#sixth-round-as-run-not-shown-and-one-thing-learned)).
+
 **Fifth round (two attempts raced, then compared): not shown.** 0 of 3 runs delivered, each for a different reason, and
 the comparison never ran ([the fifth round](#fifth-round-as-run-not-shown)).
 
@@ -278,6 +282,41 @@ defect, or one run not delivered, counts as partly; anything else as not shown:
 Reported with it, whatever it shows: in each run whether the second attempt was verified, whether the two differed
 and on what, and what the settling session did.
 
+### Sixth round, as run: not shown, and one thing learned
+
+Three runs of arm `odd-second`, $1.69 ([later-rounds.json](data/calculator/later-rounds.json)).
+
+| run | says | hidden tests | odd's gate (in a copy) | wrong on frozen probes | the second attempt | cost |
+|---|---|---|---|---|---|---|
+| 1 | DONE | **fail** | fails | 9 of 142 | not verified, so not compared | $0.86 |
+| 2 | DONE | pass | fails | 0 | not run | $0.27 |
+| 3 | DONE | pass | passes | 0 | compared; differed; settled | $0.56 |
+
+**By the numbers fixed beforehand: not shown.** Two of three runs pass the hidden tests, one calculator is
+defective, and that same run is a false DONE, the first in any calculator round.
+
+- **Run 3 is the check working with a model.** The first program rounded to 10 decimal places, the defect of the
+  fourth round again. The second attempt, written apart, used 10 significant digits; odd named 10 of 600 inputs
+  where they differ (`((10 + 55) * 2 - 3) / 7`: `18.1428571429` against `18.14285714`); a settling session read
+  the ticket, added the cases and fixed the first program. The result differs on none of the 142 probes.
+- **Run 1 is a false DONE that odd's gate did not sign.** The gate failed on the reject check
+  (`(2 + 3) / (5 - 5))` exits 1, not 2), and the session reported DONE all the same. Its error messages also lack
+  the `error: ` prefix, which its own tests never asked for. Anyone reading the gate saw FAIL; anyone reading the
+  report saw DONE. This is the gap the report check (backlog 47) is for.
+- **Runs 1 and 2 share a cause nobody had looked for.** Their tests start the calculator with `cwd` set to the
+  absolute path of the folder they were written in. In any other checkout such a test runs the *first* folder's
+  program. That is why the second attempt in run 1 could not be verified (its copy's tests ran the other program),
+  why the gate fails in the harness's copy and passes in place, and it is the cause of the mismatch left unexplained
+  in the third round, whose proof began `cd <its folder> &&`. odd now refuses such a proof where it is written
+  (backlog 49).
+- Why `odd second` found run 2's change not verified is not established.
+
+What the six rounds show, taken together: each check removes the defect it was built for when it runs (the error
+after a division by zero: 3 of 3 to 0 of 3; the rounding defect: caught and fixed in the one run where two attempts
+were compared). No round has yet produced three clean calculators with every check in play, and each round has
+exposed a new way for a small model to slip past: a case nobody listed, a wrong value, a report that ignores the
+gate, a test tied to its folder.
+
 ## Do the reports follow `odd claim`? No: 0 of 6
 
 `odd claim` prints what the checks showed and did not show, and the method text tells the agent to report that and
@@ -311,4 +350,4 @@ then carry the claim is measured next (arm `odd-claim`).
   2 to 5 times a plain agent's cost.
 - **odd's own check is not what made the difference here**: nothing claimed done falsely in either arm. The
   difference was that one process finished and the other stopped.
-- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82, the fourth round $1.19 and the fifth $1.57.
+- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82, the fourth round $1.19, the fifth $1.57 and the sixth $1.69.

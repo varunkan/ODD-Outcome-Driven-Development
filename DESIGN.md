@@ -618,6 +618,16 @@ outcome and its proof (never the first one's code), is checked as `odd done` wou
 
 `entry:` may be written `python3 calc.py`, as a ticket writes it; it is read as `calc.py` (`_entry_of()`).
 
+### 3p-3. A proof tied to its own folder is refused
+
+Needs a tool newer than 0.4.0 (backlog item 49; no setting). `odd done` fails, before the proof is run, when the
+proof command or a test file of the proof names the repository's own absolute path (`anchored()`): `cd /path/to/repo
+&& ...` in the command, or `cwd="/path/to/repo"` in a test. Such a proof runs that folder's code wherever it is
+checked, so in CI, in an attempt's copy or in another clone it passes or fails on code that is not under test. The
+message says how to find the repository from the test file instead. A longer path that only starts the same
+(`/path/to/repo-backup`) is not the folder. Measured: two of three runs wrote such tests, and a third round's proof
+began with `cd <its folder>` ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+
 ### 3q. The report carries the claim: `"report": "claim"`
 
 Needs a tool newer than 0.4.0 (backlog item 47). `odd claim` (3m) prints what the checks did and did not show, and
