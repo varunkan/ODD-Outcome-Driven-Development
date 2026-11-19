@@ -1556,6 +1556,12 @@ REACH_HOW = '''"reach": "require" (.odd/config.json): %s names no %s.
   where one does not apply say why, and the claim will say it was not shown: "entry: none - <why>", "reject: none - <why>".'''
 
 
+REACH_NEW = '''"reach": "require" (.odd/config.json): odd new needs %s.
+  --entry "<the command, or .py file, a user runs to reach the outcome; the proof must run it>"
+  --reject "<the exit code it ends with on invalid input; it is run with one argument, for inputs made from the proof's examples>"
+  where one does not apply say why, and the claim will say it was not shown: --entry "none - <why>", --reject "none - <why>".'''
+
+
 def unreached(cfg, o):
     """Backlog item 45: what "entry: none - <why>" and "reject: none - <why>" leave unshown, for the claim. Under
     "reach": "require" an outcome with neither line nor reason fails before its proof is run."""
@@ -1577,6 +1583,48 @@ REJECT_INPUTS, REJECT_ENDINGS, REJECT_ENDING, REJECT_EACH, REJECT_ALL = 200, 8, 
 CRASH = 'Traceback (most recent call last)'
 
 
+def _entry_runs(root, cfg, entry):
+    """(the command line an input is added to, {input: (exit code or None, last output)}, run(input)) for an entry
+    point run with one argument: `python3 <file>` for a .py file of the repository, else the command itself. A run
+    takes at most REJECT_EACH seconds and all of them REJECT_ALL; past that an input is not run and reads (None, '')."""
+    cmd, t0, seen = ('python3 ' if _entry_file(root, entry) else '') + shlex.quote(entry) + ' ', time.time(), {}
+
+    def run(x):
+        if x not in seen and time.time() - t0 < REJECT_ALL:
+            seen[x] = run_proof(root, cmd + shlex.quote(x), min(REJECT_EACH, cfg['proof_timeout']))[:2]
+        return seen.get(x, (None, ''))
+    return cmd, seen, run
+
+
+def _entry_inputs(root, cfg, o):
+    """The strings and numbers of the proof's test files, sorted: what "reject:" and the attempts' comparison start
+    from. None with a backslash, whose meaning depends on the test's language."""
+    return sorted(x for x in _proof_literals(root, cfg, o, LITERAL_ANY) if '\\' not in x)
+
+
+TOKEN = re.compile(r'\d+(?:\.\d+)?|\S')
+VARIANTS = 600  # inputs compared between passing attempts
+
+
+def variants(known):
+    """Inputs one edit away from the proof's examples, always the same ones, at most VARIANTS: each example; with one
+    token taken out, or doubled; cut short after each token; and with each number made larger by digits written after
+    its whole part: 000, 234 and 2345678901 (a decimal keeps its fraction; a whole part of 0 counts as 1). Zeros
+    reach large whole results, mixed digits reach rounding and notation. A token is a number or one other character."""
+    out = {}
+    for x in known:
+        out.setdefault(x)
+        spans = [m.span() for m in TOKEN.finditer(x)][:24]
+        for a, b in spans:
+            for v in (x[:a] + x[b:], x[:b] + x[a:], x[:b]):
+                out.setdefault(v)
+            if x[a].isdigit():
+                whole = x[a:b].split('.')[0]
+                for more in ('000', '234', '2345678901'):
+                    out.setdefault(x[:a] + (whole.lstrip('0') or '1') + more + x[a + len(whole):])
+    return pick([v for v in out if v.strip()], VARIANTS)
+
+
 def rejects(root, cfg, o):
     """Backlog item 45: "reject: <exit code>" beside "entry:" says how the entry point ends on invalid input. The
     entry point is run with one argument for each string and number of the proof's test files (at most REJECT_INPUTS;
@@ -1591,17 +1639,16 @@ def rejects(root, cfg, o):
         raise CouldNotRun('"reject:" needs "entry:", the command or .py file that is run with each input')
     if not re.match(r'^\d{1,3}$', code) or not 0 < int(code) < 256:
         raise CouldNotRun('"reject:" must be an exit code from 1 to 255, the one %s ends with on invalid input: %s' % (entry, code))
-    code, cmd, t0, seen = int(code), ('python3 ' if _entry_file(root, entry) else '') + shlex.quote(entry) + ' ', time.time(), {}
+    code, t0 = int(code), time.time()
+    cmd, seen, run = _entry_runs(root, cfg, entry)
 
     def end(x):
-        if x not in seen and time.time() - t0 < REJECT_ALL:
-            seen[x] = run_proof(root, cmd + shlex.quote(x), min(REJECT_EACH, cfg['proof_timeout']))[:2]
-            if CRASH in seen[x][1]:
-                raise Fail('%s%s crashed ("reject: %d" says invalid input ends with exit %d, and no input may end in a '
-                           'traceback):\n%s' % (cmd, shlex.quote(x), code, code, _indent(seen[x][1])))
+        if x not in seen and CRASH in run(x)[1]:
+            raise Fail('%s%s crashed ("reject: %d" says invalid input ends with exit %d, and no input may end in a '
+                       'traceback):\n%s' % (cmd, shlex.quote(x), code, code, _indent(seen[x][1])))
         return seen.get(x, (None, ''))[0]
 
-    known = pick(sorted(x for x in _proof_literals(root, cfg, o, LITERAL_ANY) if '\\' not in x), REJECT_INPUTS)
+    known = pick(_entry_inputs(root, cfg, o), REJECT_INPUTS)
     passing, refused = [x for x in known if end(x) not in (None, code)], [x for x in known if end(x) == code]
     endings = {}
     for b in refused:
@@ -2901,8 +2948,12 @@ def cmd_new(a, root):
     hidden = masked(a.proof)
     if hidden:
         raise Fail(hidden)
+    reach = [(k, ' '.join((getattr(a, k) or '').split())) for k, _ in REACH]
+    if load_config(root)['reach'] == 'require' and not all(v for _, v in reach):  # backlog 45: asked before the work
+        raise Fail(REACH_NEW % ' and '.join('--' + k for k, v in reach if not v))
     o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(globs))] +
                ([('covers', covers)] if covers else []) + ([('kind', a.kind)] if a.kind else []) +
+               [(k, v) for k, v in reach if v] +
                ([('counterfactual', REFACTOR_SKIP)] if a.kind == 'refactor' else []))
     o.save()
     odd_looking = [g for g in globs if re.search(r'[\s{}]', g)]
@@ -3057,7 +3108,7 @@ Leave alone: %(fixed)s. An attempt that edits them is discarded.
 
 %(read)s
 When you have finished, exit. odd then checks this copy as `odd done %(slug)s` would: the proof passes, fails with the
-change taken out and passes again, and small breaks in the changed lines make it fail. Do not commit, push or run
+change taken out and passes again, and small breaks in the changed lines make it fail.%(check)s Do not commit, push or run
 `odd park` here; if the outcome cannot honestly be reached, say why in your output and exit. If the proof itself is
 wrong (an assertion contradicts the outcome, the request or the proof's own data), do not change it or work around
 it: print one line `odd-dispute: <the assertion, and why it is wrong>` and exit.
@@ -3289,7 +3340,9 @@ def _keep(root, cmd, slug):
 
 def _prompt(root, o, cfg, base, fixed):
     return RACE_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), fixed=', '.join(fixed),
-                              slug=o.slug, read=read_first(root, o, base)) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
+                              slug=o.slug, read=read_first(root, o, base), check=(
+                                  ' To see that check before you exit, run `%s done %s --base %s` here and fix what it '
+                                  'reports.' % (ODD, o.slug, rev(root, base)) if base and rev(root, base) else '')) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
 
 
 def _worktree(root, run, name, head, fixed, seed=()):
@@ -3395,8 +3448,10 @@ def disagree(cfg, o, ranked):
     passing patches behave differently from the reference fix): each is marked as disputing the proof, so no winner is
     picked and the existing dispute path sends the proof back to its author. Returns the finding, or ''."""
     cmd = o.get('probe')
-    if not cmd or len(ranked) < 2:
+    if len(ranked) < 2:
         return ''
+    if not cmd:
+        return _apart(cfg, o, ranked) if o.get('entry') and not NONE.match(o.get('entry')) else ''
     seen = {}
     for at in ranked:
         rc, _, _, (digest, head) = run_proof(at['wt'], cmd, cfg['proof_timeout'], whole=True)
@@ -3414,6 +3469,40 @@ def disagree(cfg, o, ranked):
     print('  ' + why)
     for at in ranked:
         at['why'], at['dispute'] = 'passes, but disagrees with another passing attempt on "probe:"', why
+    return why
+
+
+def _apart(cfg, o, ranked):
+    """Backlog item 46: with "entry:" and no "probe:", the tool makes the probe. Each passing attempt's entry point
+    is run on variants() of the proof's examples; two attempts differ on an input when their exit codes differ, or
+    both exit 0 with different output (after another exit code only the code is compared: an error's wording, and a
+    traceback's paths, are not behaviour the proof was asked to pin). The proof holds the examples its author thought
+    of and every attempt passes it, so a wrong value on any other input shows only as a difference between them.
+    Differing attempts dispute the proof as with "probe:". Returns the finding, or ''."""
+    entry, inputs = o.get('entry'), variants(_entry_inputs(ranked[0]['wt'], cfg, o))
+    runs = [_entry_runs(at['wt'], cfg, entry)[2] for at in ranked]
+    apart = []
+    for x in inputs:
+        got = [run(x) for run in runs]
+        if any(rc is None for rc, _ in got):
+            continue  # timed out or past the time limit in an attempt: not compared
+        kinds = {}
+        for at, (rc, tail) in zip(ranked, got):
+            kinds.setdefault((rc, tail if rc == 0 else ''), (at, rc, tail))
+        if len(kinds) > 1:
+            apart.append((x, list(kinds.values())[:2]))
+    if not apart:
+        print('  %d inputs made from the proof\'s examples give the same result in all %d passing attempts (%s)'
+              % (len(inputs), len(ranked), entry))
+        return ''
+    say = lambda at, rc, tail: 'attempt %s: exit %d%s' % (  # noqa: E731
+        at['name'], rc, ', ' + (tail.strip().splitlines() or [''])[-1][:120] if rc == 0 else '')
+    why = ('passing attempts differ on %d of %d inputs made from the proof\'s examples (%s), so the proof does not pin '
+           'the behaviour down; add each with its right result to the proof: %s' % (len(apart), len(inputs), entry, '; '.join(
+               '%s (%s; %s)' % (shlex.quote(x), say(*a), say(*b)) for x, (a, b) in apart[:5])))
+    print('  ' + why)
+    for at in ranked:
+        at['why'], at['dispute'] = 'passes, but differs from another passing attempt on an input made from the proof', why
     return why
 
 
@@ -4729,6 +4818,10 @@ def main(argv=None):
                    'test runner the repository uses (required, except with --kind refactor: the whole suite)')
     s.add_argument('--test', metavar='PATH', help='with --proof auto: the test file the proof runs')
     s.add_argument('--in', dest='in_', required=True, action='append', help='globs, comma-separated (may be repeated)')
+    s.add_argument('--entry', metavar='CMD', help='the command, or .py file, a user runs to reach the outcome; the '
+                   'proof must run it (or "none - <why>")')
+    s.add_argument('--reject', metavar='CODE', help='with --entry: the exit code it ends with on invalid input; the '
+                   'entry point is then tried on inputs made from the proof\'s examples (or "none - <why>")')
     s.add_argument('--covers', metavar='IDS', help='the requirements this outcome covers, comma-separated: R1, R3 (from '
                    '.odd/requirements/<ticket>.md), or <ticket>:R1')
     s.add_argument('--kind', choices=KINDS, help='bug: seal and done require the proof to fail at the base revision '

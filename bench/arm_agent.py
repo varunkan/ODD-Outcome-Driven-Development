@@ -415,7 +415,7 @@ def odd_flow(mode, prompt, ticket=''):
             levels = ','.join(session_command(m, 'level%d' % i) for i, m in enumerate((cheap, strong), 1))
             cmd = odd + ['cascade', slug, '--agents', levels, '--base', 'main']
         else:
-            cmd = odd + ['race', slug, '--n', '3' if mode == 'race' else '1', '--agent',
+            cmd = odd + ['race', slug, '--n', os.environ.get('ARM_RACE_N', '3') if mode == 'race' else '1', '--agent',
                          session_command(cheap, 'attempt'), '--base', 'main']
         code, out = sh(cmd, said)
         if code and (outcome_field(path, 'asked') or '').startswith('Is the proof right?'):

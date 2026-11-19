@@ -200,6 +200,45 @@ What this supports: on this task, making the tool supply the inputs removed the 
 cases had not, at $0.40 a calculator against Spec Kit's $0.88, with no person. What it does not: that odd's
 calculators are now free of defects (one of three is not), or anything beyond this task and three runs.
 
+## Fifth round: a second attempt, compared on inputs the tool makes
+
+The defect left in the fourth round is a wrong value with exit 0. One attempt cannot show it; a second attempt
+written apart can. odd now compares a race's passing attempts on inputs it makes from the proof's examples, and
+attempts that differ send the proof back to its author (backlog 46, [DESIGN 3p](../../DESIGN.md)).
+
+### Replayed with no model
+
+Every program was run on the inputs odd would make from each of the twelve odd test files and three Spec Kit ones;
+two programs differ by odd's own rule ([replay2.py](data/calculator/replay2.py),
+[replay2.json](data/calculator/replay2.json)). Programs are labelled from the frozen probes.
+
+| second attempt is a clean program, and the first is | differs (test file, pair) |
+|---|---|
+| clean too (Spec Kit 1, 2, 3; fourth round 2, 3) | 0 of 120 |
+| wrong value: corrupted exponent (first round 1, 2) | 60 of 60, each |
+| wrong value: rounding (fourth round 1) | 60 of 60 |
+| lone `.` accepted, and the error after a division by zero (first round 3) | 30 of 60 |
+| the error after a division by zero only (third round 1, 2, 3) | 0 of 60, each |
+
+- Two clean programs never differ, so on these programs the comparison raises no false alarm.
+- Every wrong value is exposed by any clean second attempt, from every test file.
+- It does not see the error after a division by zero: that is what `reject:` is for, and the two checks do not
+  overlap here.
+- **Two attempts with the same defect agree.** The two first-round calculators with the corrupted exponent differ
+  from each other under 0 of 12 test files. A second attempt helps only when it is wrong differently or not at all.
+- The generator was changed twice while looking at these programs (decimals with a leading zero; large numbers with
+  mixed digits, without which the corrupted exponent was reached in 5 of 60). These figures are fitted to this task.
+
+### Fixed before the run
+
+Arm `odd-pair`: one session states the outcome and seals its proof; two coding sessions attempt it; edge cases and
+reach required. Three runs, same ticket, model and limits. Shown only if all hold; one calculator with a defect, or
+one run that ends NOT DONE, counts as partly; anything else as not shown:
+
+- 3 of 3 runs say DONE and pass the hidden tests, with nobody answering;
+- 0 of 3 calculators differ on any frozen probe;
+- the three runs cost at most $2.65 (what Spec Kit's three cost).
+
 ## What to keep in mind
 
 - **Three runs each, one task, one model.** 3 of 3 against 1 of 3 is not statistically significant.

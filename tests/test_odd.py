@@ -4268,6 +4268,63 @@ class Disputes(ProofAuthors, Agents):
         self.assertEqual(self.read('calc.py'), FIXED)
 
 
+class Apart(Agents):
+    """Backlog item 46: with "entry:" and no "probe:", passing attempts are compared on inputs odd makes from the
+    proof's examples; attempts that differ dispute the proof, so a wrong value no example reaches is not picked."""
+
+    CLI = 'import sys\nfrom calc import add\na, b = sys.argv[1].split("+")\nprint(add(int(a), int(b)))\n'
+    VIA = TEST + ('\n    def test_cli(self):\n        import subprocess, sys\n        self.assertEqual(subprocess.run('
+                  '[sys.executable, "cli.py", "2+3"], capture_output=True, text=True).stdout, "5\\n")\n')
+    LOUD = FIXED.replace('def add', 'import sys\n\n\ndef add') + 'sys.excepthook = lambda *a: (print("bad input"), sys.exit(1))\n'
+
+    def setUp(self):
+        Agents.setUp(self)
+        self.write('cli.py', self.CLI)
+        self.commit('a command line')
+        self.write('tests/test_calc.py', self.VIA)
+        self.add_line('add', 'entry: cli.py')
+
+    def test_attempts_that_differ_on_a_made_input_pick_no_winner_and_name_the_input(self):
+        self.config([self.agent('right', self.writes(FIXED)), self.agent('special', self.writes(SPECIAL, wait=0.3))])
+        out = self.no('race', 'add')
+        self.assertEqual(self.read('calc.py'), BROKEN, 'nothing is applied while passing attempts differ')
+        self.assertRegex(out, r"differ on \d+ of \d+ inputs made from the proof's examples \(cli.py\)")
+        self.assertIn('2000+3 (attempt 1: exit 0, 2003; attempt 2: exit 0, 0)', out)
+        self.assertRegex(self.read('.odd/outcomes/add.md'), r'(?m)^asked: Is the proof right\? 2 of 2 attempt\(s\) dispute it')
+
+    def test_an_attempt_is_told_how_to_run_the_check_itself_and_doing_so_does_not_spoil_it(self):
+        base = self.git('rev-list', '--max-parents=0', 'HEAD').strip()
+        seen = os.path.join(self.bin, 'seen')
+        body = ('%s\ncmd=$(%s -c \'import re, sys; print(re.search(r"run `(.*? done add --base [0-9a-f]+)`", '
+                'open(sys.argv[1]).read()).group(1))\' "$1")\necho "$cmd" > %s\n$cmd >> %s 2>&1'
+                % (self.writes(FIXED), sys.executable, seen, seen))
+        self.config([self.agent('checks', body)])
+        out = self.ok('race', 'add', '--n', '1', '--base', base)
+        with open(seen) as f:
+            said = f.read()
+        self.assertIn('done add --base ' + base, said, out)
+        self.assertIn('add: verified', said, 'the command from the prompt works inside the attempt')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+
+    def test_attempts_that_agree_pick_a_winner_and_count_the_inputs(self):
+        self.config([self.agent('right', self.writes(FIXED)), self.agent('commented', self.writes('# adds\n' + FIXED, wait=0.3))])
+        out = self.ok('race', 'add')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertRegex(out, r"\d+ inputs made from the proof's examples give the same result in all 2 passing attempts")
+
+    def test_after_an_error_only_the_exit_code_is_compared(self):
+        self.config([self.agent('right', self.writes(FIXED)), self.agent('loud', self.writes(self.LOUD, wait=0.3))])
+        out = self.ok('race', 'add')
+        self.assertIn('give the same result in all 2 passing attempts', out, 'both exit 1 on "2", with different words')
+
+    def test_variants_are_the_same_every_time_and_reach_large_numbers(self):
+        made = oddmod.variants(['2+3', '1.5'])
+        self.assertEqual(made, oddmod.variants(['2+3', '1.5']))
+        for want in ('2+3', '+3', '2+', '2', '22+3', '2000+3', '2+3234', '2+32345678901', '12345678901.5'):
+            self.assertIn(want, made)
+        self.assertLessEqual(len(oddmod.variants(['%d+%d' % (i, i) for i in range(200)])), oddmod.VARIANTS)
+
+
 SPECIAL = 'def add(a, b):\n    return 5 if (a, b) == (2, 3) else 0\n'  # passes the visible proof, special-cased
 
 
@@ -4441,8 +4498,8 @@ class RejectStable(Repo):
         self.assertIn('"reject:" must be an exit code', self.no('done', 'add', code=2))
 
     def test_under_reach_require_an_outcome_names_both_or_says_why_and_the_claim_carries_the_why(self):
-        self.write('.odd/config.json', json.dumps({'reach': 'require'}))
         self.stable(self.GOOD, entry='', reject='')
+        self.write('.odd/config.json', json.dumps({'reach': 'require'}))
         out = self.no('done', 'add')
         self.assertIn('add names no "entry:" and no "reject:"', out)
         self.assertIn('entry: none - <why>', out)
@@ -4456,6 +4513,17 @@ class RejectStable(Repo):
         self.assertIn('add: not shown to reject invalid input', self.ok('claim'))
         self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('reject: none - it takes no input', 'reject: 2'))
         self.assertIn('rejection is stable', self.ok('done', 'add'))
+
+    def test_under_reach_require_odd_new_asks_for_both_and_writes_them(self):
+        self.write('.odd/config.json', json.dumps({'reach': 'require'}))
+        new = ('new', 'add', SENTENCE, '--proof', self.PROOF, '--in', 'sum.py')
+        self.assertIn('odd new needs --entry and --reject', self.no(*new))
+        self.assertIn('odd new needs --reject', self.no(*new, '--entry', 'sum.py'))
+        self.assertFalse(os.path.exists(self.path('.odd/outcomes/add.md')))
+        self.ok(*new, '--entry', 'sum.py', '--reject', '2')
+        md = self.read('.odd/outcomes/add.md')
+        self.assertIn('\nentry: sum.py\n', md)
+        self.assertIn('\nreject: 2\n', md)
 
     def test_a_setting_other_than_off_or_require_is_refused(self):
         self.stable(self.GOOD)

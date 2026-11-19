@@ -568,6 +568,39 @@ working tree with inputs it was not written for: do not declare `reject:` for a 
 its argument. It reaches only one step beyond the proof's examples, and it judges the exit code, never the value: a
 wrong number that exits 0 passes. Tracebacks are recognised for Python only. All of it is measured on one task.
 
+### 3p. Passing attempts compared on inputs the tool makes
+
+Needs a tool newer than 0.4.0 (backlog item 46). `reject:` judges exit codes; a wrong value that exits 0 passes it,
+and the fourth calculator round left exactly that: one program rounding to 10 decimal places where the ticket says 10
+significant digits. No check of one attempt can see a wrong value the tests do not hold. A second attempt, written
+apart, can: it is unlikely to be wrong in the same way.
+
+- **When.** In `odd race` and `odd cascade`, with two or more passing attempts, an `entry:` and no `probe:`
+  (`disagree()`, `_apart()`). An outcome with `probe:` keeps its own command (3b step 4).
+- **Inputs.** `variants()` of the strings and numbers in the proof's test files, at most 600 and always the same
+  ones: each example; with one token taken out, or doubled; cut short after each token; and with each number made
+  larger by digits written after its whole part (`000`, `234`, `2345678901`). Zeros reach large whole results; mixed
+  digits reach rounding and notation.
+- **Differ** means: the exit codes differ, or both exit 0 with different output. After any other exit code only the
+  code is compared, because an error's wording and a traceback's paths are not behaviour the proof was asked to pin.
+  An input that times out in an attempt is not compared.
+- **Then.** Attempts that differ dispute the proof, exactly as with `probe:`: no winner is applied, the finding names
+  up to five inputs with each attempt's result, and the existing dispute path sends the proof back to its author,
+  who adds them with their right results.
+- **`odd new --entry`, `--reject`.** Under `"reach": "require"`, `odd new` refuses without both (`REACH_NEW`), so the
+  entry point is known before attempts start. An attempt's prompt also names the command that runs odd's check in
+  its own copy (`odd done <slug> --base <base>`), so it can fix what the check reports before it exits.
+
+Measured with no model on the fifteen calculators kept from evidence 19, every test file against every pair: two
+programs that are clean on the frozen probes never differ (0 of 120); each of the three programs with a wrong value
+differs from every clean program under every test file (60 of 60 each, on 1 to 15 of the 600 inputs). The generator
+was changed twice while looking at these same programs (leading-zero decimals, mixed digits), so these figures are
+not a prediction for other programs.
+
+Limits. Two attempts that share a wrong reading agree: the two first-round calculators with the same corrupted
+exponent never differ from each other. Attempts that differ where the requirement is silent stop the work on
+something that is not a defect. It costs a second attempt. Only programs that take one argument fit.
+
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
 **The base** is one revision for everything: where this branch left the target branch (the merge-base of HEAD and

@@ -787,3 +787,13 @@ cost to build.
   calculators still wrong on a frozen probe (rounding, a value the check does not judge), so the fixed target was
   met partly. Not built from the same design: deletion mutants (report mode) and comparing a
   race's attempts on generated inputs.
+
+### 46. Passing attempts compared on inputs the tool makes
+- **Outcome:** when two or more attempts of a race pass the proof and the outcome names its entry point, odd runs
+  each attempt on inputs it makes from the proof's examples; attempts that differ dispute the proof, so a wrong
+  value that no test holds is not picked as the winner.
+- **Evidence:** the fourth calculator round left one wrong value with exit 0, which `reject:` does not judge
+  ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B46: passing attempts compared on inputs the tool makes" (`variants()`, `_apart()`,
+  `odd new --entry --reject`; tests `Apart`; [DESIGN 3p](DESIGN.md); arm `bench/arms/odd-pair`). Replayed with no
+  model: clean pairs never differ (0 of 120), each wrong-value program differs from every clean one (60 of 60).
