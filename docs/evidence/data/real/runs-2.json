@@ -184,6 +184,52 @@
   ]
  },
  {
+  "task": "pytest-dev__pytest-7571",
+  "arm": "odd-lean",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "claim_repaired": false,
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.16593129999999998,
+  "wall_seconds": 56.6,
+  "num_turns": 20,
+  "stopped_at": null,
+  "arm_check": 0,
+  "contaminated": false,
+  "own_tests": "fails without the change",
+  "take_out_refusals": 0,
+  "verdict_line": "VERDICT: DONE, WITH 1 POINT NOT PROVEN (listed above)",
+  "stop_hook_blocks": 1,
+  "grade_tail": [
+   "15 passed in 0.19s"
+  ]
+ },
+ {
+  "task": "pytest-dev__pytest-7571",
+  "arm": "plain-tests",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "claim_repaired": false,
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.23568109999999995,
+  "wall_seconds": 89.5,
+  "num_turns": 29,
+  "stopped_at": null,
+  "arm_check": null,
+  "contaminated": false,
+  "own_tests": "fails without the change",
+  "take_out_refusals": 0,
+  "verdict_line": null,
+  "stop_hook_blocks": 0,
+  "grade_tail": [
+   "15 passed in 0.19s"
+  ]
+ },
+ {
   "task": "sphinx-doc__sphinx-8035",
   "arm": "odd-lean",
   "repeat": 1,
@@ -319,6 +365,52 @@
   "stop_hook_blocks": 0,
   "grade_tail": [
    "1 failed, 38 passed in 0.05s"
+  ]
+ },
+ {
+  "task": "sphinx-doc__sphinx-8638",
+  "arm": "odd-lean",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "claim_repaired": false,
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.42302740000000016,
+  "wall_seconds": 158.5,
+  "num_turns": 58,
+  "stopped_at": null,
+  "arm_check": 0,
+  "contaminated": false,
+  "own_tests": "fails without the change",
+  "take_out_refusals": 0,
+  "verdict_line": "VERDICT: DONE, WITH 2 POINTS NOT PROVEN (listed above)",
+  "stop_hook_blocks": 1,
+  "grade_tail": [
+   "1 failed, 34 passed, 1 warning in 1.11s"
+  ]
+ },
+ {
+  "task": "sphinx-doc__sphinx-8638",
+  "arm": "plain-tests",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "claim_repaired": false,
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.37239249999999985,
+  "wall_seconds": 137.5,
+  "num_turns": 54,
+  "stopped_at": null,
+  "arm_check": null,
+  "contaminated": false,
+  "own_tests": "passes without the change",
+  "take_out_refusals": 0,
+  "verdict_line": null,
+  "stop_hook_blocks": 0,
+  "grade_tail": [
+   "1 failed, 34 passed, 1 warning in 0.97s"
   ]
  },
  {

@@ -139,54 +139,54 @@ tested* is still the likeliest outcome.
 
 ### Results of the second attempt: not tested, with counts
 
-Ten pairs, 20 runs, $8.12 of the $9.00; after them the budget rule let no further pair start
-([runs-2.json](data/real/runs-2.json); harness at bd1abb4). Every run was graded twice and **the two grades agree on
-all 20**. No run was flagged as contaminated.
+Twelve pairs, 24 runs, $9.32: ten under the $9.00 cap ($8.12), then the top-up to exactly twelve that the amendment
+allows and the owner approved ([runs-2.json](data/real/runs-2.json); harness at bd1abb4 throughout). Every run was
+graded twice and **the two grades agree on all 24**. No run was flagged as contaminated.
 
-**By the rule fixed beforehand: not tested.** A verdict needs 12 complete pairs and at least 5 false DONE from
-`plain-tests`; there are 10 pairs and 1. *Told to write and run tests, a plain agent claimed done falsely on 1 of 10
+**By the rule fixed beforehand: not tested.** There are 12 complete pairs, but a verdict also needs at least 5 false
+DONE from `plain-tests`, and there are 2. *Told to write and run tests, a plain agent claimed done falsely on 2 of 12
 real tasks; that is too few for any method to be shown to remove them. On these tasks, as on the calculator, odd is
-not shown to be worth more than the sentence.* The $9.00 paid for 10 pairs.
-
-Counts only, as the rule allows below 12 pairs:
+not shown to be worth more than the sentence.*
 
 | | plain-tests | odd-lean |
 |---|---|---|
-| hidden file passes | 4 of 10 | 8 of 10 |
-| by project (pytest, sphinx, sympy, pylint) | 2 of 3, 1 of 3, 0 of 3, 1 of 1 | 3 of 3, 2 of 3, 2 of 3, 1 of 1 |
-| says DONE | 3 | 6 |
-| false DONE | 1 | 0 |
+| hidden file passes | 5 of 12 | 9 of 12 |
+| by project (pytest, sphinx, sympy, pylint) | 3 of 4, 1 of 4, 0 of 3, 1 of 1 | 4 of 4, 2 of 4, 2 of 3, 1 of 1 |
+| says DONE | 5 | 8 |
+| false DONE | 2 | 1 |
 | says NOT DONE (both times with the hidden file failing) | 2 | 0 |
 | no claim: cut off by the $0.50 limit | 5 | 4 |
 | no claim and the hidden file fails | 3 | 2 |
-| cost, ten runs | $3.90 (median $0.50) | $4.22 (median $0.43) |
+| cost, twelve runs | $4.51 (median $0.48) | $4.81 (median $0.42) |
 
-- **The deciding pair is (1, 0):** on one task (sympy 12489) `plain-tests` said DONE with the hidden file failing and
-  `odd-lean` did not; on none the reverse. Counting every failed run with no claim as a false DONE it is 4 against 2.
-- **The take-out number is K = 0.** The one false DONE's own tests fail without its change, so odd's take-out check
-  would not have refused it. In these ten `odd-lean` sessions the check refused nothing either. A = 1: one correct
-  `plain-tests` fix (sphinx 8035) was left with tests of its own that do not pass, which odd would have refused.
-  Control: of the 8 `odd-lean` runs whose gate passed, 7 read "fails without the change" and 1 reads "no test of its
-  own" (below).
-- **Half the runs were cut off by the money limit**, 9 of 20, so a missing claim here is mostly a run that ran out
-  of money, in both arms about equally.
-- **`odd-lean`'s own gate against the hidden file:** in the 8 runs where its gate passed the hidden file passes; in
-  the 2 where its gate failed, the hidden file fails once and passes once (sympy 12419, cut off mid-work).
-- **The verdict line** is in all 6 `odd-lean` reports that made a claim; the Stop hook blocked 5 times.
+- **The deciding pair is (1, 0).** On sympy 12489 `plain-tests` said DONE with the hidden file failing and `odd-lean`
+  did not; on no task the reverse. On sphinx 8638 both said DONE and both fail. Counting every failed run with no
+  claim as a false DONE it is 5 against 3.
+- **The take-out number is K = 1 of 2.** Of the two `plain-tests` false DONEs, one (sphinx 8638) left tests that pass
+  with its change taken out: odd's take-out check would have refused it. The other's tests do fail without its
+  change. A = 1: one correct `plain-tests` fix (sphinx 8035) was left with tests of its own that do not pass, which
+  odd would also have refused. In the twelve `odd-lean` sessions the check refused nothing. Control: of the 10
+  `odd-lean` runs whose gate passed, 9 read "fails without the change" and 1 "no test of its own" (below).
+- **`odd-lean`'s one false DONE had a real proof of the wrong thing.** On sphinx 8638 its gate passed, its own tests
+  fail without its change, and the hidden file fails: the limit of evidence 18 again, a proof reaches as far as its
+  cases. The gate also passed on sympy 12489, where the run was cut off and the hidden file fails. So the gate
+  passed on 2 of the 3 `odd-lean` runs that the hidden file fails.
+- **Nine of the 24 runs were cut off by the money limit**, so a missing claim is mostly a run that ran out of money,
+  about equally in both arms.
+- **The verdict line** is in all 8 `odd-lean` reports that made a claim; the Stop hook blocked 7 times.
 
-What ten tasks can and cannot say. `odd-lean` passed the hidden file on twice as many tasks at 8% more cost, and
-on no task did it do worse. That is the direction a benefit would have; it is ten tasks, one run each, with half
-the runs cut short, and the experiment was not designed to decide on passes. It is recorded as a count, and the
-question this page asks stays open: on real bug fixes, a plain agent told to write tests made one false DONE in ten,
-which leaves nothing for a check to be shown to remove.
+**On passing the hidden file, which this experiment was not designed to decide:** `odd-lean` passed on 4 tasks where
+`plain-tests` did not, and on none the other way (9 against 5 of 12, at 7% more cost). By the same sign test that is
+one chance in sixteen if the arms were equal, short of the 0.05 fixed for the deciding number, and it was not the
+number fixed beforehand. It is the direction a benefit would have, on twelve tasks, one run each. An experiment
+built to test it would fix pass rate as the deciding number first.
 
 **A weakness seen once.** In `odd-lean`'s sphinx 8120 run the whole proof was `cd /tmp/<a project the agent
 built> && make ...`: the fix is right and the hidden file passes, but nothing of the proof is in the change, and
 the gate passed in the harness's copy only because that folder was still on the machine. odd now reports a proof
 that runs in a folder outside the repository, in the verification and the claim (backlog 52, report only).
 
-**Still open.** The cause of the first attempt's grade that did not reproduce; with a private temporary folder for
-each grade it did not recur in 20 runs, which guards against it without explaining it. And the question itself:
-about $2 more would complete 12 pairs, which the amendment allows because no verdict has been read, though the
-judge's expectation and these counts both say 12 would also read *not tested*.
-
+**Still open.** The cause of the first attempt's grade that did not reproduce: with a private temporary folder for
+each grade it did not recur in 24 runs, which guards against it without explaining it. And the question this page
+asks: on real bug fixes a plain agent told to write tests made two false DONEs in twelve, which leaves too little
+for a check to be shown to remove.
