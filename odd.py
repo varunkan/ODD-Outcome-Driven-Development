@@ -1967,6 +1967,20 @@ def anchored(root, cfg, o):
             'root without `cd <absolute path>`.' % (os.path.abspath(root), ', '.join(where)))
 
 
+def outside(root, o):
+    """Report only (backlog item 52): the folders outside the repository that the proof command changes into (`cd
+    /tmp/x && ...`). What is there is not in the change, so CI or a reviewer cannot rerun the proof, and the take-out
+    check cannot see whether that folder's files matter. Measured once: a verified outcome whose whole proof was a
+    project the agent had built under /tmp. It enters as a report by the admission rule (DESIGN 3r)."""
+    here, out = os.path.realpath(root), []
+    for m in re.finditer(r'(?:^|[;&|(]\s*)cd\s+("[^"]+"|\'[^\']+\'|\S+)', o.get('proof') or ''):
+        path = m.group(1).strip('"\'')
+        real = os.path.realpath(path)
+        if os.path.isabs(path) and real != here and not real.startswith(here + os.sep) and path not in out:
+            out.append(path)
+    return out
+
+
 def copied(root, cfg, o, base, targets):
     """Backlog item 40, advisory: changed product lines that branch on two or more literals of the proof's own test
     files (or on one string of them), the shape of a change special-cased to the proof's inputs, and changed lines that
@@ -2186,7 +2200,8 @@ def _verify(root, cfg, o, base, changed, say):
     if hidden:
         raise Fail(hidden)
     _, _, _, product = classify(changed, cfg)
-    beyond = unreached(cfg, o)
+    beyond = unreached(cfg, o) + ['the proof runs in a folder outside the repository (%s): what is there is not in '
+                                  'the change, so nobody else can rerun it' % p for p in outside(root, o)]
     aimed = target_check(root, cfg, o) if o.get('target') else None
     premised = premises(root, cfg, o) if o.get('assume') else None
     targets = [p for p in product if o.covers(p)]

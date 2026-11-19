@@ -511,7 +511,7 @@ def one_run(cfg, task, arm, repeat):
            'arm_check': None, 'arm_notes': None, 'error': None, 'final': '', 'max_turns': cfg['max_turns'],
            'max_budget_usd': cfg['max_budget_usd'], 'timeout_seconds': cfg['timeout'], 'cli': cfg['cli'],
            'provenance': dict(cfg['provenance'], task_tree=cfg['trees'][task['id']], arm_version=cfg['versions'][arm]),
-           'env_passed': None, 'stopped_at': None, 'claim_reason': '', 'regression_passed': None,
+           'env_passed': None, 'stopped_at': None, 'claim_reason': '', 'regression_passed': None, 'grade_tail': None,
            'changed_lines_py': None, 'transcript': None, 'contaminated': False, 'contaminated_by': None,
            'models': [], 'branch': None, 'worktrees': None, 'left_outside': None, 'leftovers_killed': None,
            'warnings': []}
@@ -842,7 +842,13 @@ def grade(task, copy, env, rec, canaries):
                 out.write('\n# %s\n' % canary)
     # a real project's whole test file can take minutes on correct code: three times what realtasks.py measured
     limit = max(GRADE_TIMEOUT, 3 * (task.get('grade_seconds') or 0))
-    status = run(task['grade'], copy, env, limit)[0]
+    # A grade has a temporary folder of its own, beside the copy and gone with it: project tests write there (pytest's
+    # numbered folders), and the machine's shared one holds what every earlier session and grade left behind.
+    own_tmp = os.path.join(os.path.dirname(copy), 'grade-tmp')
+    os.makedirs(own_tmp, exist_ok=True)
+    status, out, err = run(task['grade'], copy, dict(env, TMPDIR=own_tmp), limit)
+    # how it ended, kept with the verdict: one recorded failure could not be reproduced and had left nothing to read
+    rec['grade_tail'] = '\n'.join(((out or '') + '\n' + (err or '')).strip().splitlines()[-12:])[-1500:]
     if status is None:  # code that hangs is the session's outcome: a fail, not a machine error
         rec['warnings'].append('grade was stopped after %d seconds' % limit)
     rec['passed'] = status == 0

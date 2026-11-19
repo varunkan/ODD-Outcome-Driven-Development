@@ -302,6 +302,21 @@ class GradeTimeTest(unittest.TestCase):
             state = 'gone'
         self.assertIn(state, ('gone', 'Z'))
 
+    def test_a_grade_has_its_own_temporary_folder_and_its_last_lines_are_kept(self):
+        mod = module('run')
+        work = tempfile.mkdtemp(prefix='bench-env-test-')
+        self.addCleanup(shutil.rmtree, work, ignore_errors=True)
+        task_dir, copy = os.path.join(work, 'task'), os.path.join(work, 'g', 'project')
+        write(os.path.join(task_dir, 'hidden', 'tests_hidden', 'present.txt'), 'x\n')
+        os.makedirs(os.path.join(task_dir, 'repo'))
+        os.makedirs(copy)
+        rec = {'final': '', 'claim': 'none', 'claim_reason': '', 'warnings': []}
+        task = {'dir': task_dir, 'grade': 'echo "tmp is $TMPDIR"; echo 1 failed >&2; test -d "$TMPDIR" && exit 1'}
+        mod.grade(task, copy, {'PATH': os.environ['PATH'], 'TMPDIR': '/shared-by-everyone'}, rec, [])
+        self.assertIs(rec['passed'], False)
+        self.assertIn('tmp is %s' % os.path.join(work, 'g', 'grade-tmp'), rec['grade_tail'])
+        self.assertIn('1 failed', rec['grade_tail'], 'what the grade said last is in the record')
+
     def test_a_slow_whole_file_grade_gets_the_time_it_was_measured_to_need(self):
         mod = module('run')
         work = tempfile.mkdtemp(prefix='bench-env-test-')

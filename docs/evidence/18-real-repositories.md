@@ -143,6 +143,8 @@ fails 4 of 4. Still to do before any claim: the blind screen of each task's asse
 runs themselves. Differences from SWE-bench's own environments: dependencies are resolved by date, not by its pins;
 the project is on the path, not installed; sympy is graded with pytest.
 
+**Run since:** [evidence 22](22-real-bug-fixes.md), twelve pairs, not tested by its own rule.
+
 ## A first fix tried: a blind second proof (odd-dual), 6 runs
 
 Idea, from applying the "several independent minds" step of Google's AI co-scientist to the requirement rather than to

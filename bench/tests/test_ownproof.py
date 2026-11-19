@@ -77,5 +77,29 @@ class OwnProofTest(unittest.TestCase):
         self.assertEqual(self.verdict()['product'], ['calc.py'])
 
 
+class RegradeTest(unittest.TestCase):
+    """bench/regrade.py grades a kept tree again with run.py's own grade(), so a single grade is never the count."""
+
+    def test_a_kept_tree_is_graded_again_and_a_missing_one_is_said(self):
+        import json
+        import regrade
+        root = tempfile.mkdtemp(prefix='regrade-test-')
+        self.addCleanup(shutil.rmtree, root, True)
+        task_dir, tree = os.path.join(root, 'tasks', 't1'), os.path.join(root, 'kept')
+        os.makedirs(os.path.join(task_dir, 'hidden', 'tests_hidden'))
+        os.makedirs(os.path.join(task_dir, 'repo'))
+        os.makedirs(tree)
+        with open(os.path.join(task_dir, 'task.json'), 'w') as f:
+            json.dump({'id': 't1', 'grade': 'test -f fixed.txt && echo graded-here'}, f)
+        rec = {'task': 't1', 'arm': 'a', 'session_dir': tree, 'final': 'RESULT: DONE', 'claim': 'DONE', 'passed': True}
+        self.assertEqual(regrade.regrade(rec, root)[0], False, 'the recorded pass is not taken on trust')
+        with open(os.path.join(tree, 'fixed.txt'), 'w') as f:
+            f.write('x')
+        passed, tail = regrade.regrade(rec, root)
+        self.assertEqual((passed, 'graded-here' in tail), (True, True))
+        self.assertFalse(os.path.exists(os.path.join(tree, 'tests_hidden')), 'hidden tests never reach the kept tree')
+        self.assertEqual(regrade.regrade(dict(rec, session_dir=os.path.join(root, 'gone')), root), (None, 'no kept tree'))
+
+
 if __name__ == '__main__':
     unittest.main()

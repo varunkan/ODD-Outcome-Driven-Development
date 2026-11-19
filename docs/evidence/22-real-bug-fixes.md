@@ -111,3 +111,82 @@ What four runs can and cannot say:
 
 **What it would take to answer the question.** First, the cause of the grade that does not reproduce; then about
 $20 for the 26 pairs with the money limit raised to where runs finish, or about $9 for the first 12.
+
+## Second attempt, amended before it is run
+
+The owner approved continuing, with a hard cap of $9.00 for this attempt. The same judge amended the design
+([ruling-2.md](data/real/ruling-2.md)) before any further run. What changes:
+
+- **Limits.** `--max-budget-usd 0.50` (it was 0.40: both sphinx runs were cut off at $0.41, already passing, before
+  they could report), `--jobs 2` throughout, $0.53 reserved for every run. Turns and time are unchanged.
+- **Tasks 1 and 2 are run again** as pairs 1 and 2. The first attempt's four runs stay as reported above and are
+  never pooled: the money limit an agent sees has changed, and one of them carries the grade that does not
+  reproduce.
+- **Every run is graded twice.** The harness now grades in a temporary folder of its own and keeps the grade's last
+  lines; after all runs, [regrade.py](../../bench/regrade.py) grades each kept tree once more. The run-time grade
+  is the grade of record. A run whose two grades differ is a disputed run: every count is computed under both
+  readings, a verdict of shown needs every condition under both, and where the readings disagree the weaker verdict
+  stands. Three or more disputed runs: *not tested: this harness's grade does not reproduce*.
+- **What $9.00 buys.** It guarantees 8 pairs. Twelve are likely and not certain: pair 12 starts only if the first
+  11 cost $7.94 or less. With fewer than 12 the verdict is *not tested* and counts only are reported; the minimum
+  of 12 pairs and 5 false DONEs from `plain-tests` stands.
+- **Two threats are added:** the limits were raised after the first attempt's costs were seen, and the cause of the
+  grade that did not reproduce was never found, so the new safeguards guard against it without explaining it.
+
+Nothing else changes: the hypothesis, the deciding number, the 26 tasks and their order, the arms, the model, the
+verdict wordings and the take-out number are as first ruled. The judge's expectation, again as an inference: *not
+tested* is still the likeliest outcome.
+
+### Results of the second attempt: not tested, with counts
+
+Twelve pairs, 24 runs, $9.32: ten under the $9.00 cap ($8.12), then the top-up to exactly twelve that the amendment
+allows and the owner approved ([runs-2.json](data/real/runs-2.json); harness at bd1abb4 throughout). Every run was
+graded twice and **the two grades agree on all 24**. No run was flagged as contaminated.
+
+**By the rule fixed beforehand: not tested.** There are 12 complete pairs, but a verdict also needs at least 5 false
+DONE from `plain-tests`, and there are 2. *Told to write and run tests, a plain agent claimed done falsely on 2 of 12
+real tasks; that is too few for any method to be shown to remove them. On these tasks, as on the calculator, odd is
+not shown to be worth more than the sentence.*
+
+| | plain-tests | odd-lean |
+|---|---|---|
+| hidden file passes | 5 of 12 | 9 of 12 |
+| by project (pytest, sphinx, sympy, pylint) | 3 of 4, 1 of 4, 0 of 3, 1 of 1 | 4 of 4, 2 of 4, 2 of 3, 1 of 1 |
+| says DONE | 5 | 8 |
+| false DONE | 2 | 1 |
+| says NOT DONE (both times with the hidden file failing) | 2 | 0 |
+| no claim: cut off by the $0.50 limit | 5 | 4 |
+| no claim and the hidden file fails | 3 | 2 |
+| cost, twelve runs | $4.51 (median $0.48) | $4.81 (median $0.42) |
+
+- **The deciding pair is (1, 0).** On sympy 12489 `plain-tests` said DONE with the hidden file failing and `odd-lean`
+  did not; on no task the reverse. On sphinx 8638 both said DONE and both fail. Counting every failed run with no
+  claim as a false DONE it is 5 against 3.
+- **The take-out number is K = 1 of 2.** Of the two `plain-tests` false DONEs, one (sphinx 8638) left tests that pass
+  with its change taken out: odd's take-out check would have refused it. The other's tests do fail without its
+  change. A = 1: one correct `plain-tests` fix (sphinx 8035) was left with tests of its own that do not pass, which
+  odd would also have refused. In the twelve `odd-lean` sessions the check refused nothing. Control: of the 10
+  `odd-lean` runs whose gate passed, 9 read "fails without the change" and 1 "no test of its own" (below).
+- **`odd-lean`'s one false DONE had a real proof of the wrong thing.** On sphinx 8638 its gate passed, its own tests
+  fail without its change, and the hidden file fails: the limit of evidence 18 again, a proof reaches as far as its
+  cases. The gate also passed on sympy 12489, where the run was cut off and the hidden file fails. So the gate
+  passed on 2 of the 3 `odd-lean` runs that the hidden file fails.
+- **Nine of the 24 runs were cut off by the money limit**, so a missing claim is mostly a run that ran out of money,
+  about equally in both arms.
+- **The verdict line** is in all 8 `odd-lean` reports that made a claim; the Stop hook blocked 7 times.
+
+**On passing the hidden file, which this experiment was not designed to decide:** `odd-lean` passed on 4 tasks where
+`plain-tests` did not, and on none the other way (9 against 5 of 12, at 7% more cost). By the same sign test that is
+one chance in sixteen if the arms were equal, short of the 0.05 fixed for the deciding number, and it was not the
+number fixed beforehand. It is the direction a benefit would have, on twelve tasks, one run each. An experiment
+built to test it would fix pass rate as the deciding number first.
+
+**A weakness seen once.** In `odd-lean`'s sphinx 8120 run the whole proof was `cd /tmp/<a project the agent
+built> && make ...`: the fix is right and the hidden file passes, but nothing of the proof is in the change, and
+the gate passed in the harness's copy only because that folder was still on the machine. odd now reports a proof
+that runs in a folder outside the repository, in the verification and the claim (backlog 52, report only).
+
+**Still open.** The cause of the first attempt's grade that did not reproduce: with a private temporary folder for
+each grade it did not recur in 24 runs, which guards against it without explaining it. And the question this page
+asks: on real bug fixes a plain agent told to write tests made two false DONEs in twelve, which leaves too little
+for a check to be shown to remove.
