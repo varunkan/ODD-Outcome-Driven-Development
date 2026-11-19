@@ -1,0 +1,568 @@
+[
+ {
+  "id": "pylint-dev__pylint-4551",
+  "repo": "pylint-dev/pylint",
+  "targets": [
+   "tests/unittest_pyreverse_writer.py::test_dot_files[packages_No_Name.dot]",
+   "tests/unittest_pyreverse_writer.py::test_dot_files[classes_No_Name.dot]",
+   "tests/unittest_pyreverse_writer.py::test_get_visibility[names0-special]",
+   "tests/unittest_pyreverse_writer.py::test_get_visibility[names1-private]",
+   "tests/unittest_pyreverse_writer.py::test_get_visibility[names2-public]",
+   "tests/unittest_pyreverse_writer.py::test_get_visibility[names3-protected]",
+   "tests/unittest_pyreverse_writer.py::test_get_annotation_annassign[a:",
+   "tests/unittest_pyreverse_writer.py::test_get_annotation_assignattr[def",
+   "tests/unittest_pyreverse_writer.py::test_infer_node_1",
+   "tests/unittest_pyreverse_writer.py::test_infer_node_2"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "Tests import and call get_annotation and infer_node from pylint.pyreverse.utils and require the label 'Optional[str]'; the ticket names none of these functions and only asks for 'something like a : String'. The whole file is fail-to-pass because of that import.",
+  "ticket_chars": 753
+ },
+ {
+  "id": "pylint-dev__pylint-4604",
+  "repo": "pylint-dev/pylint",
+  "targets": [
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_bitbucket_issue_78",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_no_name_in_module_skipped",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_all_elements_without_parent",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_redefined_builtin_ignored",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_redefined_builtin_custom_modules",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_redefined_builtin_modname_not_ignored",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_redefined_builtin_in_function",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_unassigned_global",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_listcomp_in_decorator",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_listcomp_in_ancestors",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_return_type_annotation",
+   "tests/checkers/unittest_variables.py::TestVariablesChecker::test_attribute_in_type_comment",
+   "tests/checkers/unittest_variables.py::TestVariablesCheckerWithTearDown::test_custom_callback_string",
+   "tests/checkers/unittest_variables.py::TestVariablesCheckerWithTearDown::test_redefined_builtin_modname_not_ignored",
+   "tests/checkers/unittest_variables.py::TestVariablesCheckerWithTearDown::test_redefined_builtin_in_function",
+   "tests/checkers/unittest_variables.py::TestVariablesCheckerWithTearDown::test_import_as_underscore",
+   "tests/checkers/unittest_variables.py::TestVariablesCheckerWithTearDown::test_lambda_in_classdef",
+   "tests/checkers/unittest_variables.py::TestVariablesCheckerWithTearDown::test_nested_lambda",
+   "tests/checkers/unittest_variables.py::TestVariablesCheckerWithTearDown::test_ignored_argument_names_no_message",
+   "tests/checkers/unittest_variables.py::TestVariablesCheckerWithTearDown::test_ignored_argument_names_starred_args",
+   "tests/checkers/unittest_variables.py::TestMissingSubmodule::test_package_all"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_attribute_in_type_comment itself (no unused-import for foo.Bar / Bar.Boo in type comments) is IMPLIED, but all 21 tests of the file are fail-to-pass, which can only come from the new module-level import 'from pylint.constants import IS_PYPY' - a constant the ticket never mentions (inferred from the F2P list, not checked in source).",
+  "ticket_chars": 648
+ },
+ {
+  "id": "pylint-dev__pylint-4661",
+  "repo": "pylint-dev/pylint",
+  "targets": [
+   "tests/lint/unittest_lint.py::test_pylint_home"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_pylint_home asserts PYLINT_HOME == appdirs.user_cache_dir('pylint') (the cache dir, via the appdirs package); the ticket calls the directory data storage and points to $HOME/.local/share/<PROGRAM_NAME>.",
+  "ticket_chars": 990
+ },
+ {
+  "id": "pylint-dev__pylint-6386",
+  "repo": "pylint-dev/pylint",
+  "targets": [
+   "tests/config/test_config.py::test_short_verbose"
+  ],
+  "rating": "IMPLIED",
+  "reason": "test_short_verbose: '-v' must run without an argument and behave like --verbose ('Using config file' on stderr); the ticket asks for 'similar behaviour to the long option'.",
+  "ticket_chars": 704
+ },
+ {
+  "id": "pylint-dev__pylint-8898",
+  "repo": "pylint-dev/pylint",
+  "targets": [
+   "tests/config/test_config.py::test_csv_regex_error"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_csv_regex_error demands that '(foo{1,}, foo{1,3}})' is split at the comma outside the braces and reports the exact message '...(foo{1,} beginning at index 0: missing ), unterminated subpattern'; the ticket only asks that valid regexes with commas be expressible (or escapable) and fixes no splitting rule.",
+  "ticket_chars": 3377
+ },
+ {
+  "id": "pytest-dev__pytest-10051",
+  "repo": "pytest-dev/pytest",
+  "targets": [
+   "testing/logging/test_fixture.py::test_clear_for_call_stage"
+  ],
+  "rating": "IMPLIED",
+  "reason": "test_clear_for_call_stage: after caplog.clear(), get_records('call') is empty and then receives new records - exactly the ticket's complaint; the setup-stage records staying untouched is unchanged prior behaviour (ticket is silent on it, mild doubt).",
+  "ticket_chars": 1334
+ },
+ {
+  "id": "pytest-dev__pytest-10356",
+  "repo": "pytest-dev/pytest",
+  "targets": [
+   "testing/test_mark.py::test_mark_mro"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_mark_mro calls the internal get_unpacked_marks(C, consider_mro=False) and requires an exact order [c, a, b]; the keyword and the function are not in the ticket.",
+  "ticket_chars": 5158
+ },
+ {
+  "id": "pytest-dev__pytest-5631",
+  "repo": "pytest-dev/pytest",
+  "targets": [
+   "testing/python/integration.py::TestMockDecoration::test_mock_sentinel_check_against_numpy_like"
+  ],
+  "rating": "IMPLIED",
+  "reason": "A patch 'new' object whose __eq__ raises (numpy-like) must be collected and the test pass; this is the ticket's ValueError case.",
+  "ticket_chars": 2265
+ },
+ {
+  "id": "pytest-dev__pytest-5840",
+  "repo": "pytest-dev/pytest",
+  "targets": [
+   "testing/test_conftest.py::test_setinitial_conftest_subdirs[test]",
+   "testing/test_conftest.py::test_setinitial_conftest_subdirs[tests]"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_setinitial_conftest_subdirs requires pathlib.Path(...).resolve() to be a key of the private dict PytestPluginManager._conftestpath2mod; the ticket only reports an ImportError from lower-cased paths on Windows.",
+  "ticket_chars": 610
+ },
+ {
+  "id": "pytest-dev__pytest-7236",
+  "repo": "pytest-dev/pytest",
+  "targets": [
+   "testing/test_unittest.py::test_pdb_teardown_skipped[@unittest.skip]"
+  ],
+  "rating": "IMPLIED",
+  "reason": "With --pdb a @unittest.skip test must be reported skipped and setUp/tearDown must not run; stated in the ticket.",
+  "ticket_chars": 2607
+ },
+ {
+  "id": "pytest-dev__pytest-7324",
+  "repo": "pytest-dev/pytest",
+  "targets": [
+   "testing/test_mark_expression.py::test_valid_idents[True]",
+   "testing/test_mark_expression.py::test_valid_idents[False]",
+   "testing/test_mark_expression.py::test_valid_idents[None]"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "test_valid_idents[True/False/None] requires Expression.compile of these words to succeed and evaluate them as ordinary identifiers through the matcher; the ticket only says compiling 'False' crashes a debug interpreter and does not say what the result should be.",
+  "ticket_chars": 462
+ },
+ {
+  "id": "pytest-dev__pytest-7490",
+  "repo": "pytest-dev/pytest",
+  "targets": [
+   "testing/test_skipping.py::TestXFail::test_dynamic_xfail_set_during_runtest_failed",
+   "testing/test_skipping.py::TestXFail::test_dynamic_xfail_set_during_runtest_passed_strict"
+  ],
+  "rating": "IMPLIED",
+  "reason": "Dynamically added xfail must give xfailed for a failing test and, with strict=True, failed for a passing one; ticket says it must be treated like a statically marked xfail.",
+  "ticket_chars": 22402
+ },
+ {
+  "id": "pytest-dev__pytest-7571",
+  "repo": "pytest-dev/pytest",
+  "targets": [
+   "testing/logging/test_fixture.py::test_change_level_undos_handler_level"
+  ],
+  "rating": "IMPLIED",
+  "reason": "caplog.handler.level must be back to 0 in the next test after set_level; this is the ticket's example.",
+  "ticket_chars": 448
+ },
+ {
+  "id": "sphinx-doc__sphinx-10466",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_build_gettext.py::test_Catalog_duplicated_message"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "test_Catalog_duplicated_message requires de-duplicated locations (IMPLIED) in one exact order [(filename,1),(filename,2),(yetanother,1)]; the ticket says nothing on order and its own suggested fix (list(set(...))) would not guarantee it.",
+  "ticket_chars": 3004
+ },
+ {
+  "id": "sphinx-doc__sphinx-11445",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_util_rst.py::test_prepend_prolog_with_roles_in_sections_with_newline",
+   "tests/test_util_rst.py::test_prepend_prolog_with_roles_in_sections_without_newline"
+  ],
+  "rating": "IMPLIED",
+  "reason": "prepend_prolog must put the prolog before a first line ':mod:`foo`' heading instead of treating it as docinfo; this is the ticket's bug at the function that inserts rst_prolog, in the layout the function already uses (mild doubt: the ticket does not name the function).",
+  "ticket_chars": 1726
+ },
+ {
+  "id": "sphinx-doc__sphinx-7590",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_domain_cpp.py::test_expressions"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_expressions demands exact mangled ids for user-defined literals (e.g. 'clL_Zli3q_JEL6.62607015e-34EE') and for character/string/hex-float UDLs; the ticket only asks that UDLs be supported.",
+  "ticket_chars": 582
+ },
+ {
+  "id": "sphinx-doc__sphinx-8035",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_ext_autodoc_private_members.py::test_private_members"
+  ],
+  "rating": "IMPLIED",
+  "reason": "private-members given '_public_function' must document only that member; ticket asks for :private-members: to take arguments like :members:.",
+  "ticket_chars": 712
+ },
+ {
+  "id": "sphinx-doc__sphinx-8056",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_ext_napoleon_docstring.py::NumpyDocstringTest::test_multiple_parameters"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "test_multiple_parameters: with napoleon_use_param=True 'x1, x2 : array_like' must be split into separate :param x1:/:type x1: and :param x2:/:type x2: fields; the ticket asks for one combined entry 'x1, x2 (array_like, optional) - ...' and does not mention splitting.",
+  "ticket_chars": 1512
+ },
+ {
+  "id": "sphinx-doc__sphinx-8120",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_intl.py::test_customize_system_message"
+  ],
+  "rating": "IMPLIED",
+  "reason": "A sphinx.po in the project's locale dir must override the built-in translation ('Quick search' -> 'QUICK SEARCH'); this is the ticket's request.",
+  "ticket_chars": 1819
+ },
+ {
+  "id": "sphinx-doc__sphinx-8265",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_pycode_ast.py::test_unparse[(1,"
+  ],
+  "rating": "IMPLIED",
+  "reason": "unparse of '(1, 2, 3)' must give '(1, 2, 3)'; ticket shows the tuple default must keep its parentheses.",
+  "ticket_chars": 1675
+ },
+ {
+  "id": "sphinx-doc__sphinx-8551",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_domain_py.py::test_info_field_list"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "test_info_field_list requires the type pending_xref nodes to carry attributes 'py:module'='example' and 'py:class'='Class'; the ticket asks that lookups start from the current module but does not name the node attributes that carry it.",
+  "ticket_chars": 1812
+ },
+ {
+  "id": "sphinx-doc__sphinx-8638",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_domain_py.py::test_info_field_list_var"
+  ],
+  "rating": "IMPLIED",
+  "reason": "test_info_field_list_var: the ':var' name is rendered as plain literal_strong with no cross-reference; ticket says the variable must not be linked.",
+  "ticket_chars": 2886
+ },
+ {
+  "id": "sphinx-doc__sphinx-9602",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_domain_py.py::test_parse_annotation_Literal"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "test_parse_annotation_Literal requires the Literal values to be bare Text nodes ('True', \"'abc'\") between punctuation nodes; the ticket requires only that the value be shown and not raise the nitpick warning, which other node shapes would also satisfy.",
+  "ticket_chars": 1359
+ },
+ {
+  "id": "sphinx-doc__sphinx-9673",
+  "repo": "sphinx-doc/sphinx",
+  "targets": [
+   "tests/test_ext_autodoc_configs.py::test_autodoc_typehints_description_no_undoc"
+  ],
+  "rating": "IMPLIED",
+  "reason": "With target 'documented', a function with a ':returns:' field must get 'Return type: int'; ticket: 'As the return is specified, the return type should be present'.",
+  "ticket_chars": 1386
+ },
+ {
+  "id": "sympy__sympy-12419",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_Identity"
+  ],
+  "rating": "IMPLIED",
+  "reason": "Sum of all elements of Identity(n) with n=3 must be 3 and In[i, j] must not be 0; ticket says the total must be n.",
+  "ticket_chars": 1111
+ },
+ {
+  "id": "sympy__sympy-12489",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_Permutation_subclassing"
+  ],
+  "rating": "IMPLIED",
+  "reason": "A Permutation subclass must keep its type through operations (type(p*q) == CustomPermutation) and pass the Permutation tests; ticket asks that subclassing work via the class reference.",
+  "ticket_chars": 1206
+ },
+ {
+  "id": "sympy__sympy-13031",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_sparse_matrix"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "test_sparse_matrix asserts SparseMatrix.hstack/vstack of zero-row/zero-column matrices give shape (0,6)/(6,0); the ticket's example and text are about sy.Matrix (dense) and only show hstack, SparseMatrix is not named.",
+  "ticket_chars": 682
+ },
+ {
+  "id": "sympy__sympy-13551",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_13546"
+  ],
+  "rating": "IMPLIED",
+  "reason": "Product(n + 1/2**k, (k, 0, n-1)).doit().subs(n, 2) must be 15/2; stated in the ticket.",
+  "ticket_chars": 491
+ },
+ {
+  "id": "sympy__sympy-13615",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_Complement"
+  ],
+  "rating": "IMPLIED",
+  "reason": "Complement(FiniteSet(x, y, 2), Interval(-10, 10)) must equal Complement(FiniteSet(x, y), Interval(-10, 10)); stated in the ticket.",
+  "ticket_chars": 195
+ },
+ {
+  "id": "sympy__sympy-13647",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_col_insert"
+  ],
+  "rating": "IMPLIED",
+  "reason": "eye(6).col_insert(3, 6x2 of twos) must keep the identity block in the bottom rows; this is the ticket's example.",
+  "ticket_chars": 1032
+ },
+ {
+  "id": "sympy__sympy-13852",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_polylog_values"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_polylog_values requires automatic evaluation polylog(2, 1/2) == pi**2/12 - log(2)**2/2 without expand_func, the value polylog(2, 2) == pi**2/4 - I*pi*log(2), and an evaluate=False keyword; the ticket asks for expand_func results only.",
+  "ticket_chars": 1873
+ },
+ {
+  "id": "sympy__sympy-13877",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_determinant"
+  ],
+  "rating": "IMPLIED",
+  "reason": "det of the n x n matrix [i + a*j] must be 0 for n = 5, 6, 7 instead of nan / TypeError; the mathematically correct value for the ticket's own example.",
+  "ticket_chars": 4301
+ },
+ {
+  "id": "sympy__sympy-13974",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_tensor_product_simp"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "tensor_product_simp(TP(A, B)**x) == TP(A**x, B**x) for a symbolic exponent x; the ticket shows only integer powers written as repeated products.",
+  "ticket_chars": 1008
+ },
+ {
+  "id": "sympy__sympy-15349",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_quaternion_conversions"
+  ],
+  "rating": "IMPLIED",
+  "reason": "to_rotation_matrix entries with the corrected sign; ticket says one sin(x) must be negative and the standard formula fixes which (the other entries already fix the convention).",
+  "ticket_chars": 705
+ },
+ {
+  "id": "sympy__sympy-15599",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_Mod"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "Mod(3*i, 2) == Mod(i, 2) is IMPLIED, but the same test also adds Mod(8*i/j, 4) == 4*Mod(2*i/j, 1), an exact output form the ticket never mentions (cannot tell without running whether it already passed).",
+  "ticket_chars": 1777
+ },
+ {
+  "id": "sympy__sympy-15976",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_presentation_symbol"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_presentation_symbol demands a new node layout: msub/msup/msubsup as the top node instead of wrapped in mi; the ticket only reports that 'x2' is invisible and names no structure.",
+  "ticket_chars": 1028
+ },
+ {
+  "id": "sympy__sympy-16792",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_ccode_unused_array_arg"
+  ],
+  "rating": "IMPLIED",
+  "reason": "C code for an unused array argument must have signature 'double test(double *x)'; ticket says x should be double *.",
+  "ticket_chars": 1879
+ },
+ {
+  "id": "sympy__sympy-17318",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_12420"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_issue_12420 requires the private _sqrt_match(4 + I) == [] and sqrtdenest((3 - sqrt(2)*sqrt(4 + 3*I) + 3*I)/2) == I, while the ticket says the expression should be returned unchanged.",
+  "ticket_chars": 2256
+ },
+ {
+  "id": "sympy__sympy-18211",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_18188"
+  ],
+  "rating": "IMPLIED",
+  "reason": "Eq(x*cos(x) - 3*sin(x), 0).as_set() must return ConditionSet(x, Eq(...), Reals); stated in the ticket (second case is the same rule).",
+  "ticket_chars": 820
+ },
+ {
+  "id": "sympy__sympy-18698",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_factor_terms"
+  ],
+  "rating": "IMPLIED",
+  "reason": "sqf_list(x*(x + y)) == (1, [(x**2 + x*y, 1)]): factors of equal multiplicity are combined, as the ticket's (x**2 - 5*x + 6, 3) example demands.",
+  "ticket_chars": 457
+ },
+ {
+  "id": "sympy__sympy-19040",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_5786"
+  ],
+  "rating": "IMPLIED",
+  "reason": "factor(expand((x - I*y)*(z - I*t)), extension=[I]) must expand back to the input; ticket: factor with extension must not drop a factor.",
+  "ticket_chars": 1844
+ },
+ {
+  "id": "sympy__sympy-20154",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_partitions",
+   "test_uniq"
+  ],
+  "rating": "IMPLIED",
+  "reason": "partitions() must yield distinct dicts so lists of them are correct without .copy(); stated in the ticket.",
+  "ticket_chars": 549
+ },
+ {
+  "id": "sympy__sympy-20428",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_20427"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_issue_20427 asserts the freshly built Poly(<big expression>, x) itself equals Poly(0, x, domain='EX'); the ticket is about the unstripped result of clear_denoms() and never asks that the input poly be recognised as zero on construction.",
+  "ticket_chars": 3620
+ },
+ {
+  "id": "sympy__sympy-20438",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_Eq",
+   "test_issue_19378"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "test_Eq requires Eq(ProductSet({1}, {2}), Interval(1, 2)) is S.false, and test_issue_19378 requires Eq({1}, {x}).simplify() unchanged and b.is_subset(FiniteSet(1)) is False; the ticket shows only a session of wrong outputs for one pair of sets and states no expected values.",
+  "ticket_chars": 1239
+ },
+ {
+  "id": "sympy__sympy-20801",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_zero_not_false"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "test_zero_not_false asserts (S(0.0) == S.false) is False; the ticket's last sentence literally says 'we would want S(0.0) == S.false to return True as well', contradicting its own S(0) comparison.",
+  "ticket_chars": 490
+ },
+ {
+  "id": "sympy__sympy-21379",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_Mod"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "expr.subs({1: 1.0}) not raising is IMPLIED, but test_Mod also requires (Piecewise(...)/z) % 1 and sinh(...).is_zero not to raise; the ticket never mentions Mod and a fix elsewhere could satisfy the ticket without these.",
+  "ticket_chars": 1748
+ },
+ {
+  "id": "sympy__sympy-21596",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_imageset_intersect_real"
+  ],
+  "rating": "NOT IMPLIED",
+  "reason": "First assertion (intersection with Reals == FiniteSet(-1, 1)) is IMPLIED, but the test adds six more image sets, one requiring the exact form ImageSet(Lambda(x, x/2), ConditionSet(n, Eq(n**2 - n/2 - 1/2, 0), Integers)), none in the ticket.",
+  "ticket_chars": 537
+ },
+ {
+  "id": "sympy__sympy-21612",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_Mul"
+  ],
+  "rating": "UNCLEAR",
+  "reason": "The target is in the string printer: str(Mul(x, Pow(1/y, -1, evaluate=False), evaluate=False)) == 'x/(1/y)'; the ticket describes a LaTeX parsing error, though its expected output is the bracketed printed form.",
+  "ticket_chars": 655
+ },
+ {
+  "id": "sympy__sympy-22914",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_PythonCodePrinter"
+  ],
+  "rating": "IMPLIED",
+  "reason": "PythonCodePrinter must print Min(x, y) as 'min(x, y)' and Max as 'max(x, y)'; given verbatim in the ticket.",
+  "ticket_chars": 600
+ },
+ {
+  "id": "sympy__sympy-23262",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_14941"
+  ],
+  "rating": "IMPLIED",
+  "reason": "lambdify([], (1,))() must return (1,); this is the ticket's example.",
+  "ticket_chars": 998
+ },
+ {
+  "id": "sympy__sympy-24066",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_24062"
+  ],
+  "rating": "IMPLIED",
+  "reason": "_collect_factor_and_dimension(1 + exp(T/(R*C))) must return (1 + E, Dimension(1)) instead of raising; this is the ticket's case.",
+  "ticket_chars": 589
+ },
+ {
+  "id": "sympy__sympy-24213",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_24211"
+  ],
+  "rating": "IMPLIED",
+  "reason": "_collect_factor_and_dimension(A1*T1 + V1) must not raise ValueError; this is the ticket's example.",
+  "ticket_chars": 996
+ },
+ {
+  "id": "sympy__sympy-24661",
+  "repo": "sympy/sympy",
+  "targets": [
+   "test_issue_24288"
+  ],
+  "rating": "IMPLIED",
+  "reason": "parse_expr(text, evaluate=False) must return the unevaluated relational for <, <=, >, >=, !=, ==; ticket title covers relationals and shows Lt.",
+  "ticket_chars": 340
+ }
+]

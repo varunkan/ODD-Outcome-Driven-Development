@@ -63,6 +63,12 @@ class OwnProofTest(unittest.TestCase):
         self.write('tests/test_calc.py', REAL.replace('== 5', '== 6'))
         self.assertEqual(self.verdict()['verdict'], 'not passing as left')
 
+    def test_a_file_under_testing_counts_as_a_test_whatever_its_name(self):
+        self.write('calc.py', FIXED)
+        self.write('testing/python/integration.py', REAL)
+        res = self.verdict()
+        self.assertEqual((res['tests'], res['verdict']), (['testing/python/integration.py'], 'fails without the change'), res)
+
     def test_an_arms_own_files_are_neither_test_nor_product(self):
         self.write('calc.py', FIXED)
         self.write('tests/test_calc.py', REAL)

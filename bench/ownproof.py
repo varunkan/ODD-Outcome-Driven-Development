@@ -5,7 +5,8 @@ A session that says "my tests pass" has shown nothing if those tests would pass 
 check refuses exactly that; a plain agent told to write and run tests has no such check. This measures, on what any
 arm left behind, how often it happens: for each run record, in a copy of the kept tree,
 
-  1. the files that differ from the base branch are split into test files (odd's own test paths) and the rest;
+  1. the files that differ from the base branch are split into test files (odd's own test paths, and pytest's
+     testing/ folder) and the rest;
   2. the changed test files are run with pytest, in the task's environment, as the session left the tree;
   3. the rest is put back as it is on the base branch (new files removed), and the same tests are run again.
 
@@ -33,6 +34,8 @@ from realtasks import grade_environ  # noqa: E402
 
 OWN = ('.odd/', '.claude/', '.specify/', 'specs/', 'AGENTS.md', 'CLAUDE.md')  # an arm's own files: neither test nor product
 TIMEOUT = 900
+# pytest keeps its own tests under testing/, in files not all named test_*.py; odd's test paths are not changed for it
+TEST_GLOBS = odd.DEFAULTS['test_globs'] + ['testing/**', '**/testing/**']
 
 
 def git(tree, *args):
@@ -59,9 +62,9 @@ def run_tests(tree, tests, env):
 def own_proof(tree, task_dir, base='main'):
     """The verdict for one kept tree, with what it rests on."""
     files = changed(tree, base)
-    tests = [f for f in files if odd.matches(f, odd.DEFAULTS['test_globs']) and f.endswith('.py')
+    tests = [f for f in files if odd.matches(f, TEST_GLOBS) and f.endswith('.py')
              and os.path.isfile(os.path.join(tree, f))]
-    product = [f for f in files if f not in tests and not odd.matches(f, odd.DEFAULTS['test_globs'])]
+    product = [f for f in files if f not in tests and not odd.matches(f, TEST_GLOBS)]
     out = dict(tests=tests, product=product)
     if not tests:
         return dict(out, verdict='no test of its own')
