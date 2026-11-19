@@ -48,7 +48,7 @@ try:
 except ImportError:  # not a POSIX system
     fcntl = None
 
-VERSION = '0.4.0'
+VERSION = '0.5.0'
 DEFAULTS = {
     'trivial_lines': 25,   # product lines that may change outside any outcome (a per-change budget)
     'exempt': ['.odd/outcomes/**', '**/*.md', 'LICENSE*', '.gitignore', '.gitattributes', '**/*.lock',
@@ -5041,7 +5041,7 @@ def main(argv=None):
     s.add_argument('slug')
     s.add_argument('what', help='what went wrong, and where it was found')
     sub.add_parser('stats').add_argument('--json', action='store_true', help='print the counts, the proof quality '
-                                         'groups and the spend as JSON instead (a tool newer than 0.4.0)')
+                                         'groups and the spend as JSON instead')
     sub.add_parser('hook').add_argument('event', choices=[arg for _, arg in HOOKS])
     for name in ('race', 'cascade', 'chain'):
         sub.choices[name].add_argument('--no-cache', action='store_true', help='verify each attempt in full')

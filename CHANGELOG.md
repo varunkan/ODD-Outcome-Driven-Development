@@ -1,11 +1,16 @@
 # Changelog
 
 Each entry names the backlog item that carries its reason and evidence ([BACKLOG.md](BACKLOG.md)); behaviour is
-specified in [DESIGN.md](DESIGN.md), where everything below is marked "needs a tool newer than 0.4.0".
+specified in [DESIGN.md](DESIGN.md).
 
-## Unreleased
+## 0.5.0
 
-Built since 0.4.0 and not yet in a release.
+The first public release. See [launch/RELEASE-NOTES-v0.5.0.md](launch/RELEASE-NOTES-v0.5.0.md). 0.4.0 was the number
+used during development and was never published.
+
+**The core**
+- `init`, `new`, `done`, `gate`, `park`, `seal`, `escaped`, `stats`; the take-out check; proof strength; the GitHub
+  Action.
 
 **Agents and attempts**
 - `odd race`, `odd cascade`, `odd chain`: several attempts at one outcome, each in its own copy; the proof picks.
@@ -31,8 +36,3 @@ Built since 0.4.0 and not yet in a release.
 **Reports**
 - `odd claim`: what is proven, what is not, one verdict line, generated from the gate's facts (43).
 - `odd ask`, `odd ask --open`; requirement coverage (`covers:`); the auto-merge lane; `odd ship`; `odd owed`.
-
-## 0.4.0
-
-The first public release: `init`, `new`, `done`, `gate`, `park`, `seal`, `escaped`, `stats`; the take-out check;
-proof strength; the GitHub Action. See [launch/RELEASE-NOTES-v0.4.0.md](launch/RELEASE-NOTES-v0.4.0.md).

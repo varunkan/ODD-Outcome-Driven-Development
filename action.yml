@@ -33,7 +33,7 @@ outputs:
     description: >-
       "auto" when the target's .odd/config.json sets "auto_lane": true and every condition of the auto-merge lane
       holds, "review" when it is on and one does not (or the gate stopped), "off" when the setting is off. odd itself
-      never merges: a repository's own merge rules may key on this output (a tool newer than 0.4.0).
+      never merges: a repository's own merge rules may key on this output.
     value: ${{ steps.gate.outputs.odd_lane }}
 runs:
   using: composite
