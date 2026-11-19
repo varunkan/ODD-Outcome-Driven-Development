@@ -35,21 +35,15 @@ Free notes: questions asked and answered, decisions and why.
 - Paths, globs and the proof are relative to the repository root.
 - Optional lines: `counterfactual: skip - <reason>`, `parked: <reason>`, `escaped: ...` (written by `odd escaped`,
   section 9), `sealed: ...` (written by `odd seal`, section 4), `test-change: <reason>` (why this change edits or
-  deletes a test that existed at the base, section 5; needs a tool newer than 0.4.0, the next release:
-  a pinned Action at 0.4.0 or older refuses the unknown field), `proof-by: <name>` (written by `odd spec`: which
-  agent command wrote the sealed proof, section 3d; the same tool version, and the same refusal by an older one:
-  delete the line for an older tool), `covers: R1, R3` (the ticket requirements this outcome covers, section 5a;
-  the same tool version and the same refusal by an older one), `kind: bug` (section 4a), `asked: <question>`
-  (written by `odd ask`: an open question, section 4b; the same tool version and the same refusal by an older one),
-  `same: <command>` (the command's output must be identical with and without the change, section 4e; the same tool
-  version and the same refusal by an older one), `probe: <command>` (run in every passing attempt of a race or a
-  cascade level; passing attempts must agree on its output, section 3b step 4; the same tool version and the same
-  refusal by an older one), `entry: <command or .py file>` (where a user reaches the outcome; the proof must execute
-  it, section 3l; the same tool version and the same refusal by an older one), `open: <question> ;; <question>`
-  (written by `odd ask --open`: questions left open while the work goes on, stated with the claim, section 3m; the
-  same tool version and the same refusal by an older one), `reject: <exit code>` (with `entry:`: the exit code for
-  invalid input; the entry point is run on inputs odd makes from the proof's examples, section 3o; the same tool
-  version and the same refusal by an older one).
+  deletes a test that existed at the base, section 5), `proof-by: <name>` (written by `odd spec`: which agent command
+  wrote the sealed proof, section 3d), `covers: R1, R3` (the ticket requirements this outcome covers, section 5a),
+  `kind: bug` (section 4a), `asked: <question>` (written by `odd ask`: an open question, section 4b), `same:
+  <command>` (the command's output must be identical with and without the change, section 4e), `probe: <command>` (run
+  in every passing attempt of a race or a cascade level; passing attempts must agree on its output, section 3b step
+  4), `entry: <command or .py file>` (where a user reaches the outcome; the proof must execute it, section 3l), `open:
+  <question> ;; <question>` (written by `odd ask --open`: questions left open while the work goes on, stated with the
+  claim, section 3m), `reject: <exit code>` (with `entry:`: the exit code for invalid input; the entry point is run on
+  inputs odd makes from the proof's examples, section 3o).
 
 There is no status field. "Done" is never written to a committed file. A requirement becomes one or more outcome
 files; their sentences and proofs are the specification, and each file is a task.
@@ -59,23 +53,23 @@ files; their sentences and proofs are the specification, and each file is a task
 | command | what it does | exit |
 |---|---|---|
 | `odd init [--claude-hooks] [--mcp]` | installs or repairs: `.odd/odd.py`, `.odd/config.json`, the method in `AGENTS.md`, the import line in an existing Claude instruction file; prints the CI step, the conditions under which CI is the authority, and a proof suggestion (section 3a); `--mcp` also installs the MCP server (section 7) | 0 |
-| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a; needs a tool newer than 0.4.0); `--kind bug|feature|refactor` writes `kind:` and prints a hint (sections 4a, 4c; needs a tool newer than 0.4.0); `--proof` may be left out only with `--kind refactor` (exit 2 otherwise, as before); refuses a sentence with no observable (section 4b; a tool newer than 0.4.0); after creating the file prints "read these first" (section 3f; a tool newer than 0.4.0) | 0, 1 refused (also: `auto` and no runner detected) |
+| `odd new <slug> "<outcome>" --proof CMD --in "GLOB, GLOB"` (comma-separated; `--in` may repeat) | writes the outcome file; `--proof auto [--test PATH]` picks the command (section 3a); `--covers R1,R3` writes `covers:` (section 5a); `--kind bug|feature|refactor` writes `kind:` and prints a hint (sections 4a, 4c); `--proof` may be left out only with `--kind refactor` (exit 2 otherwise, as before); refuses a sentence with no observable (section 4b); after creating the file prints "read these first" (section 3f) | 0, 1 refused (also: `auto` and no runner detected) |
 | `odd seal <slug> [--base REF]` | optional: requires the proof to fail now, then fingerprints it in the outcome file (section 4) | 0 sealed, 1 already passes or no test file changed, 2 could not run |
 | `odd done <slug> [--base REF]` | verifies the outcome (section 4) and records it locally | 0 verified, 1 not shown, 2 could not run |
-| `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b); needs a tool newer than 0.4.0 | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
-| `odd cascade <slug> [--agents C1,C2,...] [--race N] [--base REF]` | the agents in order, cheapest first, each level's attempts run and checked as in `race`; the next level only when none is verified, with the failure in its prompt; park after the last (section 3c); needs a tool newer than 0.4.0 | 0 verified attempt applied, 1 parked or the winner left as a patch, 2 could not run |
-| `odd chain <ticket> [--race N] [--cascade] [--agents C1,C2,...] [--base REF]` | the outcomes in `.odd/chains/<ticket>.md` in order: each one without a checkpoint is raced (or cascaded), verified in your tree and committed as `odd: <slug> proven`; the first unproven one is parked and stops the chain, the tree back at the last checkpoint (section 3e); needs a tool newer than 0.4.0 | 0 every outcome proven, 1 an outcome parked, 2 could not run (a dirty tree, an unknown slug, a git failure: rolled back, not parked) |
-| `odd spec <slug> --proof-by CMD [--tries N] [--base REF]` | another agent command (in practice a stronger model) writes only the proof in its own worktree; the test files come back and are sealed red (section 3d); retried, then parked; needs a tool newer than 0.4.0 | 0 proof brought back and sealed, 1 parked or refused (the proof passes in your tree, or did not apply), 2 could not run |
-| `odd challenge <slug> [--agent CMD] [--base REF]` | advisory: one agent starts from the verified change and tries to make it wrong while the proof still passes; nothing is applied (section 3i); needs a tool newer than 0.4.0 | 0 the proof withstood it, 1 a variant passed (read the claim), 2 could not run (not verified, a skip, no agent) |
-| `odd ship <artifact> [--base REF] [--note FILE]` | the artifact's sha256 bound to the commit it was built from and that commit's recomputed gate; prints (and with `--note` writes) what was not run and what is owed (section 5f); needs a tool newer than 0.4.0 | 0 shippable, 1 the gate fails, 2 could not run (uncommitted work, no artifact) |
-| `odd owed <slug> "<step>" --evidence FILE` | closes one owed step against an evidence file (section 5f); needs a tool newer than 0.4.0 | 0, 1 no such step or no such file |
-| `odd start <slug> [--base REF]` | before work: checks the outcome's premises and reruns earlier merged proofs on its files; refuses a red baseline; prints the files to read first (section 5f); needs a tool newer than 0.4.0 | 0 ready, 1 a premise is false or the baseline is red, 2 could not run |
-| `odd plan <ticket> [--by CMD] [--tries N]` | the reasoner plans the ticket's requirements into outcomes and their build order in its own clone; brought back only when every requirement is covered and every outcome is checkable (section 3j); needs a tool newer than 0.4.0 | 0 plan brought back, 1 no plan passed, 2 could not run (no requirements, no planner) |
+| `odd race <slug> [--n N] [--agent CMD] [--base REF]` | N agent attempts at one outcome, each in its own git worktree, verified as `done` would; the winner is applied (section 3b) | 0 winner applied, 1 none verified or the winner left as a patch, 2 could not run |
+| `odd cascade <slug> [--agents C1,C2,...] [--race N] [--base REF]` | the agents in order, cheapest first, each level's attempts run and checked as in `race`; the next level only when none is verified, with the failure in its prompt; park after the last (section 3c) | 0 verified attempt applied, 1 parked or the winner left as a patch, 2 could not run |
+| `odd chain <ticket> [--race N] [--cascade] [--agents C1,C2,...] [--base REF]` | the outcomes in `.odd/chains/<ticket>.md` in order: each one without a checkpoint is raced (or cascaded), verified in your tree and committed as `odd: <slug> proven`; the first unproven one is parked and stops the chain, the tree back at the last checkpoint (section 3e) | 0 every outcome proven, 1 an outcome parked, 2 could not run (a dirty tree, an unknown slug, a git failure: rolled back, not parked) |
+| `odd spec <slug> --proof-by CMD [--tries N] [--base REF]` | another agent command (in practice a stronger model) writes only the proof in its own worktree; the test files come back and are sealed red (section 3d); retried, then parked | 0 proof brought back and sealed, 1 parked or refused (the proof passes in your tree, or did not apply), 2 could not run |
+| `odd challenge <slug> [--agent CMD] [--base REF]` | advisory: one agent starts from the verified change and tries to make it wrong while the proof still passes; nothing is applied (section 3i) | 0 the proof withstood it, 1 a variant passed (read the claim), 2 could not run (not verified, a skip, no agent) |
+| `odd ship <artifact> [--base REF] [--note FILE]` | the artifact's sha256 bound to the commit it was built from and that commit's recomputed gate; prints (and with `--note` writes) what was not run and what is owed (section 5f) | 0 shippable, 1 the gate fails, 2 could not run (uncommitted work, no artifact) |
+| `odd owed <slug> "<step>" --evidence FILE` | closes one owed step against an evidence file (section 5f) | 0, 1 no such step or no such file |
+| `odd start <slug> [--base REF]` | before work: checks the outcome's premises and reruns earlier merged proofs on its files; refuses a red baseline; prints the files to read first (section 5f) | 0 ready, 1 a premise is false or the baseline is red, 2 could not run |
+| `odd plan <ticket> [--by CMD] [--tries N]` | the reasoner plans the ticket's requirements into outcomes and their build order in its own clone; brought back only when every requirement is covered and every outcome is checkable (section 3j) | 0 plan brought back, 1 no plan passed, 2 could not run (no requirements, no planner) |
 | `odd gate [--base REF] [--recompute] [--summary FILE] [--json FILE]` | checks the whole change (section 5); optionally also writes the result as Markdown or JSON | 0 pass, 1 fail, 2 could not run |
 | `odd park <slug> "<reason>"` | the honest exit, for blocked work and for work that cannot be done as specified | 0 |
-| `odd ask <slug> "<question>"` | records one open question as `asked:`; the gate reports the outcome as waiting for an answer (section 4b); needs a tool newer than 0.4.0 | 0, 1 not a question or no such outcome |
+| `odd ask <slug> "<question>"` | records one open question as `asked:`; the gate reports the outcome as waiting for an answer (section 4b) | 0, 1 not a question or no such outcome |
 | `odd escaped <slug> "<what, where found>"` | records a defect that got past this outcome (section 9) | 0, 1 vague report or no such outcome |
-| `odd stats [--json]` | counts, labelled self-reported, with escaped defects split by kind of proof and grouped by outcome kind, seal, strength band and proof author with a rate per group (section 9), and dollars and seconds per proven outcome from agent attempts (section 3h; the cost table needs a tool newer than 0.4.0) | 0 |
+| `odd stats [--json]` | counts, labelled self-reported, with escaped defects split by kind of proof and grouped by outcome kind, seal, strength band and proof author with a rate per group (section 9), and dollars and seconds per proven outcome from agent attempts (section 3h) | 0 |
 
 `odd hook stop|session-start` is an internal entry point called only by the opt-in Claude Code hooks.
 
@@ -111,8 +105,6 @@ red before any attempt). odd never calls a model: an agent is a shell command in
 when there is one. `{prompt_file}` in the command becomes the path
 of a prompt file; without it the prompt arrives on stdin. The prompt names the outcome, the proof, the boundary, the
 files to leave alone, and the method `odd init` installs.
-The settings `agents`, `race_timeout` and `race_seal` need a tool newer than 0.4.0: v0.4.0 (and its Action)
-refuses an unknown setting, so a project that adds them vendors the newer `odd.py` first.
 
 1. **Working trees.** Each attempt gets its own working tree of HEAD outside the repository, under the system
    temporary directory (`<tmp>/odd-runs-<hash of the git directory>/run-<pid>/<n>`), never the user's tree and never
@@ -204,8 +196,7 @@ from an earlier level's attempt.
 **Cost** is what the agent says it cost: the last line of its output of the form `odd-cost: <usd>` (an optional `$`,
 digits, an optional fraction, nothing else on the line). An agent that prints none shows "not reported"; odd never
 estimates a price and never reads a vendor's output format. A wrapper script around a CLI agent is the place to print
-it. `--race` needs no new setting; cascade uses `agents`, `race_timeout` and `race_seal`, so it too needs a tool newer
-than 0.4.0.
+it. `--race` needs no new setting; cascade uses `agents`, `race_timeout` and `race_seal`.
 
 Limits: the levels run one after another, so a failed cheap level adds its agent time and verification to the cost of
 the dear one; the ordering is the user's (odd does not know which agent is cheaper); a cheap attempt that is verified
@@ -236,8 +227,7 @@ author for a reviewer; it is not proof of who ran.
 
 Then `odd race` and `odd cascade` run with the sealed proof unchanged: the brought-back test files are changed test
 files, so `_race_start()` puts them in the files an attempt must leave alone, and an attempt that edits them is
-refused (and `check_seal()` refuses any later edit in your tree). Setting: `proof_tries`; field: `proof-by`; both need
-a tool newer than 0.4.0.
+refused (and `check_seal()` refuses any later edit in your tree). Setting: `proof_tries`; field: `proof-by`.
 
 **Why, and what to measure.** ExecCritic (arXiv 2609.09133; docs/evidence/14-research.md section 2.5): with the
 repairing agent fixed, tests written by the weak base model lowered resolution from 61.2% to 57.3%, and tests from a
@@ -254,7 +244,7 @@ leave the unsealed test files in your tree. The author can write outside its wor
 
 ### 3d1. A disputed proof: `odd-dispute:`
 
-Needs a tool newer than 0.4.0 (backlog item 23). A sealed proof can be wrong, and then no attempt can pass it
+Backlog item 23. A sealed proof can be wrong, and then no attempt can pass it
 honestly; in the comparison's rerun the attempts said so, precisely, in 17 of 18 such runs
 ([16](docs/evidence/16-new-arms.md#after-the-fixes)). The race prompt (also cascade's and chain's) tells an attempt:
 if the proof itself is wrong (an assertion contradicts the outcome, the request or the proof's own data), do not
@@ -305,7 +295,7 @@ anywhere but the chain file, the chain's outcome files and test files (both are 
 diff --cached HEAD`), and it never resets: the only write it undoes is the patch it applied, and what the failed step
 staged is unstaged again, so the index and the tree are both at the last checkpoint. An uncommitted edit of yours to a
 test file the proof names goes into that outcome's checkpoint commit with the rest. New command and MCP tool `chain`; no new setting (it uses `agents`, `race_timeout`,
-`race_seal`), so it needs a tool newer than 0.4.0.
+`race_seal`).
 
 Limits: a kill with SIGKILL between applying a winner and committing its checkpoint leaves the winner's files
 uncommitted; the next run refuses to start and names them (nothing is lost, nothing is guessed). The checkpoint is
@@ -317,7 +307,7 @@ item 10.
 
 ### 3f. Boundary as context: "read these first"
 
-A tool newer than 0.4.0 (backlog item 13; no setting). After `odd new` writes the outcome file (also through the MCP
+Backlog item 13; no setting. After `odd new` writes the outcome file (also through the MCP
 `new` tool, which returns odd's output) it prints, under the heading `read these first`, the files inside the
 outcome's `in:` boundary that exist (tracked or untracked and not ignored, never under `.odd/`), at most ten
 (`READ_FIRST`), the largest change against the base first (changed lines from `sizes()`, the helper the small-change
@@ -333,8 +323,7 @@ measure) is not measured.
 
 ### 3g. Attempt budget per outcome: `"max_attempts"`
 
-A tool newer than 0.4.0 (backlog item 15; the Action at v0.4.0 refuses `"max_attempts"` as an unknown setting, so
-set it only once the tool in use is newer). `"max_attempts"` (an integer, default 0 = off) parks an outcome once its
+Backlog item 15. `"max_attempts"` (an integer, default 0 = off) parks an outcome once its
 failed attempts reach the number. The count comes from local evidence under the git directory (`failures()` reads the
 log `record()` writes): every failed `odd done` (the `ok: false` line it already wrote; a run that could not run,
 exit 2, is not an attempt) and every attempt of `race`, `cascade` or `chain` that `_judge()` refused (one
@@ -366,7 +355,7 @@ cascade logs. The spend saved on tasks that end unsolved (the item's measure) is
 
 ### 3h. Cost per proven outcome
 
-A tool newer than 0.4.0 (backlog item 16; no new setting). Every attempt that `race`, `cascade` or `chain` runs (all
+Backlog item 16; no new setting. Every attempt that `race`, `cascade` or `chain` runs (all
 three go through `_attempts()`) writes one line to the outcome's local evidence (`record()`, under the git directory,
 never committed): `attempt` (its name), `cost` (the agent's last `odd-cost: <usd>` line, parsed by `_cost()` as for
 the cascade table, or null when it printed none) and `seconds` (the agent's seconds plus the verification's, rounded
@@ -388,7 +377,7 @@ worktree, as for the budget. Not measured on real agents; the tests use fake age
 
 ### 3i. `odd challenge`: can the proof be fooled? (advisory)
 
-Needs a tool newer than 0.4.0 (R6). The take-out check shows the proof depends on the change; it cannot show the proof
+Backlog item R6. The take-out check shows the proof depends on the change; it cannot show the proof
 would notice a different, wrong change. `odd challenge <slug>` asks one agent (`--agent`, else the first of
 `"agents"`) to do exactly that: starting from the verified change, edit the product files inside `in:` so the code
 no longer does what the outcome says for some case, while the proof still passes, and print one line `odd-wrong:
@@ -411,7 +400,7 @@ rejected 19.7% of passing patches with such checks, arXiv 2603.00520).
 
 ### 3j. The reasoner, and `odd plan`
 
-Needs a tool newer than 0.4.0 (backlog item 35). odd calls no model; the judgement-heavy roles take one agent command,
+Backlog item 35. odd calls no model; the judgement-heavy roles take one agent command,
 `"reasoner"` in the settings, in practice the strongest model available, for example
 
 ```json
@@ -437,7 +426,7 @@ yet.
 
 ### 3k. Reasoning made checkable: `red-because:` and `assume:`
 
-Needs a tool newer than 0.4.0 (backlog item 36). A strong reasoner plans, names its premises, predicts what it will
+Backlog item 36. A strong reasoner plans, names its premises, predicts what it will
 see, and checks the prediction before it calls work done. odd turns two of those habits into checks that run, so they
 hold for any model, strong or weak, present or future:
 
@@ -460,7 +449,7 @@ check rests on reasoning: a red for another reason shows nothing about the chang
 
 ### 3l. End to end, and special-casing: `entry:` and literals copied from the proof
 
-Needs a tool newer than 0.4.0 (backlog items 40 and 41).
+Backlog items 40 and 41.
 
 - **`entry: <command or .py file>`** (a check). Where a user reaches the outcome: a command run through PATH, or a
   `.py` file of the repository. `done` and `gate --recompute` run the proof once more and require that it executes
@@ -482,7 +471,7 @@ Needs a tool newer than 0.4.0 (backlog items 40 and 41).
 
 ### 3m. The claim is generated, not written: `odd claim` and open questions
 
-Needs a tool newer than 0.4.0 (backlog item 43). An agent's own summary can say more than its checks showed; odd's
+Backlog item 43. An agent's own summary can say more than its checks showed; odd's
 answer is to take the summary away from the agent. `odd claim` runs the gate and prints three parts, all from the
 gate's own facts and none from anything the worker wrote down:
 
@@ -510,7 +499,7 @@ and whether readers are misled less, is not measured yet.
 
 ### 3n. Requirements with their edge cases: `"cases": "require"`
 
-Needs a tool newer than 0.4.0 (backlog item 44). Off by default. A proof written from a ticket's examples passes work
+Backlog item 44. Off by default. A proof written from a ticket's examples passes work
 that is wrong on inputs nobody tested: on the calculator task every odd calculator passed its proof and the hidden
 tests and still had a defect of its own, while the runs that first wrote 14 to 18 requirements and an edge-case
 section had none ([evidence 19](docs/evidence/19-calculator-head-to-head.md)). The idea, writing requirements and
@@ -539,7 +528,7 @@ verification and listed in `odd claim`. The setting `"reach": "require"` is remo
 refused as an unknown setting), and `odd new` takes `--entry` and `--reject` without requiring them. The text below
 describes the check as first built; where it says "fails", read "is reported".
 
-Needs a tool newer than 0.4.0 (backlog item 45). A proof holds the inputs its author thought of, and the author of
+Backlog item 45. A proof holds the inputs its author thought of, and the author of
 the tests is usually the author of the code, so a misreading sits in both and the proof passes. With edge cases
 required (3n), all three calculators of the rerun still answered `1/0+` with "division by zero" where the ticket says
 "invalid expression": each test file had `2+` rejected and `1/0` as a division by zero, and none had the two
@@ -582,7 +571,7 @@ wrong number that exits 0 passes. Tracebacks are recognised for Python only. All
 
 ### 3p. Passing attempts compared on inputs the tool makes
 
-Needs a tool newer than 0.4.0 (backlog item 46). `reject:` judges exit codes; a wrong value that exits 0 passes it,
+Backlog item 46. `reject:` judges exit codes; a wrong value that exits 0 passes it,
 and the fourth calculator round left exactly that: one program rounding to 10 decimal places where the ticket says 10
 significant digits. No check of one attempt can see a wrong value the tests do not hold. A second attempt, written
 apart, can: it is unlikely to be wrong in the same way.
@@ -614,7 +603,7 @@ something that is not a defect. It costs a second attempt. Only programs that ta
 
 ### 3p-2. `odd second`: a second attempt after the first is verified
 
-Needs a tool newer than 0.4.0 (backlog item 48). Advisory, like `odd challenge`. The comparison of 3p needs two
+Backlog item 48. Advisory, like `odd challenge`. The comparison of 3p needs two
 passing attempts, and a race that seals a whole proof first delivered 0 of 3 calculators with a small model
 ([evidence 19](docs/evidence/19-calculator-head-to-head.md)). `odd second <slug> [--agent CMD] [--base REF]` adds
 the second attempt to work that is already verified: one agent, in its own copy started from the base with the
@@ -631,7 +620,7 @@ outcome and its proof (never the first one's code), is checked as `odd done` wou
 
 ### 3p-3. A proof tied to its own folder is refused
 
-Needs a tool newer than 0.4.0 (backlog item 49; no setting). `odd done` fails, before the proof is run, when the
+Backlog item 49; no setting. `odd done` fails, before the proof is run, when the
 proof command or a test file of the proof names the repository's own absolute path (`anchored()`): `cd /path/to/repo
 && ...` in the command, or `cwd="/path/to/repo"` in a test. Such a proof runs that folder's code wherever it is
 checked, so in CI, in an attempt's copy or in another clone it passes or fails on code that is not under test. The
@@ -692,7 +681,7 @@ passed the admission rule of 3r.
 
 ### 3q. The report carries the claim: `"report": "claim"`
 
-Needs a tool newer than 0.4.0 (backlog item 47). `odd claim` (3m) prints what the checks did and did not show, and
+Backlog item 47. `odd claim` (3m) prints what the checks did and did not show, and
 the method text says to report it and nothing beyond it. Measured on six runs: every session ran `odd claim`, and no
 final report carried any of the three or four points it listed as not proven; one report said the output was
 rounded to 10 significant digits when it was not ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
@@ -849,7 +838,7 @@ product file is inside the boundary of exactly one verified in-play outcome, or 
 
 - A changed product file may match the `in` of only one in-play outcome. Otherwise the gate fails and names both:
   such outcomes become one outcome, or two successive changes.
-- **Successive changes on one branch** (needs a tool newer than 0.4.0; found by the comparison, [16](docs/evidence/16-new-arms.md)).
+- **Successive changes on one branch** (found by the comparison, [16](docs/evidence/16-new-arms.md)).
   A first-parent commit since the base whose subject is exactly `odd: <slug> proven` (what `odd chain` commits, section
   3e), not reverted later (`Revert "odd: <slug> proven"`), with the outcome file there identical to the one in force,
   is that outcome's **checkpoint** (`segments()`). Each checkpointed outcome is its own change: from the checkpoint
@@ -897,8 +886,7 @@ A reason that names test files (`test-change: tests/test_keep.py - the old test 
 files; another touched test file still fails. A reason that names no test file covers every test edit in the change,
 as before, so older outcome files keep passing; the gate then prints `[names no file, so it covers every test edit:
 <files>]` next to it, and for a named reason `[covers: <files>]`, so a reviewer sees which reason covers which file
-and from which outcome. The named form is the same `test-change:` field, so it needs the same tool version (newer
-than 0.4.0).
+and from which outcome. The named form is the same `test-change:` field.
 
 **CI is the authority only when** (1) the gate is a required check on the target branch, (2) the tool, its settings
 and the CI configuration cannot change without a person's review, and (3) the agent cannot merge or push to the
@@ -950,7 +938,7 @@ Under `"report"` and `"enforce"` a `covers:` id that names no requirement is alw
 file, a plain id when the change has no requirements file or more than one (then write `<ticket>:R1`), a malformed
 id, a requirement listed twice, or a requirements file with no `R<n>:` line. `<ticket>:R1` may also name a ticket
 recorded in an earlier change; it is checked to exist and counts for nothing. `covers:` is not part of what `odd done`
-verified, so changing it needs no new `done`. Setting `coverage` and field `covers` need a tool newer than 0.4.0.
+verified, so changing it needs no new `done`.
 
 Limits: odd checks that every listed requirement is named by some outcome, not that the outcome's proof tests it, and
 not that the list is the whole ticket: whoever writes the list can leave a requirement out, and a requirement removed
@@ -975,11 +963,11 @@ gate for the whole change afterwards, so it runs the guards too (its own exit co
 - `"report"`: the same line is printed, the gate does not fail on it.
 - `"off"`: no earlier proof runs.
 
-Setting `guard` needs a tool newer than 0.4.0. A repository that vendors the new tool gets `"enforce"`: a later
-change that touches an earlier outcome's files now costs one proof run per such outcome and fails when that proof
-fails; set `"off"` for the earlier behaviour. In CI the setting is read from the target branch, like every setting.
+The default is `"enforce"`: a later
+change that touches an earlier outcome's files costs one proof run per such outcome and fails when that proof
+fails; set `"off"` to run no earlier proof. In CI the setting is read from the target branch, like every setting.
 
-Three cases run a guard that is **reported and never fails the gate** (a tool newer than 0.4.0 after this fix), each
+Three cases run a guard that is **reported and never fails the gate**, each
 with the outcome as it is at the base: a merged outcome this change parks or asks (`guard   <slug> (proven in
 <commit>), parked in this change, now fails: ...`), and a merged outcome whose file this change deletes (`..., its
 outcome file is deleted in this change, ...`); the gate also prints `deleted <slug> (merged in <commit>)`, `--json`
@@ -995,7 +983,7 @@ on a multi-step task sequence, with and without the guard (BACKLOG item 9).
 
 ### 5c. Auto-merge lane: a flag the repository's merge rules may use
 
-Off unless `.odd/config.json` sets `"auto_lane": true` (a tool newer than 0.4.0; in CI read from the target branch,
+Off unless `.odd/config.json` sets `"auto_lane": true` (in CI read from the target branch,
 like every setting). Then `odd gate` (local and `--recompute`) adds a result: `"lane": "auto"` when every condition
 below holds, else `"lane": "review"` with every reason that failed (none is weighed against the others). It appears
 as `lane` and `lane_reasons` in `--json`, as the line `lane    auto ...` or `lane    review: <reasons>` in the
@@ -1034,7 +1022,7 @@ jobs:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
       - id: odd
-        uses: varunkan/ODD-Outcome-Driven-Development@<a tag newer than v0.4.0>
+        uses: varunkan/ODD-Outcome-Driven-Development@v0.5.0
       - if: steps.odd.outputs.odd_lane == 'auto'
         run: gh pr merge --auto --squash "${{ github.event.pull_request.number }}"
         env: {GH_TOKEN: "${{ github.token }}"}
@@ -1056,7 +1044,7 @@ lane (BACKLOG item 11).
 
 ### 5e. Held-out proofs: `"held_out"`
 
-Needs a tool newer than 0.4.0 (R8). The outcome's proof is written or seen by the agent, so work can fit it without
+Backlog item R8. The outcome's proof is written or seen by the agent, so work can fit it without
 doing what the outcome says (a lookup table for the visible cases; research: 97% on visible checks against 0% held
 out, arXiv 2605.21384). `"held_out"` in `.odd/config.json` lists proofs the agent never sees:
 
@@ -1081,7 +1069,7 @@ one more run per proof per gate. The outcome's own proof still has to pass the t
 
 ### 5f. From the source projects' logs: checks, flakes, targets, owed steps, cost, pipes
 
-All need a tool newer than 0.4.0 (backlog items 24 to 29, with the evidence, in [BACKLOG](BACKLOG.md)).
+Backlog items 24 to 29, with the evidence, are in [BACKLOG](BACKLOG.md).
 
 - **Standing checks (`"checks"`).** `[{"name", "cmd", "in"}]` in the settings, read from the target in CI: project
   rules as commands (a secrets scan, a forbidden-command scan, the project's own gates). Every gate runs each one whose
@@ -1198,8 +1186,7 @@ For CI, a cache step saves and restores the file. Restore it on pull requests an
 target branch (`actions/cache/restore` on `pull_request`, `actions/cache/save` on `push` to the default branch), so a
 pull request's own proofs never write the file a later run trusts. This recipe is not run on GitHub Actions here.
 
-`"cache_file"` needs a tool newer than 0.4.0: the Action at v0.4.0 refuses it as an unknown setting, so set it only
-once the pinned Action is newer. Without it, nothing changes in CI; locally `odd done` caches by default.
+Without `"cache_file"`, nothing changes in CI; locally `odd done` caches by default.
 
 **Affected guards.** The regression guard (5b) already selects earlier proofs by path. The gate now also prints
 `guard   N earlier proof(s) skipped as unaffected: no file this change touches is inside their boundaries` and
@@ -1225,7 +1212,7 @@ seen in the tests, which is not the same).
 
 ### 4a. Reproduce first: `kind: bug`
 
-An outcome may carry `kind: bug` (`odd new ... --kind bug`; needs a tool newer than 0.4.0; the kinds are `bug`,
+An outcome may carry `kind: bug` (`odd new ... --kind bug`; the kinds are `bug`,
 `feature` and `refactor` (section 4c), any other value is refused). For a bug outcome `odd seal` and `odd done` (and so `odd gate --recompute`) require the proof
 to fail at the base revision, and print how it failed as `reproduced: <last line of its output>`. The base run is the
 take-out of section 4, unchanged: taking out every changed product file inside the outcome's `in:` puts back exactly
@@ -1265,8 +1252,7 @@ class `AmbiguityStop` ("The login button is disabled while the request is pendin
 between guests."). It cannot tell a checkable sentence from one that only contains a listed word ("Users see a nicer
 page." and "Clean the code so it still works." pass), an ordinary sentence built from words not in the lists is
 refused, and a sentence in another language is likely refused: set `"ambiguity_stop": false` in
-`.odd/config.json` to turn the check off (default `true`; the setting needs a tool newer than 0.4.0, and an older tool
-refuses the unknown setting).
+`.odd/config.json` to turn the check off (default `true`).
 
 When the outcome cannot be made checkable from the ticket, the method tells the agent to ask one precise question
 and stop. `odd ask <slug> "<question>"` writes it as `asked: <question>` (one line, ending in `?`, at least 15
@@ -1281,7 +1267,7 @@ the `asked:` line, with the answer written into the sentence, proof or notes. Me
 
 ### 4c. Templates by kind of change: `odd new --kind bug|feature|refactor`
 
-Needs a tool newer than 0.4.0. `--kind` writes `kind: <kind>`, fills the kind's defaults, and prints one line
+`--kind` writes `kind: <kind>`, fills the kind's defaults, and prints one line
 `hint (<kind>): ...` after the file is written (`HINTS` in odd.py); without `--kind` nothing changes and no hint is
 printed.
 
@@ -1304,7 +1290,7 @@ measured.
 
 ### 4e. Behaviour-preserving changes: `same: <command>`
 
-Needs a tool newer than 0.4.0 (R8). A refactor skips the take-out check, because nothing should fail without it, so
+Backlog item R8. A refactor skips the take-out check, because nothing should fail without it, so
 until now odd showed only that the proof passes. With the outcome line `same: <command>`, `done` and `gate
 --recompute` also run that command twice: with the change, and with the change taken out (the same in-place take-out
 and journal as section 4, `without_change(run=...)`). Its exit code and its whole output (sha256 over every byte;
@@ -1321,7 +1307,7 @@ prints little shows little.
 
 ### 4f. Per-file inertness: `"inert"`
 
-Needs a tool newer than 0.4.0 (R7). The take-out check removes the whole change at once, so a file the proof does not
+Backlog item R7. The take-out check removes the whole change at once, so a file the proof does not
 need passes along with the files it does (an unused helper, a stray edit, special-casing kept "just in case"). With
 `"inert": "report"` or `"enforce"` (default `"off"`), after green-red-green `done` and `gate --recompute` take each
 changed product file inside the boundary out on its own, the others kept, with the same journalled take-out
@@ -1340,7 +1326,7 @@ measured (the research found one task, arXiv 2606.28430).
 
 ### 4d. Failure feedback: the `next:` block
 
-Needs a tool newer than 0.4.0. When `odd done` fails (exit 1), and when `odd race` or `odd cascade` ends with no
+When `odd done` fails (exit 1), and when `odd race` or `odd cascade` ends with no
 verified attempt, the output ends with a block an agent can act on without reading the prose above it:
 
 ```
@@ -1392,7 +1378,7 @@ it gets one `@AGENTS.md` import line. Running `init` again replaces the block in
 as it was; the block is held under 1,300 characters and 22 lines by a test (1,221 and 20 today; it was 2,600
 and 32 until the ruling of section 3r). A check never adds text here: its failure message carries the instruction.
 
-Step 4 of the method stops the work when it is proven (backlog item 14, a tool newer than 0.4.0, no setting): once
+Step 4 of the method stops the work when it is proven (backlog item 14, no setting): once
 `odd done` and `odd gate` pass, the agent is told to stop. `odd done` and `odd gate` end with one line,
 `verdict_line()`: `VERDICT: DONE`, `VERDICT: DONE, WITH n POINTS NOT PROVEN (listed above)`, or `VERDICT: NOT DONE
 (the gate did not pass; the reasons are above)`; when the gate fails it follows the gate's `FAIL` and its problems. The MCP `done` tool
@@ -1468,7 +1454,7 @@ latest passing verification recorded on this machine; then, in total, escapes ag
 sealed or not, take-out skipped or checked, and proof strength n of n, a mutant survived, or not measured here. Each
 split reads `N in K of M`: N escapes in K of the M outcomes of that kind. There is no lessons database.
 
-Escaped defects by group (backlog item 17; a tool newer than 0.4.0, no new setting). After those splits `odd stats`
+Escaped defects by group (backlog item 17; no new setting). After those splits `odd stats`
 prints a table headed `escaped defects by group (a snapshot of the outcome files as they are now, not a trend over
 time; self-reported: ...)`; nothing in it is compared over time, one row per group: `kind: bug`, `kind: feature`,
 `kind: refactor`, `kind: none`; `sealed`, `not sealed` (sealed as above: the `sealed:` line matches a seal recorded on

@@ -22,8 +22,7 @@ MEANING = {0: 'pass', 1: 'fail / not shown', 2: 'could not run'}
 S, B = {'type': 'string'}, {'type': 'boolean'}
 SLUG = ('slug', S, 'the outcome, as named in .odd/outcomes/<slug>.md')
 BASE = ('base', S, 'measure from this revision instead of the target branch')
-NOCACHE = ('no-cache', B, 'verify in full even when the inputs match an earlier verification (odd 0.4.0 with backlog '
-                         'item 12 and later)')
+NOCACHE = ('no-cache', B, 'verify in full even when the inputs match an earlier verification')
 POSITIONAL = ('slug', 'ticket', 'outcome', 'reason', 'what', 'question')
 TOOLS = (  # name, description, arguments (name, schema, description), the required ones
     ('new', 'State an outcome before the code: writes .odd/outcomes/<slug>.md. proof "auto" picks a narrow command '
@@ -76,7 +75,7 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
      [SLUG, ('what', S, 'what went wrong, and where it was found')], ('slug', 'what')),
     ('stats', 'Counts, self-reported: per outcome, escaped defects grouped by outcome kind, seal, proof strength band '
               'and proof author (rate per group; a group under 10 outcomes is said to be small), and cost per proven '
-              'outcome (odd newer than 0.4.0).',
+              'outcome.',
      [('json', B, 'the same counts as JSON')], ()),
 )
 OUTPUT = {'type': 'object', 'properties': {'exit_code': {'type': 'integer'}, 'output': {'type': 'string'},

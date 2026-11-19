@@ -42,9 +42,9 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   `test-change:`, the empty-proof check in `hollow()`, 74 lines added and 8 removed in `odd.py`. Measured on seeded fixtures (exit(0)
   at import, with and without a skip; unittest.skip on an existing test, with and without a skip; unittest.skip on a
   new test under a skip; deleting the old test; an empty unittest suite under a skip; go test with no test files under
-  a skip): 0.4.0 accepted 6 of 8 in both `done` and `gate --recompute`, this version refuses 8 of 8, and three honest
-  controls (unittest, pytest, go) pass in both (Python 3.13, where an empty unittest suite already exits 5, so 0.4.0
-  refused that one; on 3.11 and older it exits 0, not measured). Not measured: the share of impossible-task cheats caught (needs R1).
+  a skip): the tool before this change accepted 6 of 8 in both `done` and `gate --recompute`, this version refuses 8 of 8, and three honest
+  controls (unittest, pytest, go) pass in both (Python 3.13, where an empty unittest suite already exits 5, so the
+  earlier tool refused that one; on 3.11 and older it exits 0, not measured). Not measured: the share of impossible-task cheats caught (needs R1).
 - **Review fixes, done** in the commit "R2, R4: review fixes ..." (`git log --grep '^R2, R4: review fixes'`), from the reviewer's probe
   (seven fixtures, re-run after the fix): a new `conftest.py` that drops an existing failing test was accepted, now
   refused (conftest.py, pytest.ini, a changed pytest section of pyproject.toml/setup.cfg/tox.ini and a changed
@@ -97,7 +97,7 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
   succeeds, the proof is too weak.
 - **Evidence:** 19.7% of passing patches rejected by such checks (arXiv 2603.00520); 29.6% of passing patches diverge
   in behaviour (arXiv 2503.15223). The only measured way, without a reference patch, to catch special-casing.
-- **Done** in the commit "R6: odd challenge" (`git log --grep '^R6:'`), a tool newer than 0.4.0: `odd challenge <slug>
+- **Done** in the commit "R6: odd challenge" (`git log --grep '^R6:'`): `odd challenge <slug>
   [--agent CMD]`, advisory, exit 1 when a variant the challenger calls wrong passes the proof ([DESIGN 3i](DESIGN.md)).
   Built on race's attempt machinery (`_attempts(judge=, seed=, counted=)`, `_contained()`). Tests: `Challenge`.
   Measure: on the harness, how many verified outcomes a challenger breaks, and how many of those claims a person
@@ -106,7 +106,7 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
 ### R7. Per-file inertness (opt-in)
 - **Outcome:** each changed file is taken out on its own, and a file whose removal leaves the proof green is flagged.
 - **Evidence:** arXiv 2606.28430, one task only; prevalence unknown.
-- **Done** in the commit "R7: per-file inertness" (`git log --grep '^R7:'`), a tool newer than 0.4.0: setting
+- **Done** in the commit "R7: per-file inertness" (`git log --grep '^R7:'`): setting
   `"inert"` (off, report, enforce; default off), one proof run per changed file, only when more than one changed
   ([DESIGN 4f](DESIGN.md)). Tests: `InertFiles`. Measure: how many verified outcomes on the harness carry an inert
   file, under `"report"`; not yet run.
@@ -115,8 +115,8 @@ cheapest. Each cites its papers there, with a skeptic's verdict.
 - **Outcome:** an optional held-out proof run only by `gate --recompute`, plus a base-against-head behaviour diff for
   "no behaviour change" outcomes.
 - **Evidence:** visible-only checks scored 97% against 0% held-out on a lookup-table solution (arXiv 2605.21384).
-- **Done** in the commit "R8: held-out proofs and same-behaviour checks" (`git log --grep '^R8:'`), a tool newer than
-  0.4.0: setting `"held_out"`, run only by `gate --recompute`, output never shown ([DESIGN 5e](DESIGN.md)); outcome
+- **Done** in the commit "R8: held-out proofs and same-behaviour checks" (`git log --grep '^R8:'`):
+  setting `"held_out"`, run only by `gate --recompute`, output never shown ([DESIGN 5e](DESIGN.md)); outcome
   line `same: <command>`, output identical with and without the change ([DESIGN 4e](DESIGN.md)). Tests:
   `HeldOut`, `SameBehaviour`. Measure: not yet run on the harness (it needs held-out tests per task, which the
   harness's hidden tests already are: the next comparison can pass them as `"held_out"`).
@@ -137,7 +137,7 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Measure:** accuracy and cost per proven outcome for Haiku x 3 race against plain Sonnet x 1 and plain Haiku x 1, as
   a new bench arm.
 - **Done** in the commit "B1: odd race ..." (`git log --grep '^B1:'`): `odd race <slug> [--n N] [--agent CMD]`, the
-  settings `agents`, `race_timeout`, `race_seal` (a tool newer than 0.4.0), the MCP tool `race`, and `prove()` shared
+  settings `agents`, `race_timeout`, `race_seal`, the MCP tool `race`, and `prove()` shared
   with `odd done`; DESIGN.md section 3b. Each attempt runs in a detached worktree under the git directory, is checked
   by the copied-files rule, the boundary and `prove()` (R2 + green-red-green + strength), and the winner is applied
   only to a tree with no changes inside the boundary. Measured with fake agents (`tests/test_odd.py` class `Race`,
@@ -303,7 +303,7 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   outcome (tracked at the base, not in play, not parked, asked or skipped) whose `in:` holds a touched product or test
   file and runs its proof once through `run_proof` (green only, no take-out); `odd gate` local and `--recompute` fail
   with `<slug> (proven in <commit>) now fails: <last line>` under the setting `"guard"` (`enforce` default, `report`,
-  `off`; a tool newer than 0.4.0); `--json` `guards`, `--summary` **Guards** list. DESIGN.md section 5b. Measured with
+  `off`); `--json` `guards`, `--summary` **Guards** list. DESIGN.md section 5b. Measured with
   `tests/test_odd.py` class `RegressionGuard` (5 tests; the 3 positive ones seen RED for want of the guard and the
   setting before the code, the 2 negative ones passed vacuously before it and are pinned by mutants). Mutants: 9 of
   the new code (off ignored, no overlap filter, parked, asked and skipped kept as guards, report acting as enforce, no
@@ -347,8 +347,8 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Measure:** human review minutes per merged change ([docs/review-time.md](docs/review-time.md) protocol), and
   escaped defects through the lane.
 - **Done** in the commit "B11: auto-merge lane ..." (`git log --grep '^B11:'`): settings `"auto_lane"` (default
-  `false`), `"auto_min_strength"` (default `1.0`, k of n with k = n) and `"auto_max_lines"` (default 120), a tool
-  newer than 0.4.0. `lane()` and `_strong()` read what the gate already computed (the recorded strength results, the
+  `false`), `"auto_min_strength"` (default `1.0`, k of n with k = n) and `"auto_max_lines"` (default 120).
+  `lane()` and `_strong()` read what the gate already computed (the recorded strength results, the
   `test_change()` reason, `survey()`'s control, stray and product lists, the guard results, the problems); no new
   check runs, and the only extra work is one `sizes()` over the product files. `--json` `lane` and `lane_reasons`,
   the printed `lane` line, the summary line `Auto-merge lane: yes` / `no, because ...`, and the Action output
@@ -382,8 +382,8 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **How:** a file-to-proof map learned from past runs; the content hash already used by the local gate, shared as a CI
   cache.
 - **Measure:** seconds per `done` and per CI gate, and that no false pass appears.
-- **Done** in the commit "B12: verification cache and affected guards" (`git log --grep '^B12:'`), a tool newer than
-  0.4.0: `verify()` keys each verification (`verify_key()`: the tool's version and own bytes, every setting in force,
+- **Done** in the commit "B12: verification cache and affected guards" (`git log --grep '^B12:'`):
+  `verify()` keys each verification (`verify_key()`: the tool's version and own bytes, every setting in force,
   the base commit, and `_state()` of every path that differs from the base, the helper the local gate's content hash
   uses) and returns an earlier pass as `cached (verified at <time>)`; `--no-cache` on done, gate, race, cascade and
   chain and on the MCP tools. Locally `.git/odd/verified.json` (shared with race attempts' clones) or `"cache_file"`;
@@ -415,7 +415,7 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Outcome:** the agent is given the outcome's file boundary up front, so it explores less of the repository.
 - **How:** `odd new` and the MCP server return the boundary and the relevant files for the agent to read first.
 - **Measure:** turns and tokens per task.
-- **Done** in the commit "B13: boundary as context" (`git log --grep '^B13:'`), a tool newer than 0.4.0, no setting:
+- **Done** in the commit "B13: boundary as context" (`git log --grep '^B13:'`), no setting:
   `read_first()` lists, under `read these first`, the files inside `in:` that exist (never `.odd/`), at most ten
   (`READ_FIRST`), the largest change against the base first (`sizes()`; a binary counts as no lines), then the
   largest file, with `and N more`, and `the proof runs: <files>` (`proof_runs()`). `odd new` prints it (so the MCP
@@ -431,7 +431,7 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Outcome:** the method tells the agent to stop as soon as the outcome is proven and strong, with no further planning
   or review rounds.
 - **Measure:** cost and seconds per task at unchanged accuracy.
-- **Done** in the commit "B14: stop when proven" (`git log --grep '^B14:'`), a tool newer than 0.4.0, no setting:
+- **Done** in the commit "B14: stop when proven" (`git log --grep '^B14:'`), no setting:
   step 4 of the method gains one sentence (once `odd done` passes with full proof strength and `odd gate` passes,
   stop and report; do not plan, review or refactor further in this outcome), and `odd done`'s success output ends with
   `next: report the outcome as done (odd gate passed)` when its gate passes, with the gate's `FAIL` and problems
@@ -449,8 +449,8 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **How:** counted by ODD from local evidence, never shown to the agent as a budget (the pilot showed a visible budget
   makes agents skip work, [12](docs/evidence/12-pilot.md)).
 - **Measure:** spend on tasks that end unsolved.
-- **Done** in the commit "B15: attempt budget per outcome" (`git log --grep '^B15:'`), a tool newer than 0.4.0, setting
-  `"max_attempts"` (default 0, off; the v0.4.0 Action refuses it as unknown): `failures()` counts, from local evidence,
+- **Done** in the commit "B15: attempt budget per outcome" (`git log --grep '^B15:'`), setting
+  `"max_attempts"` (default 0, off): `failures()` counts, from local evidence,
   failed `odd done` runs and every attempt `_judge()` refused in `_attempts()` (so race, cascade and chain alike),
   since the latest verified `done` or budget park; `budget()` parks with the first line of each reason and exit 1 when
   the count reaches the limit; a cascade runs no further level once reached. Nothing in `AGENTS.md` or a prompt names
@@ -476,7 +476,7 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 ### 16. Cost per proven outcome
 - **Outcome:** ODD reports dollars, seconds and turns per proven outcome, the figure the race and the cascade optimise.
 - **How:** from the agent's own usage where available (bench records, MCP) and local evidence.
-- **Done** (commit "B16: cost per proven outcome", a tool newer than 0.4.0, no new setting): `_attempts()`, which
+- **Done** (commit "B16: cost per proven outcome", no new setting): `_attempts()`, which
   race, cascade and chain share, records every attempt's `cost` (the agent's `odd-cost: <usd>` line via `_cost()`, or
   null) and `seconds` (agent plus verification) in local evidence; `odd stats` prints per outcome and in total the
   dollars and seconds spent, proven outcomes, and dollars and seconds per proven outcome, failed attempts included,
@@ -494,7 +494,7 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
 - **Outcome:** a project sees which kinds of outcomes and proofs let defects through, from the escaped-defect log and
   strength scores, so the method sharpens on its own failures.
 - **How:** `odd stats` grouped by outcome kind, seal and strength.
-- **Done** (commit "B17: proof quality trends", a tool newer than 0.4.0, no new setting): `odd stats` prints a table
+- **Done** (commit "B17: proof quality trends", no new setting): `odd stats` prints a table
   `proof quality trends (self-reported: ...)` with one row per group (kind bug, feature, refactor, none; sealed or not;
   strength full, partial, not measured; proof by another agent, from the `proof-by:` line, or not): outcomes, escaped
   defects and the rate (escaped defects per outcome), and under each group of fewer than 10 outcomes a line saying the
@@ -546,8 +546,8 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   verifies each as its own change and refuses one that a later change broke.
 - **Evidence:** 34 runs in [16](docs/evidence/16-new-arms.md) proved every outcome and were then refused by the gate
   ("within one change a file belongs to one outcome"), though their work passed the hidden tests.
-- **Done** in the commit "B20: successive outcomes on one branch" (`git log --grep '^B20:'`), a tool newer than
-  0.4.0 ([DESIGN 5](DESIGN.md)). Tests: `Successive` (a chain of two outcomes on one file passes; a hollow later
+- **Done** in the commit "B20: successive outcomes on one branch" (`git log --grep '^B20:'`)
+  ([DESIGN 5](DESIGN.md)). Tests: `Successive` (a chain of two outcomes on one file passes; a hollow later
   outcome, a forged checkpoint, a later change that breaks an earlier outcome and an outcome edited after its
   checkpoint are refused; each refusal shown to fail with the fix broken). The harness's reason line now quotes a
   failed gate's first problem.
@@ -600,8 +600,8 @@ repositories. Reasons and sources: [14](docs/evidence/14-research.md).
   attempt cannot deliver them while the proof is wrong.
 - **Measure:** delivered doable tasks on the same harness with disputes sent back, against run C; false DONE must not
   rise (a rewritten proof is sealed red again, before any code).
-- **Done** in the commit "B23: a disputed proof waits for an answer instead of parking" (`git log --grep '^B23:'`), a
-  tool newer than 0.4.0 ([DESIGN 3d1](DESIGN.md)). Tests: `Disputes`. The harness sends a disputed proof back to its
+- **Done** in the commit "B23: a disputed proof waits for an answer instead of parking" (`git log --grep '^B23:'`)
+  ([DESIGN 3d1](DESIGN.md)). Tests: `Disputes`. The harness sends a disputed proof back to its
   author once (`odd spec`; the arm's own model for race and cascade, the strong model for spec) and runs the attempts
   again; test `test_a_disputed_proof_goes_back_to_its_author_once_and_the_race_runs_again`.
 - **Measured** (run D, [16](docs/evidence/16-new-arms.md#with-disputed-proofs)): in 18 runs a disputed proof went back

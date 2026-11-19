@@ -113,7 +113,7 @@ help the agent plan; ODD checks whether the work is actually done. Use them toge
 
 **Is it proven to make agents better?**
 No. In a same-task comparison (16 tasks with hidden acceptance tests, five ways of working, three runs each, Sonnet
-and Haiku, 480 runs), every arm, plain Claude Code included, got every doable task right on both Sonnet and Haiku (42 of 42 runs; one Superpowers miss on Sonnet). ODD did not make the code more correct; nothing did. The arms separated only on the impossible tasks with Haiku: ODD and Superpowers claimed "done" falsely in 2 of 6 runs, plain, BMAD and Spec Kit in 3 of 6, and ODD never edited a visible test: a hint, not a finding. ODD cost about a quarter to a half more than plain; BMAD and Spec Kit two to five times as much. These runs used ODD from before the 0.4.0 features. Results, both grades and every reason verbatim:
+and Haiku, 480 runs), every arm, plain Claude Code included, got every doable task right on both Sonnet and Haiku (42 of 42 runs; one Superpowers miss on Sonnet). ODD did not make the code more correct; nothing did. The arms separated only on the impossible tasks with Haiku: ODD and Superpowers claimed "done" falsely in 2 of 6 runs, plain, BMAD and Spec Kit in 3 of 6, and ODD never edited a visible test: a hint, not a finding. ODD cost about a quarter to a half more than plain; BMAD and Spec Kit two to five times as much. These runs used an early copy of ODD (commit 0e38e3e), without proof strength, sealed proofs, or the race, cascade and spec commands. Results, both grades and every reason verbatim:
 [15](docs/evidence/15-comparison.md); the harness is open in [`bench/`](bench/SPEC.md). ODD's case is a "done" that
 can be checked at the merge gate, not better code.
 
@@ -138,7 +138,7 @@ can be checked at the merge gate, not better code.
 | "My agent could cheat it." | On a laptop an agent with a shell can bypass any local check, so CI is the authority: a required check, its own pinned copy of the tool, settings from the target branch. |
 | "We already use Spec Kit or BMAD." | Keep them. They plan; ODD checks the result. |
 | "Does it make agents better?" | Not proven. The comparison will say, and it will be published either way. |
-| "Does the agent keep polishing after it is proven?" | It is told not to. Once `odd done` and `odd gate` both pass, the method says stop, and both commands end with one `VERDICT:` line that the report must carry, word for word (after the gate's problems when it fails). The line follows the gate, not the strength score, and this is wording, not enforcement: its effect on cost and time is not measured (a tool newer than 0.4.0). |
+| "Does the agent keep polishing after it is proven?" | It is told not to. Once `odd done` and `odd gate` both pass, the method says stop, and both commands end with one `VERDICT:` line that the report must carry, word for word (after the gate's problems when it fails). The line follows the gate, not the strength score, and this is wording, not enforcement: its effect on cost and time is not measured. |
 | "What if the work cannot be done?" | `odd park <slug> "<why>"`. The method tells the agent that when the task cannot be done as asked or the proof cannot honestly pass, stopping and explaining with `odd park` is the expected, correct answer, and a forced pass is the wrong one. This is wording, not enforcement; its effect here is not measured. |
 | "Can the agent just rewrite the test to fit its code?" | Not silently. Editing or deleting a test that existed at the base fails `done` and the gate unless the outcome says why (`test-change: <reason>`, which can name the files it covers), and the review comment prints that reason with the files it covers. Turning a test off counts too: a new or changed `conftest.py`, `pytest.ini`, pytest section or `load_tests` needs the same reason (other routes, such as `PYTEST_ADDOPTS` or an outside plugin, are not seen; DESIGN section 10). A test the change adds is covered only if the outcome is sealed. `odd seal <slug>` before the code checks the proof fails and fingerprints the test files in the outcome file; editing them later fails `done` and the gate until a reseal, which changes the outcome file in the diff. Optional; a reviewer still has to look. |
 | "What happens when a bug gets through anyway?" | `odd escaped <slug> "<what, where found>"` records it on the outcome it got past, and you write a new outcome whose proof fails on that bug. `odd stats` splits recorded escapes by sealed, take-out skipped and proof strength, so a team sees which kinds of proof leak. Only what someone records is counted, and strength only where it was measured locally. |
@@ -160,18 +160,18 @@ It is one file with no account and no service. To remove it, delete `.odd/` and 
 **How do I make it count in CI?**
 On GitHub Actions, one step at the end of your test job, made a required check:
 ```yaml
-- uses: varunkan/ODD-Outcome-Driven-Development@v0.4.0
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.5.0
 ```
-Other CI systems use the two lines `odd init` prints. The `strength`/`mutants` settings and `sealed:` need 0.4.0 or later; `test-change:` needs a tool newer than 0.4.0 (v0.4.0 refuses it as an unknown field).
+Other CI systems use the two lines `odd init` prints.
 
-**Does it run the proofs again when nothing changed?** No (a tool newer than 0.4.0). A verification is keyed on the
+**Does it run the proofs again when nothing changed?** No. A verification is keyed on the
 tool, the settings, the base commit and every file that differs from it; a second `odd done` with nothing changed
 prints `cached (verified at <time>)` and runs no proof. `--no-cache` runs it in full. In CI the cache is used only when
 the target branch sets `"cache_file"` to a path outside the repository, and only entries an earlier `--recompute`
 wrote count; restore that file on pull requests and save it only from the target branch, so a pull request cannot
 plant an entry. Ignored files, installed packages and the environment are not in the key (DESIGN.md section 5d).
 
-**Does odd tell the agent where to look?** Yes (a tool newer than 0.4.0). `odd new` and the MCP `new` tool end with
+**Does odd tell the agent where to look?** Yes. `odd new` and the MCP `new` tool end with
 `read these first`: the files inside the outcome's boundary that exist, at most ten, the largest change first, and
 the test files the proof names; race, cascade and chain put the same list in the agent's prompt. It lists nothing
 outside the boundary, so a file the change needs outside it is still the agent's to find (and to add to `in:`).
@@ -201,7 +201,7 @@ Yes: `odd init --mcp` installs a small MCP server (`.odd/odd_mcp.py`, standard l
 so the tools can never disagree with the command line. Only the test suite has driven it so far.
 
 **Can it run several agents at once and keep the best attempt?**
-`odd race <slug>` (a tool newer than 0.4.0) runs the outcome as N attempts, each by an agent command you configure
+`odd race <slug>` runs the outcome as N attempts, each by an agent command you configure
 in `"agents"` in `.odd/config.json`, each in its own clone outside the repository (a temporary folder), never in your working tree. Every
 attempt is checked as `odd done` would check it, and an attempt that edits the proof's test files or the outcome
 is discarded. The winner is the verified attempt whose proof caught the most small breaks, then the smallest, then
@@ -223,7 +223,7 @@ tree on purpose (absolute paths, `git -C` on your repository; it runs as you), a
 and macOS, which has no `/proc` (only the agent's process group is killed there).
 
 **Can it try a cheap model first and pay for a stronger one only when needed?**
-`odd cascade <slug>` (a tool newer than 0.4.0) runs the agent commands in `"agents"` in order, cheapest first, one
+`odd cascade <slug>` runs the agent commands in `"agents"` in order, cheapest first, one
 level at a time, each attempt in its own git worktree and checked as `odd done` would. The first verified attempt is
 applied and the dearer agents never run; a refused attempt's full finding (the failing output, the surviving break and
 its line, the line the proof never ran) goes into the next agent's prompt; after the last level the outcome is parked
@@ -235,7 +235,7 @@ tasks at a median $0.022, about a quarter of plain Sonnet's cost, with no false 
 impossible task; plain Haiku delivered all 42 for less, with two false DONE.
 
 **What does a proven outcome cost me?**
-With a tool newer than 0.4.0, `odd stats` ends with a table of what race, cascade and chain attempts cost: per outcome
+`odd stats` ends with a table of what race, cascade and chain attempts cost: per outcome
 the attempts, dollars, seconds and whether it was proven, and in total the dollars and seconds per proven outcome,
 with failed attempts counted in the spend. The dollars are only what your agent commands print as `odd-cost: <usd>`
 (an attempt without that line adds nothing, and the table says how many reported), the seconds are summed per
@@ -243,14 +243,14 @@ attempt rather than wall clock, and it is this machine's record only, so it is l
 does outside race, cascade and chain is not counted.
 
 **Which of our proofs let defects through?**
-With a tool newer than 0.4.0, `odd stats` prints the escape rate (defects recorded with `odd escaped`, per outcome)
+`odd stats` prints the escape rate (defects recorded with `odd escaped`, per outcome)
 for bug, feature and refactor outcomes, sealed or not, full, partial or unmeasured proof strength, and proofs written by
 another agent (`odd spec --proof-by`) or not; `--json` for a dashboard. Under 10 outcomes in a group it says the counts
 are small. Only recorded escapes count, strength is this machine's record, and an outcome without `proof-by:` is
 counted as the same author even when nobody recorded who wrote its proof.
 
 **Can an agent work through a long ticket unattended without leaving a mess when it gets stuck?**
-`odd chain <ticket>` (a tool newer than 0.4.0) runs the outcome slugs listed in `.odd/chains/<ticket>.md` in order.
+`odd chain <ticket>` runs the outcome slugs listed in `.odd/chains/<ticket>.md` in order.
 Each one not yet proven is attempted by your agents in their own git worktrees (as `odd race`, or `odd cascade` with
 `--cascade`), verified in your tree as `odd done` would, and committed as a checkpoint `odd: <slug> proven`. The first
 outcome that cannot be proven stops the chain: it is parked with every attempt's reason, the tree stays at the last
@@ -263,7 +263,7 @@ or survive a SIGKILL between applying and committing without leaving those files
 fake agents (DESIGN.md section 3e, BACKLOG item 10).
 
 **Can a stronger model write the proof and a cheaper one the code?**
-Yes: `odd spec <slug> --proof-by "<command>"` (a tool newer than 0.4.0). The command writes only the proof, in its own
+Yes: `odd spec <slug> --proof-by "<command>"`. The command writes only the proof, in its own
 git worktree; odd refuses it if it changed anything but test files or if the proof does not fail before the code, and
 passes the reason to the next try (3 tries by default, `"proof_tries"`), then parks the outcome. An accepted proof is
 brought back, sealed red and labelled `proof-by: <name>` in the outcome file. `odd race` and `odd cascade` then refuse
@@ -274,7 +274,7 @@ against a strong-written sealed proof. odd cannot tell whether the proof tests t
 first and stays unchanged; read it.
 
 **Can odd stop an agent that keeps failing at one outcome?**
-Yes, with `"max_attempts": N` in `.odd/config.json` (default 0, off; a tool newer than 0.4.0). odd counts failed
+Yes, with `"max_attempts": N` in `.odd/config.json` (default 0, off). odd counts failed
 `odd done` runs and refused race, cascade and chain attempts from its local evidence since the outcome was last
 verified; at N it parks the outcome with the reasons, exits 1, and a cascade stops escalating. From then on `odd
 done`, `race`, `cascade` and `chain` refuse that outcome (exit 1) without running a proof or an agent, until a person
@@ -287,16 +287,16 @@ saves is not measured.
 
 **How do I make sure every requirement of the ticket was done, not just the ones the agent liked?**
 List them once in `.odd/requirements/<ticket>.md`, one per line (`R1: ...`, `R2: ...`), and give each outcome a
-`covers: R1, R3` line (`odd new ... --covers R1,R3`; a tool newer than 0.4.0). `odd gate`, local and `--recompute`,
+`covers: R1, R3` line (`odd new ... --covers R1,R3`). `odd gate`, local and `--recompute`,
 and the pull-request summary report each requirement no outcome in the change covers, and fail on a `covers:` id that
 is not in the file. With `"coverage": "enforce"` an uncovered requirement fails the gate; `"report"` only
-prints it, and the default `"off"` turns the check off (it was `"report"` up to 0.4.0; the ruling in
+prints it, and the default `"off"` turns the check off (it was `"report"` earlier in development; the ruling in
 [docs/evidence/data/lean-ruling.md](docs/evidence/data/lean-ruling.md) took it out of the defaults and the method text). Outcomes without `covers:` behave as before. odd cannot tell whether the
 list is the whole ticket or whether a proof tests the requirement it claims to cover; a reviewer reads both. Whether
 this lowers missed requirements is not measured yet.
 
 **What stops a later change from breaking something proven earlier?**
-The regression guard (a tool newer than 0.4.0). Every merged outcome file stays in the repository, and `odd gate`,
+The regression guard. Every merged outcome file stays in the repository, and `odd gate`,
 local and `--recompute`, runs the proof of each earlier outcome whose `in:` holds a file the change touches; when one
 fails, the gate fails with `<slug> (proven in <commit>) now fails: <last line>`. Only the earlier proof's green run is
 repeated, one run per guard, so a change touching many proven files costs that many proof runs; `"guard": "report"`
@@ -306,7 +306,7 @@ parking a merged outcome runs its base proof and reports the result without fail
 (merged in <commit>)` for a deletion, and sends the auto lane to review. Whether it lowers regressions is not measured yet.
 
 **Can a proven change merge without a human review?**
-odd can say it qualifies; it never merges. With `"auto_lane": true` in `.odd/config.json` (a tool newer than 0.4.0)
+odd can say it qualifies; it never merges. With `"auto_lane": true` in `.odd/config.json`
 the gate reports `"lane": "auto"` only when the gate passed, every outcome is verified, each proof caught every small
 break (`"auto_min_strength"`, default 1.0) and ran every changed line (Python only; elsewhere not measured), the
 change is at most `"auto_max_lines"` product lines (default 120) inside its outcomes, and nothing else needs a
@@ -318,13 +318,13 @@ result, never a local gate, and start with a small `"auto_max_lines"`. Whether i
 letting defects through is not measured yet.
 
 **For a bug fix, how do I know the test reproduces the bug and does not just pass?**
-Create the outcome with `odd new ... --kind bug` (a tool newer than 0.4.0). `odd seal` and `odd done` then run the
+Create the outcome with `odd new ... --kind bug`. `odd seal` and `odd done` then run the
 proof on the unfixed code, the outcome's changed files put back to the base, require it to fail there, and print
 `reproduced: <last line>`; a proof that passes on the unfixed code is refused. The line shows how it failed; odd
 cannot tell whether that is the reported symptom (an import of a file the fix added also fails), so read it.
 
 **How do I state a refactor, where nothing new should be observable?**
-`odd new <slug> "<sentence>" --in "<globs>" --kind refactor` (a tool newer than 0.4.0): the proof defaults to the
+`odd new <slug> "<sentence>" --in "<globs>" --kind refactor`: the proof defaults to the
 whole suite of the runner odd detects (for example `python3 -m unittest discover -q -s tests`), and the outcome
 records `counterfactual: skip - behaviour-preserving refactor`, since taking a refactor out should change nothing.
 `done` then passes when the suite passes and no existing test was edited unexplained; the take-out and strength
@@ -344,14 +344,14 @@ The check is a word list, not a model: it stops "Refactor the billing module." a
 pass." (the suite passing is not an observable), passes state sentences such as "The login button is disabled while
 the request is pending.", lets through vague sentences that contain a listed word, and refuses ordinary sentences
 built only from words it does not list; set `"ambiguity_stop": false` if it gets in your way (for example, outcomes
-written in another language). A tool newer than 0.4.0. Whether it lowers rework is not measured.
+written in another language). Whether it lowers rework is not measured.
 
 **When `odd done` fails, how does my agent know what to fix?**
 The output ends with a `next:` block: one line per item that is present (the proof's failing line, each small break
 the proof did not notice, each changed line it never ran, each test edit refused for lack of a reason) and the
 command to rerun. A failure with none of these items (nothing changed inside `in:`, the proof passes with the change
 taken out) has no block: rerunning would fail the same way, and the message says what to do. Race, cascade (whose next prompt carries it) and the MCP server (`structuredContent.next`) give the
-same block. It states facts and does not say how to pass. A tool newer than 0.4.0. Whether it shortens the loop is
+same block. It states facts and does not say how to pass. Whether it shortens the loop is
 not measured.
 
 **What is a sensible way to adopt it?**
