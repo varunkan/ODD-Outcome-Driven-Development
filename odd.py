@@ -28,6 +28,7 @@ import collections
 import datetime
 import difflib
 import hashlib
+import itertools
 import json
 import os
 import queue
@@ -1956,8 +1957,14 @@ def anchored(root, cfg, o):
     the repository's own absolute path runs that folder's code wherever it is checked: in CI, in an attempt's copy
     or in a reviewer's clone it passes or fails on code that is not the code under test. Measured: in two of three
     runs the agent's tests held `cwd="<its folder>"`, and the gate in a copy judged the wrong program."""
-    here = {os.path.realpath(root), os.path.abspath(root)}
-    names = lambda text: any(re.search(re.escape(h) + r'(?![\w.-])', text) for h in here)  # noqa: E731
+    here = os.path.realpath(root)
+
+    def names(text):  # an absolute path in the text that is this folder or inside it, by any name (a link to it too)
+        for m in itertools.islice(re.finditer(r'(?<![\w.+-])(?:/[\w.+-]+)+', text), 5000):
+            real = os.path.realpath(m.group(0))
+            if real == here or real.startswith(here + os.sep):
+                return True
+        return False
     where = (['the proof command'] if names(o.get('proof') or '') else []) + [t for t, text in _proof_tests(root, cfg, o) if names(text)]
     if not where:
         return ''

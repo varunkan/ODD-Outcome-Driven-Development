@@ -4506,6 +4506,14 @@ class Anchored(Repo):
         self.solve()
         self.assertIn('in the proof command', self.no('done', 'add'))
 
+    def test_the_folder_under_another_name_is_still_this_folder(self):
+        link = self.dir + '-link'
+        os.symlink(self.dir, link)
+        self.addCleanup(os.remove, link)
+        self.outcome(proof='cd %s && %s' % (link, PROOF))
+        self.solve()
+        self.assertIn('in the proof command', self.no('done', 'add'))
+
     def test_a_longer_path_that_only_starts_the_same_is_not_this_folder(self):
         self.outcome()
         self.solve()
