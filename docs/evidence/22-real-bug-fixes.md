@@ -1,6 +1,6 @@
 # 22. Real bug fixes: lean odd against a plain agent told to write tests
 
-*Written 2026-11-19, before the runs; the results section is added after them. The design is an independent judge's
+*Written 2026-11-19: everything above "Results" before the runs, the results after them. The design is an independent judge's
 ([ruling](data/real/ruling.md)), fixed before any model ran. One run a task, one model: a count, not a rate.*
 
 ## Why
@@ -69,6 +69,39 @@ The judge's own expectation, stated as an inference: the likeliest outcome is *n
   "passes without the change". For pytest this needed its `testing/` folder counted as tests in the measurement
   (odd's own test paths are unchanged), committed before any model run.
 
-## Results
+## Results: not tested; the smoke stopped it
 
-Not run yet.
+Four runs, $1.45 ([smoke-runs.json](data/real/smoke-runs.json)). The ruling's smoke had nine conditions; eight
+held and one did not, and its rule for that one is to stop:
+
+> At most one run hit the $0.40 cap. If this fails: stop, "not tested: these tasks cost more than this budget can
+> pay for".
+
+**Two of the four runs hit the cap**, both on the sphinx task, one in each arm. So by the rule fixed beforehand:
+**not tested: these tasks cost more than this budget can pay for.** No further run was started; $5.45 of the $6.90
+is unspent.
+
+| task | arm | says | hidden file | cost | turns | its own tests without its change |
+|---|---|---|---|---|---|---|
+| pytest 5631 | plain-tests | DONE | passes | $0.32 | 39 | fail |
+| pytest 5631 | odd-lean | DONE | **fails** | $0.31 | 42 | fail |
+| sphinx 8035 | plain-tests | none (stopped at the money limit) | passes | $0.41 | 55 | fail |
+| sphinx 8035 | odd-lean | none (stopped at the money limit) | passes | $0.41 | 54 | fail |
+
+What four runs can and cannot say:
+
+- **Cost.** A run on these repositories costs $0.31 to over $0.41 with Haiku 4.5, about forty times the $0.008 a
+  plain run cost in the sympy pilot of evidence 18, whose model alias was not recorded as resolved. At these prices
+  the 26 pairs need about $20 with no limit a run, and the 12 pairs a verdict needs about $9.
+- **The one pair with two claims went against odd.** On pytest 5631 the plain agent told to write tests passed the
+  hidden file; lean odd said DONE, its own gate passed, and the hidden file fails. One pair is not a result, and it
+  is recorded as it is.
+- **The take-out check had nothing to refuse.** In all four runs the session's own tests fail with its change taken
+  out. Lean odd's false DONE had a real proof of the wrong thing: its test checks a case of its own, in a new file,
+  and the hidden file asks for more. That is the limit evidence 18 found, a proof reaches as far as its cases, and
+  not something the take-out check can see.
+- Both arms did equal work on the sphinx task (54 and 55 turns, both passing the hidden file, both cut off before
+  reporting): odd added no cost there, and no benefit.
+
+**What it would take to answer the question.** About $20 for the 26 pairs with the money limit raised to where
+runs finish, or about $9 for the first 12. Nothing else in the design needs to change.
