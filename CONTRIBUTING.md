@@ -23,6 +23,14 @@ CI runs the same four on Python 3.8 and 3.13, on Linux and macOS.
   evidence, in `BACKLOG.md`. A new test class goes into one theme in `tests/proof_index.py`.
 - **No model names in the tool.** odd calls no model; agents are commands the user configures.
 
+## Adding a check
+
+A check that can fail someone's work has to earn it ([DESIGN 3r](DESIGN.md)). It enters as report only. It may fail
+work once it has been replayed, with no model, on kept programs from two different kinds of task without one false
+alarm, has found a real defect on a task it was not built on, and has run one model round with its targets fixed
+beforehand. One false alarm on correct work later puts it back to report only. It adds nothing to the method text:
+its failure message carries the instruction and a way out.
+
 ## Evidence
 
 Measurements live in `docs/evidence/`, each with its data. The rules they follow:

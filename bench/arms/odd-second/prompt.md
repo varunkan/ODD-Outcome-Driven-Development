@@ -1,1 +1,0 @@
-../odd/prompt.md

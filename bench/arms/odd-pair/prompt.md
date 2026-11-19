@@ -1,1 +1,0 @@
-../odd-race/prompt.md

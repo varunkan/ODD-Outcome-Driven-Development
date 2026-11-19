@@ -829,3 +829,25 @@ cost to build.
   ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
 - **Done** in the commit "B49: a proof tied to its own folder is refused" (`anchored()`, `_proof_tests()`; tests
   `Anchored`; [DESIGN 3p-3](DESIGN.md)).
+
+### 50. Hostile inputs through the entry point
+- **Outcome:** with `entry:`, odd runs the entry point on inputs no ticket mentions and lists any that end in a
+  traceback or a signal; it never fails the outcome.
+- **Evidence:** replayed with no model on every kept program: 17 of 18 calculators crash on a 400-digit number, 600
+  nested brackets or a 2,400-term sum, the three that the frozen probes call clean among them; 0 of 9 duration
+  programs. The judge had ruled the idea out as catching none of the measured defects, which holds for the duration
+  task; the replay it asked for found these instead.
+- **Done** in the commit "Lean odd" (`hostile()`, `crashed()`; tests `Hostile`; [DESIGN 3r](DESIGN.md)). Report
+  only by the admission rule; not run with a model.
+
+### 51. Lean odd: the ruling
+- **Outcome:** odd's defaults and method text hold only what has a measured benefit or costs nothing; everything
+  else is opt-in; a check may fail work only by the admission rule.
+- **Evidence:** an independent judge's ruling on evidence 15 to 20
+  ([lean-ruling.md](docs/evidence/data/lean-ruling.md)): one measured benefit (no false DONE in 9 calculator runs
+  against 2 of 3 for a plain agent), no benefit on the second task or on real issues, and a check tuned on one task
+  that failed correct work on the next.
+- **Done** in the commit "Lean odd": `"coverage"` off by default; `"reach"` removed and `reject:` report only; the
+  method text cut from about 2,600 to about 1,200 characters; `verdict_line()` printed last by `done` and `gate`;
+  the Stop hook asks for it (`"report": "verdict"`) and gives every reason in one block; four arms retired
+  (`bench/arms/RETIRED.md`), `odd-lean` and `plain-tests` added. Not yet measured: evidence 21.

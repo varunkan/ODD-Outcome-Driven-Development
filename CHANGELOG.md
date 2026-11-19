@@ -18,9 +18,15 @@ Built since 0.4.0 and not yet in a release.
 - `probe:` (passing attempts must agree), literals copied from the proof (advisory), `entry:` (the proof must run
   the entry point).
 - `"cases": "require"`: requirements written with their edge cases, each named in a test (item 44).
-- `reject:` and `"reach": "require"`: the entry point must reject inputs odd makes from the proof's examples (45).
+- `reject:` (report only): inputs odd makes from the proof's examples that the entry point does not reject (45).
+- Hostile inputs through `entry:`, report only: any that end in a traceback or a signal (50).
+- A proof whose command or tests name the repository's own absolute path is refused (49).
 - Passing attempts compared on inputs odd makes (46).
 - Standing checks, flaky-proof repeats, guards on earlier outcomes, duplication, owed steps on the real system.
+
+**Leaner by default** (the ruling in docs/evidence/data/lean-ruling.md)
+- The method text is about 1,200 characters (it was about 2,600); `"coverage"` is `off` by default.
+- `odd done` and `odd gate` end with one `VERDICT:` line; with odd's hooks a report must end with it.
 
 **Reports**
 - `odd claim`: what is proven, what is not, one verdict line, generated from the gate's facts (43).
