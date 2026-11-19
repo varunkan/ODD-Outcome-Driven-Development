@@ -26,7 +26,7 @@ Built since 0.4.0 and not yet in a release.
 
 **Leaner by default** (the ruling in docs/evidence/data/lean-ruling.md)
 - The method text is about 1,200 characters (it was about 2,600); `"coverage"` is `off` by default.
-- `odd done` and `odd gate` end with one `VERDICT:` line; with odd's hooks a report must end with it.
+- `odd done` and `odd gate` end with one `VERDICT:` line; with odd's hooks a report must carry it.
 
 **Reports**
 - `odd claim`: what is proven, what is not, one verdict line, generated from the gate's facts (43).

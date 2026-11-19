@@ -350,7 +350,7 @@ place. Its last step tells the agent that when the task cannot be done as asked 
 should STOP and explain with `odd park`, and that this is the expected answer, not a failure (wording from
 ImpossibleBench's abort option; its effect here is not measured). Step 4 tells it to stop once `odd done` and
 `odd gate` both pass. `odd done` and `odd gate` end with one `VERDICT:` line (`DONE`, `DONE, WITH n POINTS NOT
-PROVEN`, or `NOT DONE`), and step 5 tells the agent to end its report with that line, word for word (a tool newer
+PROVEN`, or `NOT DONE`), and step 5 tells the agent to put that line in its report, word for word (a tool newer
 than 0.4.0).
 
 | reads `AGENTS.md` without configuration | needs one line |

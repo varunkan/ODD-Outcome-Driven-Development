@@ -649,7 +649,7 @@ fewest tokens ([the ruling](docs/evidence/data/lean-ruling.md), 2026-11-19). Wha
 | the take-out check, and `odd gate --recompute` in CI | on | two more proof runs, no model tokens |
 | a proof tied to its own folder is refused (3p-3) | on | none |
 | proof strength | reported, never a bar the method sets | up to 8 proof runs |
-| the report ends with the gate's verdict line (`"report": "verdict"`, with odd's hooks) | on | one blocked turn, when it fires |
+| the report carries the gate's verdict line (`"report": "verdict"`, with odd's hooks) | on | one blocked turn, when it fires |
 | the method text | about 1,200 characters, seven steps | it was about 2,600 |
 
 Off by default, and out of the method text: requirement coverage (`"coverage"` is `off`), edge cases (3n), `entry:`,

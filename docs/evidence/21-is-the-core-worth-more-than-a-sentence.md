@@ -70,7 +70,8 @@ What was also seen, none of it a pre-registered target:
   `DONE, WITH 3 POINTS NOT PROVEN`, which no plain report says.
 - **One side effect:** that third report ends with the verdict line and has no `RESULT:` line, so the harness
   recorded no claim for it. The work passes the hidden tests and odd's gate. The method's last line and the
-  harness's last line compete for the same place.
+  harness's last line compete for the same place. The method and the hook now ask for the verdict line in the report,
+  not at its end, so another tool's closing line can follow it.
 - **The shorter method text did not make odd cheaper:** $0.67 for three runs against $0.68 for the `odd` arm with
   the text twice as long. The cost is the work odd asks for, not the reading.
 - **Cost of the gate in CI is not in these figures**, and neither is its benefit: nothing an agent writes in a

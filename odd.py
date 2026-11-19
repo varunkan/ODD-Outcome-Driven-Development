@@ -4703,7 +4703,7 @@ For a change of more than {trivial} lines:
 3. Make the change inside the files the outcome names.
 4. Run `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change taken
    out, and passes again. Fix what they report; when both pass, stop.
-5. End your report with the `VERDICT:` line `odd gate` prints, word for word.
+5. Put the `VERDICT:` line `odd gate` prints in your report, word for word.
 6. If you are blocked, or {park_when}, STOP: run `odd park <slug> "<why>"` and say why. That is
    the correct answer then, not a failure; a forced pass is the wrong one.
 
@@ -4909,7 +4909,8 @@ def cmd_hook(a, root):
         why.append('your report leaves out what the checks did not show. End it with the output of `%s claim`, '
                    'unchanged, and say nothing that output does not say:\n%s' % (run, owed))
     elif owed:
-        why.append('end your report with the gate\'s verdict, word for word, and say nothing that contradicts it:\n%s' % owed)
+        why.append('your report must carry the gate\'s verdict line, word for word, and say nothing that contradicts '
+                   'it (other closing lines you were asked for still go after it):\n%s' % owed)
     if why:  # one block carries every reason: odd never blocks twice in a row, so a second reason would be lost
         print(json.dumps({'decision': 'block', 'reason': 'odd: ' + '\n'.join(why)}))
     else:
