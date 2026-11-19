@@ -346,14 +346,15 @@ class SessionEnvironmentTest(unittest.TestCase):
         os.chmod(self.tool, 0o755)
         task = read(os.path.join(self.task, 'task.json'))
         # passes only with the task's own, unchanged environment and the graded tree as the code under test
-        task['grade'] = ('test "$(envtool)" = task-env && test "$PYTHONPATH" = "$PWD" && test -d tests_hidden'
-                         ' && test -z "$HTTPS_PROXY"')
+        # real paths (pwd -P): macOS reaches its temporary folder through a link, and a shell reports the real one
+        task['grade'] = ('test "$(envtool)" = task-env && test "$(cd "$PYTHONPATH" && pwd -P)" = "$(pwd -P)"'
+                         ' && test -d tests_hidden && test -z "$HTTPS_PROXY"')
         write(os.path.join(self.task, 'task.json'), json.dumps(task))
         arm = os.path.join(self.root, 'arms', 'envarm')
         write(os.path.join(arm, 'setup.sh'), '#!/usr/bin/env bash\nset -euo pipefail\nenvtool > setup-saw.txt\n')
         write(os.path.join(arm, 'prompt.md'), '{ticket}\n')
         write(os.path.join(arm, 'post.sh'),
-              '#!/usr/bin/env bash\nenvtool | grep -q task-env && test "$PYTHONPATH" = "$PWD"\n')
+              '#!/usr/bin/env bash\nenvtool | grep -q task-env && test "$(cd "$PYTHONPATH" && pwd -P)" = "$(pwd -P)"\n')
         write(os.path.join(self.root, 'env_agent.py'), ENV_AGENT)
 
     def test_session_arm_scripts_and_grade_run_in_the_tasks_environment(self):
