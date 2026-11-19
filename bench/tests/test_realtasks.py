@@ -280,6 +280,22 @@ class BuildTest(unittest.TestCase):
 
 
 class GradeTimeTest(unittest.TestCase):
+    @unittest.skipUnless(os.path.isdir('/proc/self'), 'needs Linux /proc')
+    def test_a_command_stopped_at_its_time_limit_leaves_nothing_running(self):
+        mod = module('realtasks')
+        work = tempfile.mkdtemp(prefix='realtasks-test-')
+        self.addCleanup(shutil.rmtree, work, ignore_errors=True)
+        with self.assertRaises(subprocess.TimeoutExpired):  # a grade is a shell line: its pytest is the shell's child
+            mod.sh('sleep 60 & echo $! > pid; wait', work, timeout=1)
+        pid = read(os.path.join(work, 'pid')).strip()
+        self.addCleanup(subprocess.run, ['kill', '-9', pid], capture_output=True)
+        try:
+            with open('/proc/%s/stat' % pid) as f:
+                state = f.read().rsplit(')', 1)[1].split()[0]
+        except OSError:
+            state = 'gone'
+        self.assertIn(state, ('gone', 'Z'))
+
     def test_a_slow_whole_file_grade_gets_the_time_it_was_measured_to_need(self):
         mod = module('run')
         work = tempfile.mkdtemp(prefix='bench-env-test-')

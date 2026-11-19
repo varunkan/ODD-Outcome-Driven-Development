@@ -31,6 +31,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -62,8 +63,18 @@ PYTHON_RELEASED = {'3.7': '2018-06-28T00:00:00Z', '3.8': '2019-10-15T00:00:00Z',
                    '3.13': '2024-10-08T00:00:00Z'}
 
 
-def sh(cmd, cwd, check=True, **kw):
-    r = subprocess.run(cmd, cwd=cwd, shell=isinstance(cmd, str), capture_output=True, text=True, **kw)
+def sh(cmd, cwd, check=True, timeout=None, **kw):
+    """Run `cmd` (a string: a shell line) and return what it printed. At `timeout` everything it started is killed
+    with it (a grade is a shell line whose pytest would otherwise run on), and subprocess.TimeoutExpired raised."""
+    p = subprocess.Popen(cmd, cwd=cwd, shell=isinstance(cmd, str), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         text=True, start_new_session=True, **kw)
+    try:
+        out, err = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        raise
+    r = subprocess.CompletedProcess(cmd, p.returncode, out, err)
     if check and r.returncode:
         raise RuntimeError('%s: %s' % (cmd if isinstance(cmd, str) else ' '.join(cmd), (r.stderr or r.stdout)[-400:]))
     return r
