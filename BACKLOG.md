@@ -755,6 +755,11 @@ cost to build.
 - **Evidence:** 28 of 29 pytest, requests, pylint and sphinx candidates could not run their own test file with the real
   fix on one bare Python 3.13 (docutils, astroid not installed), so item 18b was not testable here.
 
+- **Done** in the commits "B42, in progress: per-task environments" and "B42: 53 real tasks build in their own
+  environments" (`spec_for()`, `make_env()`, `task_environ()`, `grade_environ()` in `bench/realtasks.py`; sessions
+  and grading in `bench/run.py`; tests `bench/tests/test_realtasks.py`). 53 of 62 candidates pass `--strict`. Not
+  run with a model; `regression_passed` means nothing for these tasks.
+
 ### 43. The claim is generated, not written
 - **Outcome:** a report cannot say more than the checks showed: `odd claim` prints what is proven, what is not, and
   one verdict line, from the gate's facts; `odd ask --open` leaves a question open without stopping the work, and the

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build comparison tasks from real open-source issues (SWE-bench Lite), for BACKLOG item 18.
+"""Build comparison tasks from real open-source issues (SWE-bench Lite or Verified rows), for BACKLOG item 18.
 
 usage: realtasks.py --rows DIR --out ROOT [--strict] [--want N] [--python X.Y|spec] [--keep-refused] ID [ID ...]
 
-DIR holds the SWE-bench Lite rows as fetched from the Hugging Face datasets server (rows*.json). For each instance ID
+DIR holds the SWE-bench rows as fetched from the Hugging Face datasets server (rows*.json). For each instance ID
 this writes ROOT/tasks/<id>/ in the harness's task format: repo/ (the project at the issue's base commit, without its
 git history), ticket.md (the issue text, as its reporter wrote it), hidden/tests_hidden/ (the test file as the real
 fix's test patch leaves it), solution.patch (the real fix) and task.json (grade: pytest on that whole file, so its
@@ -174,7 +174,8 @@ def make_env(task_dir, spec, before=None, version=None):
     day of the issue or of its commit) or by the day that Python came out if that is later (PYTHON_RELEASED), since a
     project of that day breaks on later releases of what it uses; then the spec's pins, whatever their date. The
     project is installed to resolve its dependencies and then taken out again, and what that install wrote at the
-    top of repo/ is removed. The environment is relocatable: it works from a copy."""
+    top of repo/ is removed (a version file the build writes inside the package stays, as SWE-bench's own install
+    leaves it: pytest does not start without its own). The environment is relocatable: it works from a copy."""
     repo, env = os.path.join(task_dir, 'repo'), os.path.join(task_dir, 'env')
     had = set(os.listdir(repo))
     sh(['uv', 'venv', '-q', '--relocatable', '--python', spec['python'], env], task_dir, timeout=900)
@@ -280,7 +281,7 @@ def build(row, root, strict=False, python=None):
         grade += ' -k "not (%s)"' % ' or '.join(dict.fromkeys(broken))
     with open(os.path.join(task_dir, 'task.json'), 'w', encoding='utf-8') as f:
         json.dump(dict({'id': iid, 'size': 'large', 'kind': 'real', 'grade': grade, 'expect': 'done',
-                        'source': 'SWE-bench Lite %s (%s at %s)' % (iid, row['repo'], row['base_commit'][:12])},
+                        'source': 'SWE-bench %s (%s at %s)' % (iid, row['repo'], row['base_commit'][:12])},
                        **({'python': spec['python'], 'grade_seconds': seconds} if spec else {})), f, indent=2)
     if grade_status(task_dir, grade) == 0:
         return 'the grade passes before the fix'

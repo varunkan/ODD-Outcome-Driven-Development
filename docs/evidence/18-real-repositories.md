@@ -133,6 +133,16 @@ is the machine, not the method: SWE-bench gives every task its own environment w
 dependencies, and this harness runs every project in one bare Python 3.13. Making the claim testable needs those
 per-task environments (BACKLOG item 42).
 
+**Update, 2026-11-19: the environments are built; the comparison is not yet run.** `bench/realtasks.py --python
+spec` now gives each task its own Python 3.9 environment, with that project's test dependencies resolved as of the
+issue's date, and sessions and grading run inside it. Of the 62 candidates under the judge's rule (not a "<15 min
+fix", one test file), 53 fail before the real fix and pass after it: pytest 8 of 8, pylint 5 of 6, sphinx 11 of 13,
+requests 0 of 2, sympy 29 of 33. The nine refused are listed with their reasons in the build logs, none trimmed to
+fit. Checked with no model: an agent that applies the real fix passes 4 of 4 sampled tasks, one that does nothing
+fails 4 of 4. Still to do before any claim: the blind screen of each task's assertions against its ticket, and the
+runs themselves. Differences from SWE-bench's own environments: dependencies are resolved by date, not by its pins;
+the project is on the path, not installed; sympy is graded with pytest.
+
 ## A first fix tried: a blind second proof (odd-dual), 6 runs
 
 Idea, from applying the "several independent minds" step of Google's AI co-scientist to the requirement rather than to
