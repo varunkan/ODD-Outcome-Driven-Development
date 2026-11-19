@@ -4523,6 +4523,17 @@ class Anchored(Repo):
         self.solve()
         self.assertIn('in the proof command', self.no('done', 'add'))
 
+    def test_a_proof_that_runs_in_a_folder_outside_the_repository_is_reported_and_carried_into_the_claim(self):
+        away = tempfile.mkdtemp(prefix='odd-away-')
+        self.addCleanup(shutil.rmtree, away, True)
+        shutil.copy(self.path('README.md'), os.path.join(away, 'note.txt'))
+        self.outcome(proof='%s && cd %s && test -f note.txt' % (PROOF, away))
+        self.solve()
+        out = self.ok('done', 'add')  # report only: a new check does not fail work (DESIGN 3r)
+        self.assertIn('the proof runs in a folder outside the repository (%s)' % away, out)
+        self.assertIn('add: the proof runs in a folder outside the repository', self.ok('claim'))
+        self.assertIn('VERDICT: DONE, WITH 1 POINT NOT PROVEN', self.ok('gate'))
+
     def test_a_longer_path_that_only_starts_the_same_is_not_this_folder(self):
         self.outcome()
         self.solve()

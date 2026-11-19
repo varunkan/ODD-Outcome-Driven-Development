@@ -853,3 +853,12 @@ cost to build.
   (`bench/arms/RETIRED.md`), `odd-lean` and `plain-tests` added. Measured in
   [evidence 21](docs/evidence/21-is-the-core-worth-more-than-a-sentence.md): a plain agent told to write and run
   tests made no false DONE either, at 60% of lean odd's cost; odd's benefit beyond that sentence is not shown.
+
+### 52. A proof that runs outside the repository
+- **Outcome:** when the proof command changes into a folder outside the repository, the verification and `odd claim`
+  say so; it never fails the outcome.
+- **Evidence:** in the real bug-fix runs one verified outcome's whole proof was `cd /tmp/<a project the agent
+  built> && make ...`: nothing of the proof was in the change, and the gate passed only because that folder was
+  still on the machine ([evidence 22](docs/evidence/22-real-bug-fixes.md)).
+- **Done** in the commit "B52: a proof that runs outside the repository is reported" (`outside()`; a test in
+  `Anchored`). Report only by the admission rule; seen once.

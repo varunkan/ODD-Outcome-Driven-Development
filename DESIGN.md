@@ -685,6 +685,11 @@ programs. It does not see the defects those nine share: they exit 0.
 By this rule today the take-out check and the folder check may fail work. `reject:` failed rule 2 on its second
 task and was demoted; it is why the rule exists.
 
+**A proof that runs outside the repository (backlog 52), report only.** When the proof command changes into a
+folder outside the repository (`cd /tmp/x && ...`), the verification and the claim say so (`outside()`): what is
+there is not in the change, so nobody else can rerun the proof. Seen once on a real task; it reports until it has
+passed the admission rule of 3r.
+
 ### 3q. The report carries the claim: `"report": "claim"`
 
 Needs a tool newer than 0.4.0 (backlog item 47). `odd claim` (3m) prints what the checks did and did not show, and
