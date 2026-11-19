@@ -44,4 +44,47 @@ none. A difference found by looking is a hypothesis. This is the test of it, on 
 
 ## Results
 
-Not run yet.
+*Run 2026-11-19. Twelve new pairs (tasks 13 to 24 of the order; the budget rule let no more start), $8.98 of the
+$10.00 cap. No run errored or was contaminated. Every run was graded twice and the two grades agree on all 24.
+Records: [runs-3.json](data/real/runs-3.json).*
+
+**Verdict: not confirmed.** (b, c) = (2, 0): lean odd passed and the plain agent did not on sympy-13877 and
+sympy-20154; the reverse happened on no task. With c = 0 the threshold fixed beforehand was b of 5 or more. The
+direction is the same as in the first twelve; the count is short of the threshold fixed beforehand.
+
+| twelve pairs, one run each | `plain-tests` | `odd-lean` |
+|---|---|---|
+| hidden file passes | 7 | 9 |
+| says DONE | 7 | 7 |
+| says DONE and the hidden file fails (false DONE) | 3 | 0 |
+| says NOT DONE | 1 | 0 |
+| no claim (of these, hidden file fails) | 4 (1) | 5 (3) |
+| cut off by the money limit (of these, hidden file passes) | 4 (3) | 5 (2) |
+| cost, total (median, highest) | $4.27 ($0.36, $0.51) | $4.71 ($0.46, $0.51) |
+| turns, median | 36.5 | 55 |
+
+What the secondary numbers say, as counts and nothing more:
+
+- **False DONE: 3 against 0.** The plain agent said DONE with the hidden file failing on sympy-13615, 13877 and
+  20154; lean odd on none. As a pair that is (3, 0), under the 5 a test would need. Added to evidence 22's 2
+  against 1, still not a test: the two experiments were not designed to be pooled.
+- **Would the take-out check have refused them? 2 of the 3.** On 13877 and 20154 the plain agent's own tests pass
+  with its change taken out (they show nothing about the change); on 13615 they fail without it, so the check would
+  have let that one through. One plain run that passed (13647) wrote no test of its own. Control: every lean-odd run
+  whose gate passed has tests that fail without the change.
+- **Lean odd did not always finish.** Five of its twelve runs ended at the money limit with no claim, and in three
+  of those the hidden file fails. Its own gate failed at the end of three runs (sphinx-9673, sympy-19040, 23262),
+  and passed on two whose hidden file fails (sympy-13615 and 18698, both cut off with no claim): a passing gate is
+  proof of the agent's tests, not of the hidden ones.
+- **Cost:** lean odd cost 1.10 times the plain agent. Runs under $0.20: one plain (19040, fails), two lean odd
+  (13647 and 13877, both pass), so "the plain arm gives up cheaply" did not repeat here.
+- **Inside lean odd's sessions:** the take-out check refused nothing; the Stop hook sent the agent back 4 times; 6
+  reports carry the verdict line; in 4 runs the agent first wrote a proof that names its own folder by absolute
+  path, was refused, and ended with a passing gate.
+
+**Pooled, for description only, not a test:** over all 24 pairs of evidence 22 and this page, the hidden file
+passed on 18 for lean odd and 12 for the plain agent; on the tasks where they differ, 6 against 0.
+
+**What stands.** On real bug fixes, lean odd has not been shown to pass more often than a plain agent told in one
+sentence to write and run tests. Two experiments point the same way and neither reaches its threshold; the limits
+said beforehand hold (mostly one project, one model, one run a task, effort not separated from method).
