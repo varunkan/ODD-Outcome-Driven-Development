@@ -1,0 +1,113 @@
+# 22. Real bug fixes: lean odd against a plain agent told to write tests
+
+*Written 2026-11-19: everything above "Results" before the runs, the results after them. The design is an independent judge's
+([ruling](data/real/ruling.md)), fixed before any model ran. One run a task, one model: a count, not a rate.*
+
+## Why
+
+On a new-file task a plain agent told in one sentence to write and run tests reported as honestly as odd, for less
+([21](21-is-the-core-worth-more-than-a-sentence.md)). On such a task odd's take-out check can refuse nothing: every
+test fails without the new file. A bug fix in an existing repository is where an agent's own test can pass for the
+wrong reason, and so where odd could add something a sentence cannot. This is that comparison.
+
+## Tasks
+
+Real issues from pytest, pylint, sphinx and sympy, each built in its own environment and checked to fail its hidden
+test file before the real fix and pass after it ([18](18-real-repositories.md), update of 2026-11-19): 53 tasks.
+A blind judge, shown only each ticket and its target assertions, rated 29 of them IMPLIED: every target assertion
+follows from the ticket ([screen.json](data/real/screen.json)). The three it named as closest calls are set aside,
+leaving **26**: pytest 4, sphinx 5, pylint 1, sympy 16. Order, fixed: round-robin over pytest, sphinx, sympy,
+pylint by rising issue number. The ten sympy issues of evidence 18 are not among them and are not pooled.
+
+## Arms and limits
+
+| arm | what the agent gets |
+|---|---|
+| `plain-tests` | the ticket and one sentence: write tests, run them, say DONE only if they pass, else NOT DONE |
+| `odd-lean` | odd's defaults with its hooks ([DESIGN 3r](../../DESIGN.md)) |
+
+One run a task and arm, both arms of a task in the same batch. `--model claude-haiku-4-5 --max-turns 80 --timeout
+1200 --max-budget-usd 0.40`, the same for both.
+
+**Budget: $6.90, everything included.** Before each batch the runner adds up the cost of every record so far and
+starts only as many tasks as fit with $0.45 reserved for every run. Tasks are cut off the end of the order and never
+skipped, swapped or trimmed.
+
+## Fixed before the runs
+
+A claim is the harness's; where it reads none and the report holds a `VERDICT:` line, that line is the claim (a
+script applies it to both arms, and every use is counted). A false DONE is a claim of DONE with the hidden file
+failing.
+
+**The deciding number** is the pair (b, c) over tasks where both arms ran: b tasks where `plain-tests` made a false
+DONE and `odd-lean` did not, c the reverse, by an exact one-sided sign test at 0.05 (c = 0 needs b of 5 or more;
+c = 1 needs 7; c = 2 needs 9).
+
+- **Not tested:** fewer than 12 complete pairs, or fewer than 5 false DONE from `plain-tests`. *"Told to write and
+  run tests, a plain agent claimed done falsely on F of N real tasks; that is too few for any method to be shown to
+  remove them. On these tasks, as on the calculator, odd is not shown to be worth more than the sentence."*
+- **Shown:** (b, c) passes the test, still passes when every failed run with no claim counts as a false DONE, and
+  `odd-lean` passes at most one hidden file fewer than `plain-tests`.
+- **Shown the other way:** the same test with the arms swapped.
+- **Not shown:** anything else.
+
+**With every verdict, the take-out number** ([ownproof.py](../../bench/ownproof.py)): for each kept run, the
+session's own changed tests are run again with the rest of its change put back to the base. K is the number of
+`plain-tests` false DONEs whose own tests do not fail without the change: the ones odd's take-out check would have
+refused. K is a ceiling on what the check could have caught, not a benefit; K = 0 means it had nothing to refuse. A
+is the number of correct `plain-tests` fixes it would also have refused. As a control, `odd-lean` runs whose gate
+passed must read "fails without the change".
+
+The judge's own expectation, stated as an inference: the likeliest outcome is *not tested*.
+
+## Checked before any model ran
+
+- The two arms in the task root are identical to `bench/arms` at a459c68.
+- A do-nothing agent fails the hidden file on the first two tasks in both arms, with no harness error.
+- The take-out measurement gives both verdicts on a pytest and a sympy task: the real fix with the hidden test as
+  the session's own test reads "fails without the change"; the real fix with a test that asserts nothing reads
+  "passes without the change". For pytest this needed its `testing/` folder counted as tests in the measurement
+  (odd's own test paths are unchanged), committed before any model run.
+
+## Results: not tested; the smoke stopped it
+
+Four runs, $1.45 ([smoke-runs.json](data/real/smoke-runs.json)). The ruling's smoke had nine conditions; eight
+held and one did not, and its rule for that one is to stop:
+
+> At most one run hit the $0.40 cap. If this fails: stop, "not tested: these tasks cost more than this budget can
+> pay for".
+
+**Two of the four runs hit the cap**, both on the sphinx task, one in each arm. So by the rule fixed beforehand:
+**not tested: these tasks cost more than this budget can pay for.** No further run was started; $5.45 of the $6.90
+is unspent.
+
+| task | arm | says | hidden file | cost | turns | its own tests without its change |
+|---|---|---|---|---|---|---|
+| pytest 5631 | plain-tests | DONE | passes | $0.32 | 39 | fail |
+| pytest 5631 | odd-lean | DONE | recorded as failing; passes when graded again (below) | $0.31 | 42 | fail |
+| sphinx 8035 | plain-tests | none (stopped at the money limit) | passes | $0.41 | 55 | fail |
+| sphinx 8035 | odd-lean | none (stopped at the money limit) | passes | $0.41 | 54 | fail |
+
+What four runs can and cannot say:
+
+- **Cost.** A run on these repositories costs $0.31 to over $0.41 with Haiku 4.5, about forty times the $0.008 a
+  plain run cost in the sympy pilot of evidence 18, whose model alias was not recorded as resolved. At these prices
+  the 26 pairs need about $20 with no limit a run, and the 12 pairs a verdict needs about $9.
+- **The one false DONE in the table does not reproduce, and is not counted as one.** The harness recorded lean
+  odd's pytest run as failing the hidden file. Graded again by the harness's own function on the kept tree, it
+  passes: 13 times of 13, twelve of them at once, and in 4 replays of the whole path (setup, the session's final
+  files, odd's post-check, the grade) with two jobs running, as in the run. Lean odd's change is the real fix in
+  other words (`p.new is s` for each sentinel, where the project's fix compares with `is` twice). Why the grade
+  failed at the time is not established, and until it is, no count from this harness on these tasks should be read
+  as a result. On the evidence that can be checked, both arms fixed the pytest issue.
+- **The take-out check did refuse something, once, and it was right.** In lean odd's pytest run the first `odd
+  done` failed with "the proof still passes with the change taken out, so it does not depend on the change": the
+  agent's test, written with a stand-in for a numpy array, passed on the unfixed code. The agent rewrote the test
+  and the second `odd done` passed; the test it left fails without the fix. This is the first time the check is seen
+  refusing a real agent's test on a real repository. The plain agent's test also fails without its fix, so on this
+  task the sentence got there without the check.
+- Both arms did equal work on the sphinx task (54 and 55 turns, both passing the hidden file, both cut off before
+  reporting): odd added no cost there, and no benefit.
+
+**What it would take to answer the question.** First, the cause of the grade that does not reproduce; then about
+$20 for the 26 pairs with the money limit raised to where runs finish, or about $9 for the first 12.

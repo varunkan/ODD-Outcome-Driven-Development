@@ -1,0 +1,760 @@
+{
+ "kept": [
+  {
+   "input": "90s",
+   "exit": 0,
+   "stdout": "1m30s\n"
+  },
+  {
+   "input": "1w",
+   "exit": 0,
+   "stdout": "7d\n"
+  },
+  {
+   "input": "25h",
+   "exit": 0,
+   "stdout": "1d1h\n"
+  },
+  {
+   "input": "1h0m5s",
+   "exit": 0,
+   "stdout": "1h5s\n"
+  },
+  {
+   "input": "0s",
+   "exit": 0,
+   "stdout": "0s\n"
+  },
+  {
+   "input": "1h30m",
+   "exit": 0,
+   "stdout": "1h30m\n"
+  },
+  {
+   "input": "2d 4h",
+   "exit": 0,
+   "stdout": "2d4h\n"
+  },
+  {
+   "input": " 90s ",
+   "exit": 0,
+   "stdout": "1m30s\n"
+  },
+  {
+   "input": "3600s",
+   "exit": 0,
+   "stdout": "1h\n"
+  },
+  {
+   "input": "86400s",
+   "exit": 0,
+   "stdout": "1d\n"
+  },
+  {
+   "input": "1w1d",
+   "exit": 0,
+   "stdout": "8d\n"
+  },
+  {
+   "input": "59s",
+   "exit": 0,
+   "stdout": "59s\n"
+  },
+  {
+   "input": "60m",
+   "exit": 0,
+   "stdout": "1h\n"
+  },
+  {
+   "input": "60s",
+   "exit": 0,
+   "stdout": "1m\n"
+  },
+  {
+   "input": "1d24h",
+   "exit": 0,
+   "stdout": "2d\n"
+  },
+  {
+   "input": "007m",
+   "exit": 0,
+   "stdout": "7m\n"
+  },
+  {
+   "input": "0h0m",
+   "exit": 0,
+   "stdout": "0s\n"
+  },
+  {
+   "input": "1w 2d 3h 4m 5s",
+   "exit": 0,
+   "stdout": "9d3h4m5s\n"
+  },
+  {
+   "input": "365d",
+   "exit": 0,
+   "stdout": "365d\n"
+  },
+  {
+   "input": "52w1d",
+   "exit": 0,
+   "stdout": "365d\n"
+  },
+  {
+   "input": "100m100s",
+   "exit": 0,
+   "stdout": "1h41m40s\n"
+  },
+  {
+   "input": "0w",
+   "exit": 0,
+   "stdout": "0s\n"
+  },
+  {
+   "input": "0d0h0m0s",
+   "exit": 0,
+   "stdout": "0s\n"
+  },
+  {
+   "input": "1w0s",
+   "exit": 0,
+   "stdout": "7d\n"
+  },
+  {
+   "input": "23h59m59s",
+   "exit": 0,
+   "stdout": "23h59m59s\n"
+  },
+  {
+   "input": "24h",
+   "exit": 0,
+   "stdout": "1d\n"
+  },
+  {
+   "input": "1d",
+   "exit": 0,
+   "stdout": "1d\n"
+  },
+  {
+   "input": "1m",
+   "exit": 0,
+   "stdout": "1m\n"
+  },
+  {
+   "input": "1s",
+   "exit": 0,
+   "stdout": "1s\n"
+  },
+  {
+   "input": "61s",
+   "exit": 0,
+   "stdout": "1m1s\n"
+  },
+  {
+   "input": "3661s",
+   "exit": 0,
+   "stdout": "1h1m1s\n"
+  },
+  {
+   "input": "1d1s",
+   "exit": 0,
+   "stdout": "1d1s\n"
+  },
+  {
+   "input": "1w1s",
+   "exit": 0,
+   "stdout": "7d1s\n"
+  },
+  {
+   "input": "000s",
+   "exit": 0,
+   "stdout": "0s\n"
+  },
+  {
+   "input": "  1h  30m  ",
+   "exit": 0,
+   "stdout": "1h30m\n"
+  },
+  {
+   "input": "1h   30m",
+   "exit": 0,
+   "stdout": "1h30m\n"
+  },
+  {
+   "input": "1w1d1h1m1s",
+   "exit": 0,
+   "stdout": "8d1h1m1s\n"
+  },
+  {
+   "input": "52w",
+   "exit": 0,
+   "stdout": "364d\n"
+  },
+  {
+   "input": "8760h",
+   "exit": 0,
+   "stdout": "365d\n"
+  },
+  {
+   "input": "525600m",
+   "exit": 0,
+   "stdout": "365d\n"
+  },
+  {
+   "input": "31536000s",
+   "exit": 0,
+   "stdout": "365d\n"
+  },
+  {
+   "input": "364d23h59m60s",
+   "exit": 0,
+   "stdout": "365d\n"
+  },
+  {
+   "input": "364d 24h",
+   "exit": 0,
+   "stdout": "365d\n"
+  },
+  {
+   "input": "51w 8d",
+   "exit": 0,
+   "stdout": "365d\n"
+  },
+  {
+   "input": "10d10h10m10s",
+   "exit": 0,
+   "stdout": "10d10h10m10s\n"
+  },
+  {
+   "input": "0001h",
+   "exit": 0,
+   "stdout": "1h\n"
+  },
+  {
+   "input": "1w 1s",
+   "exit": 0,
+   "stdout": "7d1s\n"
+  },
+  {
+   "input": "2w3d",
+   "exit": 0,
+   "stdout": "17d\n"
+  },
+  {
+   "input": "1d 1m",
+   "exit": 0,
+   "stdout": "1d1m\n"
+  },
+  {
+   "input": "1h1s",
+   "exit": 0,
+   "stdout": "1h1s\n"
+  },
+  {
+   "input": "59m60s",
+   "exit": 0,
+   "stdout": "1h\n"
+  },
+  {
+   "input": "23h60m",
+   "exit": 0,
+   "stdout": "1d\n"
+  },
+  {
+   "input": "6d24h",
+   "exit": 0,
+   "stdout": "7d\n"
+  },
+  {
+   "input": "0w0d",
+   "exit": 0,
+   "stdout": "0s\n"
+  },
+  {
+   "input": "99s",
+   "exit": 0,
+   "stdout": "1m39s\n"
+  },
+  {
+   "input": "999m",
+   "exit": 0,
+   "stdout": "16h39m\n"
+  },
+  {
+   "input": "48h",
+   "exit": 0,
+   "stdout": "2d\n"
+  },
+  {
+   "input": "7d",
+   "exit": 0,
+   "stdout": "7d\n"
+  },
+  {
+   "input": "14d0h",
+   "exit": 0,
+   "stdout": "14d\n"
+  },
+  {
+   "input": "366d",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "365d1s",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "53w",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "9999h",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "52w2d",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "365d 1s",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "31536001s",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "525601m",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "8761h",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "365d0h0m1s",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "1000d",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "99999999999999999999s",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "52w1d1s",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "364d25h",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "365d1m",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "100w",
+   "exit": 1,
+   "stdout": null
+  },
+  {
+   "input": "",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": " ",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "   ",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "90",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "s",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1 h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1x",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1H",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "30m1h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h2h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "-1h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1.5h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h,30m",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "abc",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h 30",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "h1",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h30",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1hh",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1 h 30 m",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1D",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1W",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1M",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1S",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "+1h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h+30m",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h-30m",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1e3s",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1_000s",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h30m ago",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1s1m",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1m1h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h1d",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1d1w",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1s1s",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1w1w",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h1m1h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1ms",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1 s",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h 30 m",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h\t30m",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h\n",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": ".5h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1,5h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h;",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "w",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "wd",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1wd",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1w d",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "d1",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h30m5",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "5 5s",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1y",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1mo",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1min",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1sec",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h30m!",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "366d x",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "999d5",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "366d 1h 1h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "400d1x",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "9999h -",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "53w w",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1s366d",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "366",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "366dd",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "\u0661s",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1\u00a0h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h  ",
+   "exit": 0,
+   "stdout": "1h\n"
+  },
+  {
+   "input": "s1h",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "0",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "00",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "0x1s",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1h 2",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1d1",
+   "exit": 2,
+   "stdout": null
+  },
+  {
+   "input": "1 1h",
+   "exit": 2,
+   "stdout": null
+  }
+ ],
+ "left_out": []
+}

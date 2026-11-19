@@ -755,6 +755,11 @@ cost to build.
 - **Evidence:** 28 of 29 pytest, requests, pylint and sphinx candidates could not run their own test file with the real
   fix on one bare Python 3.13 (docutils, astroid not installed), so item 18b was not testable here.
 
+- **Done** in the commits "B42, in progress: per-task environments" and "B42: 53 real tasks build in their own
+  environments" (`spec_for()`, `make_env()`, `task_environ()`, `grade_environ()` in `bench/realtasks.py`; sessions
+  and grading in `bench/run.py`; tests `bench/tests/test_realtasks.py`). 53 of 62 candidates pass `--strict`. Not
+  run with a model; `regression_passed` means nothing for these tasks.
+
 ### 43. The claim is generated, not written
 - **Outcome:** a report cannot say more than the checks showed: `odd claim` prints what is proven, what is not, and
   one verdict line, from the gate's facts; `odd ask --open` leaves a question open without stopping the work, and the
@@ -785,5 +790,66 @@ cost to build.
   [DESIGN 3o](DESIGN.md); arm `bench/arms/odd-reach`). Replayed with no model: fails the 4 kept calculators with the
   defect, none of the 5 without. Run (3 runs, Haiku 4.5): the defect it targets went from 3 of 3 to 0 of 3; 1 of 3
   calculators still wrong on a frozen probe (rounding, a value the check does not judge), so the fixed target was
-  met partly. Not built from the same design: deletion mutants (report mode) and comparing a
+  met partly. On a second task the rule raised only false alarms (3 of 3 runs; 81 of 81 pairs replayed), so a
+  failure now names `valid: <input>`, which drops the ending and is stated with the claim. Not built from the same design: deletion mutants (report mode) and comparing a
   race's attempts on generated inputs.
+
+### 46. Passing attempts compared on inputs the tool makes
+- **Outcome:** when two or more attempts of a race pass the proof and the outcome names its entry point, odd runs
+  each attempt on inputs it makes from the proof's examples; attempts that differ dispute the proof, so a wrong
+  value that no test holds is not picked as the winner.
+- **Evidence:** the fourth calculator round left one wrong value with exit 0, which `reject:` does not judge
+  ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B46: passing attempts compared on inputs the tool makes" (`variants()`, `_apart()`,
+  `odd new --entry --reject`; tests `Apart`; [DESIGN 3p](DESIGN.md); arm `bench/arms/odd-pair`). Replayed with no
+  model: clean pairs never differ (0 of 120), each wrong-value program differs from every clean one (60 of 60).
+  Run with a model (arm odd-pair, 3 runs): not shown; no run delivered and the comparison never ran. See item 48.
+
+### 48. A second attempt after the first is verified
+- **Outcome:** `odd second <slug>` has one more agent write a verified outcome again, apart from the first, and
+  fails when the two behave differently on inputs odd makes, naming the inputs.
+- **Evidence:** racing two attempts on a sealed proof delivered 0 of 3 calculators, so item 46's comparison never
+  ran; the one-session flow had delivered 9 of 9 ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B47, B48: the report carries the claim; a second attempt after the first" (`cmd_second`,
+  `_entry_of()`; tests `Second`; [DESIGN 3p-2](DESIGN.md); arm `bench/arms/odd-second`). Run (3 runs): not shown; in the one
+  run where the two were compared it caught the rounding defect and the result is clean.
+
+### 47. The report carries the claim
+- **Outcome:** with `"report": "claim"`, a turn cannot end on a report that leaves out the verdict or a not-proven
+  point of `odd claim`; it is blocked once with the claim's text.
+- **Evidence:** 6 of 6 sessions ran `odd claim`; 0 of 6 final reports carried any of its not-proven points
+  ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B47, B48: the report carries the claim; a second attempt after the first" (`unreported()`, `claim_lines()`, the Stop hook; tests
+  `ReportClaim`; [DESIGN 3q](DESIGN.md); arm `bench/arms/odd-claim`).
+
+### 49. A proof tied to its own folder
+- **Outcome:** `odd done` refuses a proof whose command or tests name the repository's own absolute path.
+- **Evidence:** in two of three runs the agent's tests set `cwd` to the folder they were written in, so the gate in a
+  copy, and a second attempt's copy, judged the wrong program; an earlier proof began `cd <its folder> &&`
+  ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+- **Done** in the commit "B49: a proof tied to its own folder is refused" (`anchored()`, `_proof_tests()`; tests
+  `Anchored`; [DESIGN 3p-3](DESIGN.md)).
+
+### 50. Hostile inputs through the entry point
+- **Outcome:** with `entry:`, odd runs the entry point on inputs no ticket mentions and lists any that end in a
+  traceback or a signal; it never fails the outcome.
+- **Evidence:** replayed with no model on every kept program: 17 of 18 calculators crash on a 400-digit number, 600
+  nested brackets or a 2,400-term sum, the three that the frozen probes call clean among them; 0 of 9 duration
+  programs. The judge had ruled the idea out as catching none of the measured defects, which holds for the duration
+  task; the replay it asked for found these instead.
+- **Done** in the commit "Lean odd" (`hostile()`, `crashed()`; tests `Hostile`; [DESIGN 3r](DESIGN.md)). Report
+  only by the admission rule; not run with a model.
+
+### 51. Lean odd: the ruling
+- **Outcome:** odd's defaults and method text hold only what has a measured benefit or costs nothing; everything
+  else is opt-in; a check may fail work only by the admission rule.
+- **Evidence:** an independent judge's ruling on evidence 15 to 20
+  ([lean-ruling.md](docs/evidence/data/lean-ruling.md)): one measured benefit (no false DONE in 9 calculator runs
+  against 2 of 3 for a plain agent), no benefit on the second task or on real issues, and a check tuned on one task
+  that failed correct work on the next.
+- **Done** in the commit "Lean odd": `"coverage"` off by default; `"reach"` removed and `reject:` report only; the
+  method text cut from about 2,600 to about 1,200 characters; `verdict_line()` printed last by `done` and `gate`;
+  the Stop hook asks for it (`"report": "verdict"`) and gives every reason in one block; four arms retired
+  (`bench/arms/RETIRED.md`), `odd-lean` and `plain-tests` added. Measured in
+  [evidence 21](docs/evidence/21-is-the-core-worth-more-than-a-sentence.md): a plain agent told to write and run
+  tests made no false DONE either, at 60% of lean odd's cost; odd's benefit beyond that sentence is not shown.

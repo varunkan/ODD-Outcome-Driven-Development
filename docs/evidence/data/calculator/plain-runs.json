@@ -1,0 +1,44 @@
+[
+ {
+  "task": "calculator",
+  "arm": "plain",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.2823234,
+  "wall_seconds": 104.9,
+  "arm_check": null,
+  "contaminated": false,
+  "frozen_probes_wrong": 0
+ },
+ {
+  "task": "calculator",
+  "arm": "plain",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": false,
+  "false_done": true,
+  "cost_usd": 0.20785270000000006,
+  "wall_seconds": 84.8,
+  "arm_check": null,
+  "contaminated": false,
+  "frozen_probes_wrong": 5
+ },
+ {
+  "task": "calculator",
+  "arm": "plain",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": false,
+  "false_done": true,
+  "cost_usd": 0.3113909000000001,
+  "wall_seconds": 94.8,
+  "arm_check": null,
+  "contaminated": false,
+  "frozen_probes_wrong": 3
+ }
+]

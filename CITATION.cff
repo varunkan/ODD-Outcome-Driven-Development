@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use odd or its evidence, please cite it as below."
+title: "odd: Outcome-Driven Development for coding agents"
+type: software
+authors:
+  - name: "The odd contributors"
+repository-code: "https://github.com/varunkan/ODD-Outcome-Driven-Development"
+license: MIT
+version: 0.4.0
+abstract: >-
+  A command-line check for work done by coding agents: an outcome counts as delivered only when its proof passes,
+  fails with the change taken out, and passes again. With the measurements behind each check.
+keywords:
+  - coding agents
+  - software testing
+  - mutation testing
+  - verification

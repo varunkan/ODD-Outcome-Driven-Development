@@ -5,7 +5,22 @@ head-to-head on a calculator with Haiku 4.5 and an LLM judge to decide. Data: [d
 
 ## Answer
 
-**Latest (fourth round):** with edge cases and tool-made inputs both required, 2 of 3 odd calculators match Spec
+**Read with [evidence 21](21-is-the-core-worth-more-than-a-sentence.md):** a plain agent told in one sentence to write
+and run tests also made no false DONE in 3 runs, for less. The result below is about asking for tests, not yet about
+odd's own check.
+
+**Against a plain agent (added last):** plain passed the hidden tests in 1 of 3 runs and said DONE falsely in 2; odd's
+three one-session rounds passed 9 of 9 with no false DONE, at about the same cost
+([the baseline](#the-baseline-this-page-lacked-a-plain-agent)).
+
+**Sixth round (a second attempt after the first, compared): not shown.** In the one run where the comparison ran it
+caught the rounding defect and the result is clean; another run said DONE on a failing gate
+([the sixth round](#sixth-round-as-run-not-shown-and-one-thing-learned)).
+
+**Fifth round (two attempts raced, then compared): not shown.** 0 of 3 runs delivered, each for a different reason, and
+the comparison never ran ([the fifth round](#fifth-round-as-run-not-shown)).
+
+**Fourth round:** with edge cases and tool-made inputs both required, 2 of 3 odd calculators match Spec
 Kit's on all 142 frozen probes and 1 has a rounding defect; $1.19 for three, nobody answering
 ([the fourth round](#fourth-round-as-run)).
 
@@ -200,6 +215,159 @@ What this supports: on this task, making the tool supply the inputs removed the 
 cases had not, at $0.40 a calculator against Spec Kit's $0.88, with no person. What it does not: that odd's
 calculators are now free of defects (one of three is not), or anything beyond this task and three runs.
 
+## Fifth round: a second attempt, compared on inputs the tool makes
+
+The defect left in the fourth round is a wrong value with exit 0. One attempt cannot show it; a second attempt
+written apart can. odd now compares a race's passing attempts on inputs it makes from the proof's examples, and
+attempts that differ send the proof back to its author (backlog 46, [DESIGN 3p](../../DESIGN.md)).
+
+### Replayed with no model
+
+Every program was run on the inputs odd would make from each of the twelve odd test files and three Spec Kit ones;
+two programs differ by odd's own rule ([replay2.py](data/calculator/replay2.py),
+[replay2.json](data/calculator/replay2.json)). Programs are labelled from the frozen probes.
+
+| second attempt is a clean program, and the first is | differs (test file, pair) |
+|---|---|
+| clean too (Spec Kit 1, 2, 3; fourth round 2, 3) | 0 of 120 |
+| wrong value: corrupted exponent (first round 1, 2) | 60 of 60, each |
+| wrong value: rounding (fourth round 1) | 60 of 60 |
+| lone `.` accepted, and the error after a division by zero (first round 3) | 30 of 60 |
+| the error after a division by zero only (third round 1, 2, 3) | 0 of 60, each |
+
+- Two clean programs never differ, so on these programs the comparison raises no false alarm.
+- Every wrong value is exposed by any clean second attempt, from every test file.
+- It does not see the error after a division by zero: that is what `reject:` is for, and the two checks do not
+  overlap here.
+- **Two attempts with the same defect agree.** The two first-round calculators with the corrupted exponent differ
+  from each other under 0 of 12 test files. A second attempt helps only when it is wrong differently or not at all.
+- The generator was changed twice while looking at these programs (decimals with a leading zero; large numbers with
+  mixed digits, without which the corrupted exponent was reached in 5 of 60). These figures are fitted to this task.
+
+### Fixed before the run
+
+Arm `odd-pair`: one session states the outcome and seals its proof; two coding sessions attempt it; edge cases and
+reach required. Three runs, same ticket, model and limits. Shown only if all hold; one calculator with a defect, or
+one run that ends NOT DONE, counts as partly; anything else as not shown:
+
+- 3 of 3 runs say DONE and pass the hidden tests, with nobody answering;
+- 0 of 3 calculators differ on any frozen probe;
+- the three runs cost at most $2.65 (what Spec Kit's three cost).
+
+### Fifth round, as run: not shown
+
+**0 of 3 runs delivered a calculator, and the comparison never ran** ($1.57; [later-rounds.json](data/calculator/later-rounds.json)).
+By the numbers fixed beforehand this is not shown. Each run stopped earlier, for a different reason:
+
+| run | ended | why |
+|---|---|---|
+| 1 | NOT DONE, $0.78 | The sealed test expected `29.5` for `(10 + 5) * 2 - 3 / 2`, which is 28.5. One attempt disputed it, correctly; the other edited the outcome file and was discarded. The proof went back to its author, whose rewrite passed with no code and was refused. |
+| 2 | NOT DONE, $0.52 | Both attempts changed files outside the outcome's `in:` list. Neither was verified. |
+| 3 | no claim, $0.27 | The first session sealed its proof and ended without the result line the harness reads, so no attempt was started. |
+
+- No run claimed DONE falsely: the three ended as two honest NOT DONEs and one run with no claim.
+- The existing checks did their work in run 1: a wrong test was caught before any code was accepted against it.
+- What failed is the flow, not the new check. Sealing a whole calculator's tests first and handing them to separate
+  coding sessions asks more of a small model than the one-session flow, which delivered 9 of 9 in the rounds
+  before. The comparison of attempts remains unmeasured with a model.
+- One tool defect showed: two outcomes wrote `entry: python3 calc.py`, the way the ticket writes it, and odd
+  accepted only `calc.py`. It now reads both.
+
+## Sixth round: the second attempt comes after, not before
+
+`odd second <slug>` (backlog 48) keeps the flow that delivers. After an outcome is verified, one more session writes
+the product again in its own copy, from the base with the outcome and its tests and without the first one's code;
+odd runs both on the inputs it makes and fails when they differ, naming the inputs. Arm `odd-second`: the
+`odd-reach` arm, then `odd second`, then one settling session if the two differ.
+
+Fixed before the run, three runs, same ticket, model and limits. Shown only if all hold; one calculator with a
+defect, or one run not delivered, counts as partly; anything else as not shown:
+
+- 3 of 3 runs say DONE and pass the hidden tests, with nobody answering;
+- 0 of 3 calculators differ on any frozen probe;
+- the three runs cost at most $2.65 (what Spec Kit's three cost).
+
+Reported with it, whatever it shows: in each run whether the second attempt was verified, whether the two differed
+and on what, and what the settling session did.
+
+### Sixth round, as run: not shown, and one thing learned
+
+Three runs of arm `odd-second`, $1.69 ([later-rounds.json](data/calculator/later-rounds.json)).
+
+| run | says | hidden tests | odd's gate (in a copy) | wrong on frozen probes | the second attempt | cost |
+|---|---|---|---|---|---|---|
+| 1 | DONE | **fail** | fails | 9 of 142 | not verified, so not compared | $0.86 |
+| 2 | DONE | pass | fails | 0 | not run | $0.27 |
+| 3 | DONE | pass | passes | 0 | compared; differed; settled | $0.56 |
+
+**By the numbers fixed beforehand: not shown.** Two of three runs pass the hidden tests, one calculator is
+defective, and that same run is a false DONE, the first in any calculator round.
+
+- **Run 3 is the check working with a model.** The first program rounded to 10 decimal places, the defect of the
+  fourth round again. The second attempt, written apart, used 10 significant digits; odd named 10 of 600 inputs
+  where they differ (`((10 + 55) * 2 - 3) / 7`: `18.1428571429` against `18.14285714`); a settling session read
+  the ticket, added the cases and fixed the first program. The result differs on none of the 142 probes.
+- **Run 1 is a false DONE that odd's gate did not sign.** The gate failed on the reject check
+  (`(2 + 3) / (5 - 5))` exits 1, not 2), and the session reported DONE all the same. Its error messages also lack
+  the `error: ` prefix, which its own tests never asked for. Anyone reading the gate saw FAIL; anyone reading the
+  report saw DONE. This is the gap the report check (backlog 47) is for.
+- **Runs 1 and 2 share a cause nobody had looked for.** Their tests start the calculator with `cwd` set to the
+  absolute path of the folder they were written in. In any other checkout such a test runs the *first* folder's
+  program. That is why the second attempt in run 1 could not be verified (its copy's tests ran the other program),
+  why the gate fails in the harness's copy and passes in place, and it is the cause of the mismatch left unexplained
+  in the third round, whose proof began `cd <its folder> &&`. odd now refuses such a proof where it is written
+  (backlog 49).
+- Why `odd second` found run 2's change not verified is not established.
+
+What the six rounds show, taken together: each check removes the defect it was built for when it runs (the error
+after a division by zero: 3 of 3 to 0 of 3; the rounding defect: caught and fixed in the one run where two attempts
+were compared). No round has yet produced three clean calculators with every check in play, and each round has
+exposed a new way for a small model to slip past: a case nobody listed, a wrong value, a report that ignores the
+gate, a test tied to its folder.
+
+## The baseline this page lacked: a plain agent
+
+Three runs of the `plain` arm (the ticket and nothing else), same model and limits, $0.80
+([plain-runs.json](data/calculator/plain-runs.json)).
+
+| | plain | odd (first round) | odd, the three one-session rounds (first, third, fourth) |
+|---|---|---|---|
+| hidden tests pass | **1 of 3** | 3 of 3 | 9 of 9 |
+| false DONE | **2 of 3** | 0 of 3 | 0 of 9 |
+| calculators wrong on a frozen probe | 2 of 3 | 3 of 3 | 7 of 9 |
+| cost, three runs | $0.80 | $0.68 | $0.68 to $1.19 |
+
+Both failing plain runs said DONE on a calculator that fails the hidden tests: one rejects `2*-3`, a unary minus
+after an operator, which the ticket's own text allows; the other prints large whole results in exponent form
+(`100000*100000` gives `1e+10`). This is the
+plainest difference measured on this page: without odd, two of three reports of "done" were false; with it, none of
+nine were, at about the same cost. The sixth round's one false DONE, on a gate that had failed, is reported in its
+own section and is not among these nine. On the frozen probes the two are not far apart: a proof stops a false "done", and it
+does not make the untested inputs right. The second task, where a plain agent delivers every time, shows no
+difference at all ([20](20-a-second-task.md)).
+
+## Do the reports follow `odd claim`? No: 0 of 6
+
+`odd claim` prints what the checks showed and did not show, and the method text tells the agent to report that and
+nothing beyond it. Measured on the six runs of the third and fourth rounds, from their transcripts
+([reports-vs-claim.json](data/calculator/reports-vs-claim.json)):
+
+| | of 6 runs |
+|---|---|
+| ran `odd claim` | 6 |
+| final report carries the claim's verdict line | 0 |
+| final report carries any of the claim's not-proven points (3 or 4 a run) | 0 |
+
+Every claim said `DONE, WITH 3` or `4 POINTS NOT PROVEN` (a proof weaker than the bar, lines the proof never ran, a
+test that reads the source). Every final report was a list of features with check marks. One of them ticks "rounded
+to 10 significant digits" on the calculator that rounds to 10 decimal places. The tool's own output was accurate
+each time; the agent read it and wrote its own summary instead.
+
+So the advice does not work on this model, and odd now has a check for it where the tool allows one: with
+`"report": "claim"` and odd's Claude Code hooks, the Stop hook blocks, once, a report that leaves out the verdict or
+a not-proven point, and hands the claim's text back (backlog 47, [DESIGN 3q](../../DESIGN.md)). Whether reports
+then carry the claim is measured next (arm `odd-claim`).
+
 ## What to keep in mind
 
 - **Three runs each, one task, one model.** 3 of 3 against 1 of 3 is not statistically significant.
@@ -211,4 +379,4 @@ calculators are now free of defects (one of three is not), or anything beyond th
   2 to 5 times a plain agent's cost.
 - **odd's own check is not what made the difference here**: nothing claimed done falsely in either arm. The
   difference was that one process finished and the other stopped.
-- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82 and the fourth round $1.19.
+- The first round cost $2.10, the two continued Spec Kit runs $1.22, the edge-case rerun $0.82, the fourth round $1.19, the fifth $1.57, the sixth $1.69 and the plain baseline $0.80.

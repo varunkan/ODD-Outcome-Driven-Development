@@ -898,11 +898,11 @@ class Setup(Repo):
             self.assertTrue(block.startswith(oddmod.BEGIN) and block.endswith(oddmod.END), block)
             self.assertNotIn('That is an acceptable result.', block, 'the old step 5 is replaced, not kept beside the new one')
             flat = ' '.join(block.split())
-            for words in ('the task cannot be done as asked or the proof cannot honestly pass',
-                          'STOP and explain', 'the expected, correct answer', 'not a failure', 'special-casing'):
+            for words in ('the task cannot be done as asked or the proof cannot honestly pass', 'STOP: run `odd park',
+                          'the correct answer then, not a failure', 'a forced pass is the wrong one'):
                 self.assertIn(words, flat)
-            self.assertLessEqual(len(block), 2600, 'the block stays short enough to be read every session')
-            self.assertLessEqual(block.count('\n') + 1, 32)
+            self.assertLessEqual(len(block), 1300, 'the block stays short enough to be read every session')
+            self.assertLessEqual(block.count('\n') + 1, 22)
 
     def test_no_claude_file_is_created_and_a_symlinked_one_is_left_alone(self):
         self.ok('init')
@@ -1566,6 +1566,13 @@ class Coverage(Repo):
     """Backlog item 4: a ticket's requirements in .odd/requirements/<ticket>.md, outcomes name what they cover."""
     REQS = '# PROJ-7\n\nR1: a caller of add(2, 3) receives 5\n- R2: add rejects a string with a TypeError\n'
 
+    def setUp(self):
+        Repo.setUp(self)  # the check is off unless a repository turns it on; this one has, on its target branch
+        self.git('checkout', '-q', 'main')
+        self.write('.odd/config.json', json.dumps({'coverage': 'report'}))
+        self.commit('coverage is reported here')
+        self.git('checkout', '-q', '-B', 'feat')
+
     def covered(self, covers='R1', reqs=REQS, ticket='PROJ-7'):
         self.write('.odd/requirements/%s.md' % ticket, reqs)
         self.ok('new', 'add', SENTENCE, '--proof', PROOF, '--in', 'calc.py', '--covers', covers)
@@ -1579,7 +1586,7 @@ class Coverage(Repo):
         self.git('checkout', '-q', 'feat')
         self.git('merge', '-q', 'main')
 
-    def test_an_uncovered_requirement_is_reported_by_default_and_the_gate_passes(self):
+    def test_an_uncovered_requirement_is_reported_under_report_and_the_gate_passes(self):
         self.covered()
         self.assertRegex(self.read('.odd/outcomes/add.md'), r'(?m)^covers: R1$')
         out = self.ok('gate')
@@ -1685,10 +1692,10 @@ class Coverage(Repo):
         self.solve()
         self.ok('done', 'add')
         self.assertNotIn('requirement', self.ok('gate'), 'off: no coverage check at all')
-        self.assertEqual(oddmod.DEFAULTS['coverage'], 'report')
+        self.assertEqual(oddmod.DEFAULTS['coverage'], 'off', 'no ticket file is asked for unless a repository wants one')
 
-    def test_the_method_and_the_mcp_tool_name_it(self):
-        self.assertIn('cover each with an outcome', oddmod.METHOD)
+    def test_the_mcp_tool_names_it_and_the_method_text_does_not(self):
+        self.assertNotIn('requirements', oddmod.METHOD, 'off by default: the method text does not ask for a ticket file')
         sys.path.insert(0, os.path.dirname(MCP))
         import odd_mcp
         argv = odd_mcp.argv_for('new', {'slug': 'a', 'outcome': SENTENCE, 'proof': 'p', 'in': 'x', 'covers': 'R1'})
@@ -2663,9 +2670,9 @@ class AmbiguityStop(Repo):
         out = self.ok('gate')
         self.assertNotIn('waiting', out)
 
-    def test_the_method_says_to_ask_one_precise_question(self):
-        self.assertIn('ask one precise question', ' '.join(oddmod.METHOD.split()))
-        self.assertIn('odd ask <slug>', oddmod.METHOD)
+    def test_the_method_text_no_longer_tells_every_session_to_ask_and_stop(self):
+        # asking first stopped work that was fine in 12 of 24 runs (evidence 18); `odd ask` stays a command
+        self.assertNotIn('odd ask', oddmod.METHOD)
 
     def test_the_mcp_ask_tool(self):
         import importlib.util
@@ -3640,26 +3647,28 @@ class BoundaryPrompt(Agents):
 
 class StopWhenProven(Repo):
     """Backlog item 14: once done passes at full strength and the gate passes, the agent stops and reports."""
-    SENT = 'stop and report; do not plan, review or refactor further in this outcome'
+    SENT = 'when both pass, stop.'
 
     def test_step_4_of_the_method_says_stop_when_proven(self):
         method = oddmod.METHOD.replace('{trivial}', '25')
         step4 = ' '.join(method[method.index('\n4. '):method.index('\n5. ')].split())
-        self.assertIn('Once `done` passes with full proof strength and `odd gate` passes, ' + self.SENT, step4)
+        self.assertIn('Fix what they report; ' + self.SENT, step4)
+        self.assertNotIn('strength', method, 'proof strength is reported to the reviewer, not a bar the method sets')
 
     def test_the_block_init_writes_carries_it_and_stays_within_the_size(self):
         self.ok('init')
         agents = self.read('AGENTS.md')
         block = agents[agents.index(oddmod.BEGIN):agents.index(oddmod.END) + len(oddmod.END)]
         self.assertIn(self.SENT, ' '.join(block.split()))
-        self.assertLessEqual(len(block), 2600, 'the block stays short enough to be read every session')
-        self.assertLessEqual(block.count('\n') + 1, 32)
+        self.assertLessEqual(len(block), 1300, 'the block stays short enough to be read every session')
+        self.assertLessEqual(block.count('\n') + 1, 22)
 
     def test_done_ends_with_report_as_done_when_the_gate_passes(self):
         self.outcome()
         self.solve()
         out = self.ok('done', 'add')
-        self.assertEqual(out.rstrip('\n').split('\n')[-1], 'next: report with `odd claim` (odd gate passed)', out)
+        self.assertEqual(out.rstrip('\n').split('\n')[-1], 'VERDICT: DONE', out)
+        self.assertEqual(self.ok('gate').rstrip('\n').split('\n')[-1], 'VERDICT: DONE', 'the gate ends the same way')
 
     def test_done_ends_with_the_gates_problems_when_the_gate_fails(self):
         self.outcome()
@@ -3667,11 +3676,11 @@ class StopWhenProven(Repo):
         self.write('other.py', ''.join('x%d = %d\n' % (i, i) for i in range(40)))
         out = self.ok('done', 'add')
         self.assertIn('add: verified.', out)
-        self.assertNotIn('report with `odd claim`', out)
         tail = out.rstrip('\n').split('\n')
         fail = tail.index('FAIL')
         self.assertIn('outside every outcome', '\n'.join(tail[fail:]))
-        self.assertTrue(all(l.startswith('  ') for l in tail[fail + 1:]), 'nothing follows the problems')
+        self.assertTrue(all(l.startswith('  ') for l in tail[fail + 1:-1]), 'only the verdict follows the problems')
+        self.assertEqual(tail[-1], 'VERDICT: NOT DONE (the gate did not pass; the reasons are above)')
 
 
 class AttemptBudget(Agents):
@@ -4268,6 +4277,117 @@ class Disputes(ProofAuthors, Agents):
         self.assertEqual(self.read('calc.py'), FIXED)
 
 
+class Apart(Agents):
+    """Backlog item 46: with "entry:" and no "probe:", passing attempts are compared on inputs odd makes from the
+    proof's examples; attempts that differ dispute the proof, so a wrong value no example reaches is not picked."""
+
+    CLI = 'import sys\nfrom calc import add\na, b = sys.argv[1].split("+")\nprint(add(int(a), int(b)))\n'
+    VIA = TEST + ('\n    def test_cli(self):\n        import subprocess, sys\n        self.assertEqual(subprocess.run('
+                  '[sys.executable, "cli.py", "2+3"], capture_output=True, text=True).stdout, "5\\n")\n')
+    LOUD = FIXED.replace('def add', 'import sys\n\n\ndef add') + 'sys.excepthook = lambda *a: (print("bad input"), sys.exit(1))\n'
+
+    def setUp(self):
+        Agents.setUp(self)
+        self.write('cli.py', self.CLI)
+        self.commit('a command line')
+        self.write('tests/test_calc.py', self.VIA)
+        self.add_line('add', 'entry: cli.py')
+
+    def test_attempts_that_differ_on_a_made_input_pick_no_winner_and_name_the_input(self):
+        self.config([self.agent('right', self.writes(FIXED)), self.agent('special', self.writes(SPECIAL, wait=0.3))])
+        out = self.no('race', 'add')
+        self.assertEqual(self.read('calc.py'), BROKEN, 'nothing is applied while passing attempts differ')
+        self.assertRegex(out, r"differ on \d+ of \d+ inputs made from the proof's examples \(cli.py\)")
+        self.assertIn('2000+3 (attempt 1: exit 0, 2003; attempt 2: exit 0, 0)', out)
+        self.assertRegex(self.read('.odd/outcomes/add.md'), r'(?m)^asked: Is the proof right\? 2 of 2 attempt\(s\) dispute it')
+
+    def test_an_attempt_is_told_how_to_run_the_check_itself_and_doing_so_does_not_spoil_it(self):
+        base = self.git('rev-list', '--max-parents=0', 'HEAD').strip()
+        seen = os.path.join(self.bin, 'seen')
+        body = ('%s\ncmd=$(%s -c \'import re, sys; print(re.search(r"run `(.*? done add --base [0-9a-f]+)`", '
+                'open(sys.argv[1]).read()).group(1))\' "$1")\necho "$cmd" > %s\n$cmd >> %s 2>&1'
+                % (self.writes(FIXED), sys.executable, seen, seen))
+        self.config([self.agent('checks', body)])
+        out = self.ok('race', 'add', '--n', '1', '--base', base)
+        with open(seen) as f:
+            said = f.read()
+        self.assertIn('done add --base ' + base, said, out)
+        self.assertIn('add: verified', said, 'the command from the prompt works inside the attempt')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+
+    def test_attempts_that_agree_pick_a_winner_and_count_the_inputs(self):
+        self.config([self.agent('right', self.writes(FIXED)), self.agent('commented', self.writes('# adds\n' + FIXED, wait=0.3))])
+        out = self.ok('race', 'add')
+        self.assertEqual(self.read('calc.py'), FIXED, out)
+        self.assertRegex(out, r"\d+ inputs made from the proof's examples give the same result in all 2 passing attempts")
+
+    def test_after_an_error_only_the_exit_code_is_compared(self):
+        self.config([self.agent('right', self.writes(FIXED)), self.agent('loud', self.writes(self.LOUD, wait=0.3))])
+        out = self.ok('race', 'add')
+        self.assertIn('give the same result in all 2 passing attempts', out, 'both exit 1 on "2", with different words')
+
+    def test_variants_are_the_same_every_time_and_reach_large_numbers(self):
+        made = oddmod.variants(['2+3', '1.5'])
+        self.assertEqual(made, oddmod.variants(['2+3', '1.5']))
+        for want in ('2+3', '+3', '2+', '2', '22+3', '2000+3', '2+3234', '2+32345678901', '12345678901.5'):
+            self.assertIn(want, made)
+        self.assertLessEqual(len(oddmod.variants(['%d+%d' % (i, i) for i in range(200)])), oddmod.VARIANTS)
+
+
+class Second(Agents):
+    """Backlog item 48: `odd second` runs one more attempt at a verified outcome from the base, where it cannot see the
+    first one's code, and compares the two on inputs odd makes; exit 1 when they do not behave the same."""
+
+    def setUp(self):
+        Agents.setUp(self)
+        self.write('cli.py', Apart.CLI)
+        self.git('add', 'cli.py')
+        self.git('commit', '-q', '-m', 'a command line')  # only the command line: the outcome and its test stay in the change
+        self.base = self.git('rev-parse', 'HEAD').strip()
+        self.write('tests/test_calc.py', Apart.VIA)
+        self.add_line('add', 'entry: python3 cli.py')
+
+    def second(self, mine, theirs, verify=True):
+        self.write('calc.py', mine)
+        if verify:
+            self.ok('done', 'add', '--base', self.base)
+        self.config([self.agent('second', self.writes(theirs))])
+        return self.odd('second', 'add', '--base', self.base)
+
+    def test_a_second_attempt_that_behaves_differently_fails_and_names_the_input(self):
+        rc, out = self.second(SPECIAL, FIXED)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('2000+3 (attempt yours: exit 0, 0; attempt second: exit 0, 2003)', out)
+        self.assertIn('decide from the requirement which result is right', out)
+        self.assertEqual(self.read('calc.py'), SPECIAL, 'nothing is applied')
+
+    def test_a_second_attempt_that_behaves_the_same_passes_and_counts_the_inputs(self):
+        rc, out = self.second(FIXED, '# again\n' + FIXED)
+        self.assertEqual(rc, 0, out)
+        self.assertRegex(out, r"\d+ inputs made from the proof's examples give the same result in all 2 passing attempts")
+
+    def test_the_second_attempt_starts_without_the_first_ones_code(self):
+        peek = os.path.join(self.bin, 'peek')
+        self.write('calc.py', FIXED)
+        self.ok('done', 'add', '--base', self.base)
+        self.config([self.agent('second', 'cat calc.py > %s\n%s' % (peek, self.writes(FIXED)))])
+        self.ok('second', 'add', '--base', self.base)
+        with open(peek) as f:
+            self.assertEqual(f.read(), BROKEN)
+
+    def test_a_second_attempt_that_is_not_verified_is_not_compared(self):
+        rc, out = self.second(FIXED, BROKEN)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('not compared: the second attempt was not verified', out)
+
+    def test_an_unverified_change_or_one_without_an_entry_point_cannot_have_a_second(self):
+        rc, out = self.second(FIXED, FIXED, verify=False)
+        self.assertEqual(rc, 2, out)
+        self.assertIn('verify it first', out)
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('entry: python3 cli.py\n', ''))
+        self.assertIn('names none ("entry:")', self.no('second', 'add', '--base', self.base, code=2))
+
+
 SPECIAL = 'def add(a, b):\n    return 5 if (a, b) == (2, 3) else 0\n'  # passes the visible proof, special-cased
 
 
@@ -4377,14 +4497,47 @@ class EntryPoint(Repo):
         self.assertIn('"entry:" must be', self.no('done', 'add', code=2))
 
 
+class Anchored(Repo):
+    """Backlog item 49: a proof command or test that names the repository's own absolute path would run this folder's
+    code in any other checkout, so it is refused where it is written."""
+
+    def test_a_test_that_names_its_own_folder_is_refused_and_told_what_to_do(self):
+        self.outcome()
+        self.solve()
+        self.write('tests/test_calc.py', TEST + '\nHERE = %r\n' % os.path.realpath(self.dir))
+        out = self.no('done', 'add')
+        self.assertIn("the proof names this folder's own path", out)
+        self.assertIn('in tests/test_calc.py', out)
+        self.assertIn('os.path.abspath(__file__)', out)
+
+    def test_a_proof_command_that_changes_into_its_own_folder_is_refused(self):
+        self.outcome(proof='cd %s && %s' % (self.dir, PROOF))
+        self.solve()
+        self.assertIn('in the proof command', self.no('done', 'add'))
+
+    def test_the_folder_under_another_name_is_still_this_folder(self):
+        link = self.dir + '-link'
+        os.symlink(self.dir, link)
+        self.addCleanup(os.remove, link)
+        self.outcome(proof='cd %s && %s' % (link, PROOF))
+        self.solve()
+        self.assertIn('in the proof command', self.no('done', 'add'))
+
+    def test_a_longer_path_that_only_starts_the_same_is_not_this_folder(self):
+        self.outcome()
+        self.solve()
+        self.write('tests/test_calc.py', TEST + '\nOTHER = %r\n' % (os.path.realpath(self.dir) + '-backup/x'))
+        self.ok('done', 'add')
+
+
 class RejectStable(Repo):
-    """Backlog item 45: "reject: <exit code>" with "entry:". Each example of the proof the entry point does not reject,
-    followed by an ending the proof's own examples show rejected, must be rejected too, and nothing may crash."""
+    """Backlog item 45, report only since evidence 20: "reject: <exit code>" with "entry:". Each example of the proof
+    the entry point does not reject, followed by an ending the proof's own examples show rejected, is expected to be
+    rejected too; one that is not is listed for the reader and the claim, and never fails the outcome."""
 
     GOOD = ('import sys\ns = sys.argv[1]\nparts = s.split("+")\n'
             'if not all(p.isdigit() for p in parts):\n    sys.exit(2)\nprint(sum(map(int, parts)))\n')
     LOOSE = GOOD.replace('if not all', 'if len(parts) > 2 and parts[-1] == "":\n    parts.pop()\nif not all')
-    CRASH = GOOD.replace('if not all', 'if len(parts) > 2 and parts[-1] == "":\n    parts[9]\nif not all')
     CASES = ('import subprocess, sys, unittest\n\n\ndef run(x):\n'
              '    return subprocess.run([sys.executable, "sum.py", x], capture_output=True, text=True)\n\n\n'
              'class T(unittest.TestCase):\n    def test_sums(self):\n'
@@ -4400,26 +4553,31 @@ class RejectStable(Repo):
             if line:
                 self.add_line('add', line)
 
-    def test_an_ending_rejected_after_one_example_and_accepted_after_another_is_refused_with_the_input(self):
+    def test_an_ending_accepted_after_another_example_is_reported_with_the_input_and_never_fails(self):
         self.stable(self.LOOSE)
-        out = self.no('done', 'add')
-        self.assertIn('sum.py 2+3+ exited 0, not 2', out)
-        self.assertIn('shows 7+ rejected', out, 'the example of the proof the ending came from is named')
+        out = self.ok('done', 'add')  # the rule held on one kind of input and not on another (evidence 20): report only
+        self.assertIn('1 generated input(s) exit otherwise than 2', out)
+        self.assertIn('sum.py 2+3+ exited 0 (ending +, from 7+)', out)
+        self.assertIn('"valid: <input>"', out, 'the way to say an input is valid after all is named')
+        self.assertIn('add: 1 generated input(s) exit otherwise than 2', self.ok('claim'), 'and the claim carries it')
+        self.assertIn('VERDICT: DONE, WITH', self.ok('claim'))
 
     def test_stable_rejection_passes_and_counts_the_generated_inputs(self):
         self.stable(self.GOOD)
         self.assertRegex(self.ok('done', 'add'), r'rejection is stable: 2 generated inputs ')
 
-    def test_a_crash_on_a_generated_input_is_refused(self):
-        self.stable(self.CRASH)
-        out = self.no('done', 'add')
-        self.assertIn('sum.py 2+3+ crashed', out)
-        self.assertIn('IndexError', out)
-
-    def test_an_example_ending_in_another_error_followed_by_an_ending_must_be_rejected_too(self):
+    def test_an_example_ending_in_another_error_followed_by_an_ending_is_reported_too(self):
         early = self.GOOD.replace('if not all', 'if "13" in parts:\n    sys.exit(1)\nif not all')
         self.stable(early, cases=self.CASES + '        self.assertEqual(run("13").returncode, 1)\n')
-        self.assertIn('sum.py 13+ exited 1, not 2', self.no('done', 'add'))
+        self.assertIn('sum.py 13+ exited 1 (ending +', self.ok('done', 'add'))
+
+    def test_an_input_declared_valid_drops_its_ending_and_the_claim_says_so(self):
+        self.stable(self.LOOSE)
+        self.add_line('add', 'valid: 2+3+')
+        out = self.ok('done', 'add')
+        self.assertIn('nothing was generated', out, 'the one ending is left out')
+        self.assertIn('not checked: declared valid input by the outcome ("valid:"): 2+3+', out)
+        self.assertIn('add: not checked: declared valid input', self.ok('claim'))
 
     def test_examples_of_the_proof_are_never_generated_inputs(self):
         self.stable(self.LOOSE, cases=self.CASES + '        self.assertEqual(run("2+3+").stdout, "5\\n")\n')
@@ -4440,27 +4598,54 @@ class RejectStable(Repo):
         self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('reject: 2', 'reject: two'))
         self.assertIn('"reject:" must be an exit code', self.no('done', 'add', code=2))
 
-    def test_under_reach_require_an_outcome_names_both_or_says_why_and_the_claim_carries_the_why(self):
-        self.write('.odd/config.json', json.dumps({'reach': 'require'}))
-        self.stable(self.GOOD, entry='', reject='')
-        out = self.no('done', 'add')
-        self.assertIn('add names no "entry:" and no "reject:"', out)
-        self.assertIn('entry: none - <why>', out)
-        self.add_line('add', 'entry: sum.py')
-        self.assertIn('add names no "reject:"', self.no('done', 'add'))
-        self.add_line('add', 'reject: none')
+    def test_a_none_with_its_reason_is_carried_into_the_claim_and_new_takes_both_flags(self):
+        self.stable(self.GOOD, reject='none')
         self.assertIn('"reject: none" needs its reason', self.no('done', 'add', code=2))
         self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('reject: none', 'reject: none - it takes no input'))
-        out = self.ok('done', 'add')
-        self.assertIn("not shown to reject invalid input beyond the proof's examples (it takes no input)", out)
+        self.assertIn("not shown to reject invalid input beyond the proof's examples (it takes no input)", self.ok('done', 'add'))
         self.assertIn('add: not shown to reject invalid input', self.ok('claim'))
-        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace('reject: none - it takes no input', 'reject: 2'))
-        self.assertIn('rejection is stable', self.ok('done', 'add'))
+        self.ok('new', 'more', SENTENCE, '--proof', self.PROOF, '--in', 'other.py', '--entry', 'sum.py', '--reject', '2')
+        md = self.read('.odd/outcomes/more.md')
+        self.assertIn('\nentry: sum.py\n', md)
+        self.assertIn('\nreject: 2\n', md)
 
-    def test_a_setting_other_than_off_or_require_is_refused(self):
-        self.stable(self.GOOD)
-        self.write('.odd/config.json', json.dumps({'reach': 'yes'}))
-        self.assertIn('"reach" has the wrong kind of value', self.no('done', 'add', code=2))
+    def test_nothing_requires_an_entry_point_any_more(self):
+        self.stable(self.GOOD, entry='', reject='')
+        self.write('.odd/config.json', json.dumps({'reach': 'require'}))
+        self.assertIn('reach', self.no('done', 'add', code=2), 'the setting is gone: an old config says so, loudly')
+
+
+class Hostile(Repo):
+    """Backlog item 50, report only: with "entry:", the entry point is run on inputs no ticket mentions (empty, control
+    and non-ASCII characters, very long, very deep). A traceback or a signal is never the right answer to any input,
+    so it is listed for the reader; what the program should say instead is not judged."""
+
+    SAFE = RejectStable.GOOD.replace('print(sum(map(int, parts)))',  # 5,000 digits is past Python's own limit for int()
+                                     'try:\n    print(sum(map(int, parts)))\nexcept ValueError:\n    sys.exit(2)')
+    DEEP = SAFE.replace('parts = s.split', 'f = lambda n: n and f(n - 1)\nf(len(s))\nparts = s.split')  # one call a character
+
+    def run_it(self, product):
+        self.write('tests/test_sum.py', RejectStable.CASES)
+        self.write('sum.py', product)
+        self.outcome(proof=RejectStable.PROOF, in_='sum.py')
+        self.add_line('add', 'entry: sum.py')
+        return self.ok('done', 'add')
+
+    def test_a_program_that_never_crashes_says_so_with_the_count(self):
+        self.assertRegex(self.run_it(self.SAFE), r'no crash on %d hostile inputs' % len(oddmod.HOSTILE))
+
+    def test_a_traceback_on_a_long_input_is_reported_for_the_claim_and_does_not_fail(self):
+        out = self.run_it(self.DEEP)
+        self.assertRegex(out, r'crashes \(a traceback or a signal\) on \d+ of %d hostile inputs' % len(oddmod.HOSTILE))
+        self.assertIn('characters)', out, 'a long input is named by its start and length, not printed whole')
+        self.assertIn('add: crashes (a traceback or a signal)', self.ok('claim'))
+
+    def test_a_signal_counts_and_an_ordinary_error_exit_does_not(self):
+        self.assertTrue(oddmod.crashed(139, ''))
+        self.assertTrue(oddmod.crashed(1, 'Traceback (most recent call last):\n  File "x.py", line 1, in <module>\nValueError'))
+        self.assertTrue(oddmod.crashed(1, '  File "x.py", line 3, in f\nRecursionError'), 'a tail that lost its first line')
+        self.assertFalse(oddmod.crashed(2, 'error: invalid expression'))
+        self.assertFalse(oddmod.crashed(None, ''), 'a timeout is not a crash')
 
 
 class Checks(Repo):
@@ -4627,7 +4812,7 @@ class Cases(Repo):
         self.assertIn('add covers no requirement', self.no('gate'))
 
     def test_off_by_default_case_lines_change_nothing(self):
-        self.write('.odd/config.json', '{}')
+        self.write('.odd/config.json', json.dumps({'coverage': 'report'}))
         self.write('.odd/requirements/CALC-1.md', self.REQS)
         self.assertEqual(self.new('--covers', 'R1')[0], 0)
         self.solve()
@@ -4910,6 +5095,85 @@ class Reasoning(Repo):
         self.assertIn('add: unchecked premise(s): nobody else edits calc.py', self.ok('gate'))
 
 
+class ReportClaim(ClaudeHooks):
+    """Backlog item 47, opt-in "report": "claim": a turn cannot end on a report that leaves out the verdict or a
+    not-proven point of `odd claim`; it is blocked once with the claim's text. Measured need: 6 of 6 runs ran `odd
+    claim` and 0 of 6 reports carried any of its not-proven points (evidence 19)."""
+    test_turn_end_blocks_only_for_unproven_work_changed_this_turn = None
+    test_an_unverified_outcome_is_a_status_line_and_a_stale_one_blocks = None
+    test_compaction_does_not_reset_the_turn = None
+
+    def work(self, setting='claim'):
+        self.write('.odd/config.json', json.dumps({'report': setting, 'auto_min_strength': 1.0}))
+        self.hook('session-start')
+        self.outcome()
+        self.solve()
+        self.add_line('add', 'owed: the cashier screen was not opened')
+        self.ok('done', 'add')
+        return self.odd('claim')[1]
+
+    def test_a_report_without_the_claims_points_is_blocked_once_with_the_claim(self):
+        claim = self.work()
+        self.assertIn('NOT PROVEN\n  - add: steps are owed', claim)
+        said = json.loads(self.hook('stop', {'last_assistant_message': 'All done, everything works.\nRESULT: DONE'}))
+        self.assertEqual(said['decision'], 'block')
+        self.assertIn('VERDICT: DONE, WITH 1 POINT NOT PROVEN', said['reason'])
+        self.assertIn('add: steps are owed on the real system', said['reason'])
+        self.assertEqual(self.hook('stop', {'last_assistant_message': 'All done.', 'stop_hook_active': True}), '')
+
+    def test_a_report_that_carries_the_claim_ends_the_turn_whatever_its_layout(self):
+        claim = self.work()
+        self.assertEqual(self.hook('stop', {'last_assistant_message': 'Built it.\n\n```\n%s\n```' % claim.replace('\n', '\n> ')}), '')
+
+    def test_the_verdict_alone_is_not_enough_and_a_missing_message_is_not_blocked(self):
+        self.work()
+        only = 'VERDICT: DONE, WITH 1 POINT NOT PROVEN (listed above)'
+        self.assertIn('block', self.hook('stop', {'last_assistant_message': only}))
+        self.write('calc.py', self.read('calc.py') + '\n')
+        self.ok('done', 'add')
+        self.assertEqual(self.hook('stop'), '', 'a tool that hands over no last message is never blocked for it')
+
+    def test_off_asks_for_nothing(self):
+        self.work(setting='off')
+        self.assertEqual(self.hook('stop', {'last_assistant_message': 'All done.'}), '')
+
+    def test_by_default_only_the_verdict_line_is_asked_for(self):
+        self.assertEqual(oddmod.DEFAULTS['report'], 'verdict')
+        claim = self.work(setting='verdict')
+        verdict = [l for l in claim.splitlines() if l.startswith('VERDICT:')][0]
+        said = json.loads(self.hook('stop', {'last_assistant_message': 'All done, everything works.\nRESULT: DONE'}))
+        self.assertEqual(said['decision'], 'block')
+        self.assertTrue(said['reason'].endswith(verdict), said['reason'])
+        self.assertNotIn('NOT PROVEN\n', said['reason'], 'the points are for "claim"; the verdict is one line')
+        self.write('calc.py', self.read('calc.py') + '\n')
+        self.ok('done', 'add')
+        self.assertEqual(self.hook('stop', {'last_assistant_message': 'Built it.\n' + verdict}), '')
+
+    def test_a_report_cannot_say_done_when_the_gate_does_not(self):
+        self.write('.odd/config.json', json.dumps({'report': 'verdict'}))
+        self.hook('session-start')
+        self.outcome()
+        self.write('tests/test_calc.py', TEST)  # the proof exists and fails: nothing is verified
+        self.write('calc.py', BROKEN + '# tried\n')
+        said = json.loads(self.hook('stop', {'last_assistant_message': 'Everything passes.\nRESULT: DONE'}))
+        self.assertIn('VERDICT: NOT DONE', said['reason'])
+
+    def test_every_reason_comes_in_the_one_block(self):
+        # measured: a hook that blocked for another reason first never got to ask for the report (evidence 20, run 3)
+        self.write('.odd/config.json', json.dumps({'report': 'verdict'}))
+        self.hook('session-start')
+        self.write('calc.py', BROKEN + '# pad\n' * 30)
+        said = json.loads(self.hook('stop', {'last_assistant_message': 'RESULT: DONE'}))['reason']
+        self.assertIn('with no outcome', said)
+        self.assertIn('VERDICT: NOT DONE', said)
+
+    def test_a_small_edit_with_no_outcome_is_asked_for_nothing(self):
+        self.write('.odd/config.json', json.dumps({'report': 'verdict'}))
+        self.hook('session-start')
+        self.write('README.md', 'calc, with a typo fixed\n')
+        self.assertEqual(self.hook('stop', {'last_assistant_message': 'Fixed the typo.'}), '')
+
+
 class FinishTurn(ClaudeHooks):
     """Opt-in "finish_turn": a turn that changed files cannot end while work in this change is open (an outcome never
     verified, a requirement no outcome covers): it is blocked once with the list, never twice in a row."""
@@ -4918,7 +5182,7 @@ class FinishTurn(ClaudeHooks):
     test_compaction_does_not_reset_the_turn = None
 
     def test_open_work_blocks_the_end_of_a_turn_once_with_the_list(self):
-        self.write('.odd/config.json', json.dumps({'finish_turn': True}))
+        self.write('.odd/config.json', json.dumps({'finish_turn': True, 'coverage': 'report'}))
         self.write('.odd/requirements/T-1.md', 'R1: add returns the sum.\nR2: add handles signs.\n')
         self.hook('session-start')
         self.outcome()

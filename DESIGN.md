@@ -452,8 +452,8 @@ hold for any model, strong or weak, present or future:
   the auto lane will not take the change. Like a target (section 5f), an outcome with checked premises is never served
   from the verification cache.
 
-Both are in the method text (`AGENTS.md`, still within its 2,600-character limit) and in `odd plan`'s outcome format,
-so a planner writes them from the start. Both are present-only in the verification's identity. Limits: a predicted
+Both are in `odd plan`'s outcome format, so a planner writes them from the start; neither is in the method text any
+more (section 3r). Both are present-only in the verification's identity. Limits: a predicted
 reason is matched as text, so a vague one ("Error") checks little; a premise is only as good as its command. No
 measured study shows that stating the predicted failure first improves agents (the nearest evidence is indirect); the
 check rests on reasoning: a red for another reason shows nothing about the change.
@@ -496,8 +496,8 @@ gate's own facts and none from anything the worker wrote down:
 - **VERDICT**: `DONE`, `DONE, WITH n POINT(S) NOT PROVEN (listed above)`, or `NOT DONE (...)`. The exit code is the
   gate's.
 
-The method text tells agents to report `odd claim`'s output and nothing beyond it; after a passing
-`done` the hint is `next: report with odd claim`.
+The method text asks for one line of it, the verdict, which `odd done` and `odd gate` print last (section 3r);
+`odd claim` itself was run by 6 of 6 sessions and used by none of their reports, so the method no longer names it.
 
 **Open questions.** `odd ask <slug> "<question>" --open` records a question in `open:` without stopping the outcome
 (plain `odd ask` still stops it). The gate prints it, the claim lists it under NOT PROVEN, and the auto lane sends
@@ -532,7 +532,12 @@ Limits: naming a case in a test shows where it is meant to be tested, not that t
 check and proof strength still judge the test. Which cases get listed is the author's judgement, so a boundary nobody
 thought of is still untested. The setting costs the work of writing the list.
 
-### 3o. Inputs the tool makes: `reject:` and `"reach": "require"`
+### 3o. Inputs the tool makes: `reject:` (report only)
+
+**Changed by the ruling of section 3r.** `reject:` no longer fails an outcome: what it finds is printed with the
+verification and listed in `odd claim`. The setting `"reach": "require"` is removed (a config that still has it is
+refused as an unknown setting), and `odd new` takes `--entry` and `--reject` without requiring them. The text below
+describes the check as first built; where it says "fails", read "is reported".
 
 Needs a tool newer than 0.4.0 (backlog item 45). A proof holds the inputs its author thought of, and the author of
 the tests is usually the author of the code, so a misreading sits in both and the proof passes. With edge cases
@@ -559,14 +564,143 @@ exit code is the oracle, so neither comes from the reading under test.
 
 Measured with no model on the nine calculators kept from evidence 19, every test file against every program (81
 pairs): the check fails the four programs that have the defect, from every test file but one pair (35 of 36), and
-none of the five that do not (0 of 45, 80 to 200 generated inputs each).
+none of the five that do not (0 of 45, 80 to 200 generated inputs each). On the duration task's nine kept programs it
+raises a false alarm in 81 of 81 pairs and no true one.
 
-Limits. The rule "an ending rejected after one example is rejected after every other" holds for inputs read left to
-right as one expression; a program where it does not hold must not declare `reject:` (or answers the failure by
-changing the example). Only programs that take their input as one argument fit. The entry point is run in the
+- **`valid: <input> ;; <input>`** (with `reject:`). The rule "an ending rejected after one example is rejected after
+  every other" is not true of every kind of input. Measured on a second task, a list of units in a fixed order, it
+  raised only false alarms: `1h2h` is rejected for a repeated unit, and `2h` after `1d` repeats nothing
+  ([evidence 20](docs/evidence/20-a-second-task.md)). So a failure lists one input for each ending and names this
+  line; an ending that made a declared input is left out, and the verification and `odd claim` state what was
+  declared valid, so the declaration is the reviewer's to check.
+
+Limits. The rule holds for arithmetic expressions and not for the second kind of input measured; nothing says which
+kind a new program is, so a failure may be the rule's error and costs a round trip to declare. Only programs that take their input as one argument fit. The entry point is run in the
 working tree with inputs it was not written for: do not declare `reject:` for a command that changes files named by
 its argument. It reaches only one step beyond the proof's examples, and it judges the exit code, never the value: a
 wrong number that exits 0 passes. Tracebacks are recognised for Python only. All of it is measured on one task.
+
+### 3p. Passing attempts compared on inputs the tool makes
+
+Needs a tool newer than 0.4.0 (backlog item 46). `reject:` judges exit codes; a wrong value that exits 0 passes it,
+and the fourth calculator round left exactly that: one program rounding to 10 decimal places where the ticket says 10
+significant digits. No check of one attempt can see a wrong value the tests do not hold. A second attempt, written
+apart, can: it is unlikely to be wrong in the same way.
+
+- **When.** In `odd race` and `odd cascade`, with two or more passing attempts, an `entry:` and no `probe:`
+  (`disagree()`, `_apart()`). An outcome with `probe:` keeps its own command (3b step 4).
+- **Inputs.** `variants()` of the strings and numbers in the proof's test files, at most 600 and always the same
+  ones: each example; with one token taken out, or doubled; cut short after each token; and with each number made
+  larger by digits written after its whole part (`000`, `234`, `2345678901`). Zeros reach large whole results; mixed
+  digits reach rounding and notation.
+- **Differ** means: the exit codes differ, or both exit 0 with different output. After any other exit code only the
+  code is compared, because an error's wording and a traceback's paths are not behaviour the proof was asked to pin.
+  An input that times out in an attempt is not compared.
+- **Then.** Attempts that differ dispute the proof, exactly as with `probe:`: no winner is applied, the finding names
+  up to five inputs with each attempt's result, and the existing dispute path sends the proof back to its author,
+  who adds them with their right results.
+- **`odd new --entry`, `--reject`** write the two lines, so the entry point can be known before attempts start. An attempt's prompt also names the command that runs odd's check in
+  its own copy (`odd done <slug> --base <base>`), so it can fix what the check reports before it exits.
+
+Measured with no model on the fifteen calculators kept from evidence 19, every test file against every pair: two
+programs that are clean on the frozen probes never differ (0 of 120); each of the three programs with a wrong value
+differs from every clean program under every test file (60 of 60 each, on 1 to 15 of the 600 inputs). The generator
+was changed twice while looking at these same programs (leading-zero decimals, mixed digits), so these figures are
+not a prediction for other programs.
+
+Limits. Two attempts that share a wrong reading agree: the two first-round calculators with the same corrupted
+exponent never differ from each other. Attempts that differ where the requirement is silent stop the work on
+something that is not a defect. It costs a second attempt. Only programs that take one argument fit.
+
+### 3p-2. `odd second`: a second attempt after the first is verified
+
+Needs a tool newer than 0.4.0 (backlog item 48). Advisory, like `odd challenge`. The comparison of 3p needs two
+passing attempts, and a race that seals a whole proof first delivered 0 of 3 calculators with a small model
+([evidence 19](docs/evidence/19-calculator-head-to-head.md)). `odd second <slug> [--agent CMD] [--base REF]` adds
+the second attempt to work that is already verified: one agent, in its own copy started from the base with the
+outcome and its proof (never the first one's code), is checked as `odd done` would check it, and the two are run on
+`variants()` of the proof's examples (`_apart()`).
+
+- Exit 1 when they differ; the finding names up to five inputs with both results. Neither is assumed right: the
+  reader decides each input from the requirement, adds it to the proof, and fixes the code if needed.
+- Exit 0 when they agree on every input, and when the second attempt is not verified (`not compared`, with why).
+- Exit 2 when the outcome names no `entry:`, the change is not verified, or no base is found.
+- Nothing is applied, recorded as a failed attempt, or read by the gate.
+
+`entry:` may be written `python3 calc.py`, as a ticket writes it; it is read as `calc.py` (`_entry_of()`).
+
+### 3p-3. A proof tied to its own folder is refused
+
+Needs a tool newer than 0.4.0 (backlog item 49; no setting). `odd done` fails, before the proof is run, when the
+proof command or a test file of the proof names the repository's own absolute path (`anchored()`): `cd /path/to/repo
+&& ...` in the command, or `cwd="/path/to/repo"` in a test. Such a proof runs that folder's code wherever it is
+checked, so in CI, in an attempt's copy or in another clone it passes or fails on code that is not under test. The
+message says how to find the repository from the test file instead. The folder under another name, a link to it, counts; a longer path that only
+starts the same (`/path/to/repo-backup`) does not. Measured: two of three runs wrote such tests, and a third round's proof
+began with `cd <its folder>` ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+
+### 3r. Lean odd: what is on by default, and the rule for adding a check
+
+An independent judge was asked to rule, on the measured evidence, what odd should keep for the most benefit at the
+fewest tokens ([the ruling](docs/evidence/data/lean-ruling.md), 2026-11-19). What it left on by default:
+
+| | default | cost |
+|---|---|---|
+| the take-out check, and `odd gate --recompute` in CI | on | two more proof runs, no model tokens |
+| a proof tied to its own folder is refused (3p-3) | on | none |
+| proof strength | reported, never a bar the method sets | up to 8 proof runs |
+| the report carries the gate's verdict line (`"report": "verdict"`, with odd's hooks) | on | one blocked turn, when it fires |
+| the method text | about 1,200 characters, seven steps | it was about 2,600 |
+
+Off by default, and out of the method text: requirement coverage (`"coverage"` is `off`), edge cases (3n), `entry:`,
+`reject:`, `probe:`, races and `odd second` (3b, 3p), `odd spec`, the claim's points in the report (3q), asking and
+stopping, `assume:`, `red-because:`, sealing as a recommendation.
+
+**The Stop hook asks for the verdict.** With odd's Claude Code hooks, a turn that changed files ends only when its
+last message holds the line `odd gate` prints last (`unreported()`); otherwise it is blocked once, and the reason
+carries the line. This is the check for a report that says done when the gate does not, measured twice (evidence
+19, sixth round; evidence 20). Every reason a turn is blocked for comes in the one block: odd never blocks twice in a
+row, and in one measured run a hook that had blocked for another reason never got to ask for the report. A turn
+with no outcome in play whose gate passes, a small edit, is asked for nothing.
+
+**Hostile inputs (backlog 50), report only.** With `entry:`, the entry point is run on 31 inputs no ticket mentions
+(empty, control and non-ASCII characters, 5,000 characters, 600 brackets deep). The oracle is the one thing true of
+every program: no input may end in a traceback or a signal (`hostile()`, `crashed()`). Replayed with no model, 17 of
+18 kept calculators crash on at least one, the three the frozen probes call clean among them, and 0 of 9 duration
+programs. It does not see the defects those nine share: they exit 0.
+
+**The rule for any further check.** A check may fail work only when all of these hold; until then it prints.
+
+1. It is replayed with no model on kept programs from two different kinds of task, one written after the check was
+   frozen at a named commit. A later change to the check resets this.
+2. It raises no alarm on any program the frozen probes call correct.
+3. It raises at least one true alarm on a task it was not built on; otherwise it is opt-in for its own kind.
+4. In one model round with targets fixed first, it fails no correct work, the session fixes what it flags in at
+   least 2 of 3 runs, and cost a task rises by at most 15%.
+5. It enters as report only and is promoted, never the reverse.
+6. One false alarm on correct work in any later run puts it back to report only.
+7. It adds no method text: its failure message carries the instruction and a way out, and every use of the way out
+   is printed for the reviewer.
+
+By this rule today the take-out check and the folder check may fail work. `reject:` failed rule 2 on its second
+task and was demoted; it is why the rule exists.
+
+### 3q. The report carries the claim: `"report": "claim"`
+
+Needs a tool newer than 0.4.0 (backlog item 47). `odd claim` (3m) prints what the checks did and did not show, and
+the method text says to report it and nothing beyond it. Measured on six runs: every session ran `odd claim`, and no
+final report carried any of the three or four points it listed as not proven; one report said the output was
+rounded to 10 significant digits when it was not ([evidence 19](docs/evidence/19-calculator-head-to-head.md)).
+Advice was read and not followed, so it becomes a check where a tool allows one.
+
+With `"report": "claim"` (the default is `"verdict"`, section 3r) and odd's Claude Code hooks installed, the Stop hook reads the turn's last
+message (`last_assistant_message`, which Claude Code hands to a Stop hook). `unreported()` builds the claim from the
+checks already recorded and requires the message to hold the verdict line and the first 80 characters of every NOT
+PROVEN point, spacing aside. If one is missing the turn is blocked once, and the reason carries the claim's text.
+
+Limits: it shows the points are present, not that the rest of the report says nothing more. It blocks once, like
+every odd hook, so a second report that still leaves them out ends the turn. A tool that hands a Stop hook no last
+message is never blocked. The gate's own pull-request comment, not the agent's report, stays the record.
 
 ## 4. Verification (`odd done`, and `odd gate --recompute`)
 
@@ -1250,14 +1384,13 @@ Exemptions are not verification. Each is printed with its line count.
 `odd init` writes the method, about thirty lines, into the root `AGENTS.md` between markers (at the top on first
 insertion). That is the only rendered copy. If a Claude instruction file exists (`CLAUDE.md` or `.claude/CLAUDE.md`),
 it gets one `@AGENTS.md` import line. Running `init` again replaces the block in place and leaves the rest of the file
-as it was; the block is held under 2,600 characters and 32 lines by a test (2,595 and 32 today, measured on the
-block `init` writes with the default settings: no room is left, so a later addition must shorten something).
+as it was; the block is held under 1,300 characters and 22 lines by a test (1,221 and 20 today; it was 2,600
+and 32 until the ruling of section 3r). A check never adds text here: its failure message carries the instruction.
 
 Step 4 of the method stops the work when it is proven (backlog item 14, a tool newer than 0.4.0, no setting): once
-`odd done` passes with full proof strength and `odd gate` passes, the agent is told to stop and report, and not to
-plan, review or refactor further in this outcome. `odd done`'s success output then ends with the line
-`next: report the outcome as done (odd gate passed)` (the constant `DONE_NEXT`) when the gate it runs passes; when that
-gate fails, the output ends with the gate's `FAIL` and its problems, and the line is not printed. The MCP `done` tool
+`odd done` and `odd gate` pass, the agent is told to stop. `odd done` and `odd gate` end with one line,
+`verdict_line()`: `VERDICT: DONE`, `VERDICT: DONE, WITH n POINTS NOT PROVEN (listed above)`, or `VERDICT: NOT DONE
+(the gate did not pass; the reasons are above)`; when the gate fails it follows the gate's `FAIL` and its problems. The MCP `done` tool
 returns odd's output, so it carries the line too. Limits: the line follows the gate only, so under the default
 `"strength": "report"` it is printed even when the proof strength is below full (the strength is on the line above it;
 the method's wording, not the tool, asks for full strength); and whether it cuts cost or seconds per task (the item's

@@ -1,0 +1,176 @@
+[
+ {
+  "task": "duration",
+  "arm": "odd-claim",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.38527890000000004,
+  "wall_seconds": 188.8,
+  "arm_check": 0,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\n",
+   "non-ASCII digit"
+  ],
+  "reject_check_flagged": "1000d1h (valid, too long: a false alarm)",
+  "outcome_then": "entry: none, reject: none",
+  "report_hook_fired": true,
+  "not_proven_points": 5,
+  "points_in_final_report": 5,
+  "verdict_in_final_report": true
+ },
+ {
+  "task": "duration",
+  "arm": "odd-claim",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.2517213,
+  "wall_seconds": 121.8,
+  "arm_check": 0,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\t30m",
+   "1h\\n"
+  ],
+  "reject_check_flagged": "1000d1h (valid, too long: a false alarm)",
+  "outcome_then": "reject: none",
+  "report_hook_fired": true,
+  "not_proven_points": 5,
+  "points_in_final_report": 5,
+  "verdict_in_final_report": true
+ },
+ {
+  "task": "duration",
+  "arm": "odd-claim",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.5648947,
+  "wall_seconds": 237.5,
+  "arm_check": 1,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\t30m",
+   "1h\\n",
+   "non-ASCII digit"
+  ],
+  "reject_check_flagged": "1d2h, 1w2h (valid: false alarms)",
+  "outcome_then": "parked; the session still wrote RESULT: DONE",
+  "report_hook_fired": false,
+  "not_proven_points": 2,
+  "points_in_final_report": 0,
+  "verdict_in_final_report": false
+ },
+ {
+  "task": "duration",
+  "arm": "odd",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.31758030000000015,
+  "wall_seconds": 143.5,
+  "arm_check": 1,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\n",
+   "non-ASCII digit"
+  ]
+ },
+ {
+  "task": "duration",
+  "arm": "odd",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.19443560000000004,
+  "wall_seconds": 74.9,
+  "arm_check": 1,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\n",
+   "non-ASCII digit"
+  ]
+ },
+ {
+  "task": "duration",
+  "arm": "odd",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.2426575,
+  "wall_seconds": 109.1,
+  "arm_check": 0,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\t30m",
+   "1h\\n",
+   "non-ASCII digit"
+  ]
+ },
+ {
+  "task": "duration",
+  "arm": "plain",
+  "repeat": 1,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.1355908,
+  "wall_seconds": 57.2,
+  "arm_check": null,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\n",
+   "non-ASCII digit"
+  ]
+ },
+ {
+  "task": "duration",
+  "arm": "plain",
+  "repeat": 2,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.2171319,
+  "wall_seconds": 107.0,
+  "arm_check": null,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\t30m",
+   "1h\\n",
+   "non-ASCII digit"
+  ]
+ },
+ {
+  "task": "duration",
+  "arm": "plain",
+  "repeat": 3,
+  "model": "claude-haiku-4-5",
+  "claim": "DONE",
+  "passed": true,
+  "false_done": false,
+  "cost_usd": 0.20384110000000005,
+  "wall_seconds": 94.8,
+  "arm_check": null,
+  "contaminated": false,
+  "frozen_probes_wrong": [
+   "1h\\n",
+   "non-ASCII digit"
+  ]
+ }
+]

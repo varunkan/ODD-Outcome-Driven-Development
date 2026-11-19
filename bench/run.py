@@ -12,13 +12,17 @@ One run, in this order:
   3. the agent, prompted with arms/<arm>/prompt.md ({ticket} replaced), a blank line and arms/TAIL.md, in an
      environment built from an allow-list (agent_env) with TMPDIR=<top>/tmp; when it exits its process group is
      killed, then every process whose cwd or open files are under <top> (Linux /proc). An arm that ships agent.sh
-     runs it instead of the one claude session (run_arm_agent; SPEC.md "An arm-supplied agent")
+     runs it instead of the one claude session (run_arm_agent; SPEC.md "An arm-supplied agent"). A task that has an
+     environment of its own (tasks/<id>/env: realtasks.py --python) gives the session a copy of it, <top>/env, first
+     on PATH, with the session's tree as the project's package (realtasks.task_environ); setup.sh and post.sh run
+     in it too
   4. changed lines measured against the "arm setup" commit, in a scratch index outside the session
   5. two copies made outside the session at once: P, where arms/<arm>/post.sh runs (its exit status is the arm's own
      check), and G, which waits
   6. only when every session of the invocation has ended (no agent is running anywhere): in each G the shipped
      visible tests are put back and run (regression), .bench/final.txt and .bench/claim.json are written,
-     tasks/<id>/hidden copied in (each *.py with a random canary line) and the task's grade command run; then every
+     tasks/<id>/hidden copied in (each *.py with a random canary line) and the task's grade command run, both runs
+     in the task's own environment when it has one, never a session's copy (realtasks.grade_environ); then every
      transcript is audited for contamination and the record written
 Writes <out>/<task>.<arm>.<n>.json and, beside it, the agent's stream-json transcript (.transcript.jsonl). Between
 step 5 and the record, <out>/<task>.<arm>.<n>.pending.json (the durable manifest) holds everything the grade and the
@@ -56,6 +60,7 @@ sys.path.insert(0, HERE)
 # The transcript readers and the claim parser are shared with the helper an arm-supplied agent runs (arm_agent.py).
 from arm_agent import (ARM_REASON, CAPS, EMPHASIS, LEADING_MARKS, VERDICT, USAGE_KEYS, events,  # noqa: E402,F401
                        parse_claim, parse_result, stream_usage, tokens, total, transcripts)
+from realtasks import grade_environ, task_environ  # noqa: E402  (a task with its own environment: env/)
 BENCH_REPO = os.path.dirname(HERE)
 GIT = ['git', '-c', 'user.name=bench', '-c', 'user.email=bench@example.com']
 # What lets a headless session edit files and run commands in its directory. Evidence: RUNNER-NOTES.md.
@@ -548,9 +553,16 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
     agent_tmp = os.path.join(top, 'tmp')  # the agent's TMPDIR: never the shared one, where other sessions sit
     os.makedirs(private)
     os.makedirs(agent_tmp)
-    arm_env = dict(env, BENCH_CACHE=cfg['cache'], ODD_PY=cfg['odd_py'], BENCH_PRIVATE=private)
     gitconfig = os.path.join(top, 'gitconfig')
     open(gitconfig, 'w').close()
+    # A task's own environment (realtasks.py --python) reaches the session as a copy under <top>: the session's to
+    # change, on a path that names neither the bench root nor the task, and gone with the session. The arm's
+    # scripts run in it too, so what they record about the machine is what the agent finds.
+    own_env = os.path.join(top, 'env')
+    if os.path.isdir(os.path.join(task_dir, 'env')):
+        shutil.copytree(os.path.join(task_dir, 'env'), own_env, symlinks=True)
+    arm_vars = dict(env, BENCH_CACHE=cfg['cache'], ODD_PY=cfg['odd_py'], BENCH_PRIVATE=private)
+    arm_env = task_environ(task_dir, arm_vars, session, own_env)
 
     shutil.copytree(os.path.join(task_dir, 'repo'), session)
     git(session, env, 'init', '-q', '-b', 'main')
@@ -574,7 +586,7 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
         template = f.read()
     with open(os.path.join(task_dir, 'ticket.md'), encoding='utf-8') as f:
         prompt = template.replace('{ticket}', f.read().strip()).rstrip('\n') + '\n\n' + cfg['tail']
-    agent = agent_env(os.environ, cfg['pass_env'], gitconfig, agent_tmp)
+    agent = task_environ(task_dir, agent_env(os.environ, cfg['pass_env'], gitconfig, agent_tmp), session, own_env)
     rec['env_passed'] = sorted(agent)
     started = time.time()
     arm_agent = os.path.join(arm_dir, 'agent.sh')
@@ -664,7 +676,8 @@ def session_and_copies(cfg, task, arm, repeat, pending, session):
     post = os.path.join(arm_dir, 'post.sh')
     if os.path.isfile(post):
         notes = os.path.join(copies[0], 'post-notes.json')  # beside P, not in it: what post.sh reports
-        rec['arm_check'] = run(['bash', post], post_copy, dict(arm_env, BENCH_POST_NOTES=notes), POST_TIMEOUT)[0]
+        post_env = task_environ(task_dir, dict(arm_vars, BENCH_POST_NOTES=notes), post_copy, own_env)
+        rec['arm_check'] = run(['bash', post], post_copy, post_env, POST_TIMEOUT)[0]
         if os.path.isfile(notes):
             try:
                 with open(notes, encoding='utf-8') as f:
@@ -791,10 +804,13 @@ def grade(task, copy, env, rec, canaries):
     ships them replace whatever the session left at tests/ (a directory, a file or a symlink: regression, behaviour
     the hidden tests may not cover), then the claim and final message are written and the hidden tests copied in,
     each path cleared first so nothing the session left there is followed or mixed in, every *.py marked with a
-    random canary line. Before the visible tests are replaced, two facts for the cheat rate are read from what the
-    session left: the shipped visible test files it deleted or took lines out of (visible_tests_edited) and the
-    visible tests' literals it wrote into its code (special_cased). Nothing a session did makes this raise."""
+    random canary line. Both test runs happen in the task's own environment when it has one (grade_environ: the
+    task's, never the copy a session had). Before the visible tests are replaced, two facts for the cheat rate are
+    read from what the session left: the shipped visible test files it deleted or took lines out of
+    (visible_tests_edited) and the visible tests' literals it wrote into its code (special_cased). Nothing a session
+    did makes this raise."""
     shipped = os.path.join(task['dir'], 'repo', 'tests')
+    env = grade_environ(task['dir'], env, copy)
     rec['special_cased'] = special_cased(os.path.join(task['dir'], 'repo'), copy)
     if os.path.isdir(shipped):
         rec['visible_tests_edited'] = tests_edited(shipped, os.path.join(copy, 'tests'))
@@ -824,9 +840,11 @@ def grade(task, copy, env, rec, canaries):
         for path in (p for p in marked if p.endswith('.py')):
             with open(path, 'a', encoding='utf-8') as out:
                 out.write('\n# %s\n' % canary)
-    status = run(task['grade'], copy, env, GRADE_TIMEOUT)[0]
+    # a real project's whole test file can take minutes on correct code: three times what realtasks.py measured
+    limit = max(GRADE_TIMEOUT, 3 * (task.get('grade_seconds') or 0))
+    status = run(task['grade'], copy, env, limit)[0]
     if status is None:  # code that hangs is the session's outcome: a fail, not a machine error
-        rec['warnings'].append('grade was stopped after %d seconds' % GRADE_TIMEOUT)
+        rec['warnings'].append('grade was stopped after %d seconds' % limit)
     rec['passed'] = status == 0
     return True
 

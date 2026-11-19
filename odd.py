@@ -28,6 +28,7 @@ import collections
 import datetime
 import difflib
 import hashlib
+import itertools
 import json
 import os
 import queue
@@ -62,9 +63,8 @@ DEFAULTS = {
     'race_timeout': 1800,  # odd race: seconds an attempt's agent may run before it is killed with its process group
     'race_seal': False,    # odd race: refuse an outcome that is not sealed
     'proof_tries': 3,      # odd spec: tries for the proof author to write a proof that fails before the code
-    'coverage': 'report',  # requirements no outcome in the change covers: off, report, or enforce (an uncovered one fails)
+    'coverage': 'off',     # requirements no outcome in the change covers: off, report, or enforce (an uncovered one fails)
     'cases': 'off',        # backlog 44: require: every requirement lists its edge cases, each named in a test
-    'reach': 'off',        # backlog 45: require: every outcome names its "entry:" and "reject:", or says why not
     'ambiguity_stop': True,  # odd new refuses an outcome sentence with no observable (an English word list)
     'guard': 'enforce',    # earlier merged outcomes whose in: holds a touched file: proofs run again (off, report, enforce)
     'auto_lane': False,    # odd gate says "lane": "auto" or "review" (backlog item 11); odd itself never merges
@@ -74,6 +74,8 @@ DEFAULTS = {
     'max_attempts': 0,     # backlog item 15: park an outcome after this many failed attempts (done, race, cascade, chain); 0 is off
     'inert': 'off',        # R7: each changed file taken out on its own; off, report, or enforce (a file the proof does not need fails)
     'held_out': [],        # R8: proofs the agent never sees, [{"name", "proof", "in"}], run only by gate --recompute
+    'report': 'verdict',   # the Stop hook blocks once a report without the gate's verdict line (verdict), or without
+                           # odd claim's not-proven points too (claim, backlog 47); off
     'finish_turn': False,  # the Stop hook blocks once while work in this change is open (unattended agents)
     'duplication': 'off',  # changed blocks that repeat existing code: off, report, or enforce (fails)
     'reasoner': None,      # one agent command for judgement-heavy roles (plan, the proof author, the challenger)
@@ -83,7 +85,7 @@ DEFAULTS = {
     'checks': [],          # backlog 24: standing project rules, [{"name", "cmd", "in"}], run by every gate, output shown
 }
 CONTROL = ('.odd/odd.py', '.odd/config.json', '.odd/odd_mcp.py')  # no outcome needed; always reported; the first two read from the target in CI
-FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume', 'probe', 'entry', 'reject', 'open')
+FIELDS = ('outcome', 'proof', 'in', 'counterfactual', 'parked', 'escaped', 'sealed', 'test-change', 'proof-by', 'covers', 'kind', 'asked', 'same', 'target', 'target-is', 'owed', 'class', 'red-because', 'assume', 'probe', 'entry', 'reject', 'valid', 'open')
 KINDS = ('bug', 'feature', 'refactor')  # kind: bug, the proof must fail at the base revision (reproduce first)
 REFACTOR_SKIP = 'skip - behaviour-preserving refactor'  # backlog item 7: what `new --kind refactor` records
 HINTS = {  # backlog item 7: printed by `new --kind <kind>` after the outcome file is written
@@ -100,7 +102,7 @@ WIDE = 120     # bytes that count as one line in the small-change lane
 READ_FIRST = 10  # files inside the boundary that new and the race prompt list under "read these first"
 MARKER = '<!-- odd-gate -->'  # finds the pull-request comment of an earlier run, so there is only ever one
 RESULT = ('files', 'lines', 'seconds', 'red_says', 'skip', 'strength', 'cached', 'same', 'inert', 'checkpoint', 'target',
-          'lookalikes', 'premises', 'red_because', 'repeats', 'copied', 'entry', 'reject', 'unreached')  # what --json says of a verified outcome
+          'lookalikes', 'premises', 'red_because', 'repeats', 'copied', 'entry', 'hostile', 'reject', 'unreached')  # what --json says of a verified outcome
 ODD = 'odd'    # how the tool was invoked, for messages a reader can paste
 NO_CACHE = False  # --no-cache: every verification runs in full
 
@@ -226,7 +228,6 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'proof_tries': lambda v: type(v) is int and 1 <= v <= 32,
             'coverage': lambda v: v in ('off', 'report', 'enforce'),
             'cases': lambda v: v in ('off', 'require'),
-            'reach': lambda v: v in ('off', 'require'),
             'ambiguity_stop': lambda v: type(v) is bool,
             'guard': lambda v: v in ('off', 'report', 'enforce'),
             'auto_lane': lambda v: type(v) is bool,
@@ -240,6 +241,7 @@ SETTINGS = {'trivial_lines': lambda v: type(v) is int and v >= 0,
             'owed': lambda v: v in ('report', 'enforce'),
             'max_cost': lambda v: type(v) in (int, float) and 0 <= v < float('inf'),
             'reasoner': lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
+            'report': lambda v: v in ('off', 'verdict', 'claim'),
             'finish_turn': lambda v: type(v) is bool,
             'duplication': lambda v: v in ('off', 'report', 'enforce')}
 
@@ -768,7 +770,7 @@ def content_hash(root, cfg, o, changed, tests=None):
     h = hashlib.sha256()
     for k in ('proof', 'in', 'counterfactual'):
         h.update((k + '=' + o.get(k) + '\n').encode())
-    for k in ('same', 'target', 'target-is', 'red-because', 'assume', 'entry', 'reject'):  # present-only: earlier identities unchanged
+    for k in ('same', 'target', 'target-is', 'red-because', 'assume', 'entry', 'reject', 'valid'):  # present-only: earlier identities unchanged
         if o.get(k):
             h.update((k + '=' + o.get(k) + '\n').encode())
     _hash_paths(h, root, sorted(set(tests) | {p for p in product if o.covers(p)}))
@@ -796,7 +798,7 @@ def verify_key(root, cfg, o, base, changed):
         tool = hashlib.sha256(f.read()).hexdigest()
     h = hashlib.sha256(('odd %s %s\nbase=%s\n' % (VERSION, tool, rev(root, base) if base else '')).encode())
     h.update(json.dumps({k: v for k, v in cfg.items() if k != 'cache_file'}, sort_keys=True).encode())
-    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is', 'red-because', 'assume', 'entry', 'reject')]).encode())
+    h.update(json.dumps([o.rel] + [o.get(k) for k in ('proof', 'in', 'counterfactual', 'kind', 'sealed', 'same', 'target', 'target-is', 'red-because', 'assume', 'entry', 'reject', 'valid')]).encode())
     _hash_paths(h, root, changed)  # the outcome file and config.json too: changed, or as at the base
     return h.hexdigest()
 
@@ -1537,6 +1539,12 @@ def _dumps(d):
     return out
 
 
+def _entry_of(o):
+    """An outcome's "entry:" as a command name or a file: `python3 calc.py`, the way a ticket writes it, is calc.py."""
+    words = (o.get('entry') or '').split()
+    return words[1] if len(words) == 2 and RUNNERS.match(words[0]) and words[1].endswith('.py') else ' '.join(words)
+
+
 def _entry_file(root, entry):
     """The real path of an "entry:" that is a .py file of the repository, None for a command name run through PATH."""
     full = os.path.join(root, entry)
@@ -1549,83 +1557,144 @@ def _entry_file(root, entry):
 
 NONE = re.compile(r'^none - \S')  # "entry: none - <why>", "reject: none - <why>": said, and carried into the claim
 REACH = (('entry', 'through an entry point'), ('reject', 'to reject invalid input beyond the proof\'s examples'))
-REACH_HOW = '''"reach": "require" (.odd/config.json): %s names no %s.
-  add to %s, above the "---" line:
-    entry: <the command, or .py file, a user runs to reach the outcome; the proof must run it>
-    reject: <the exit code it ends with on invalid input; it is run with one argument, for inputs made from the proof's examples>
-  where one does not apply say why, and the claim will say it was not shown: "entry: none - <why>", "reject: none - <why>".'''
-
-
 def unreached(cfg, o):
-    """Backlog item 45: what "entry: none - <why>" and "reject: none - <why>" leave unshown, for the claim. Under
-    "reach": "require" an outcome with neither line nor reason fails before its proof is run."""
-    out, missing = [], []
+    """Backlog item 45: what "entry: none - <why>" and "reject: none - <why>" leave unshown, for the claim."""
+    out = []
     for k, what in REACH:
         v = (o.get(k) or '').strip()
         if v.split(' ')[0] == 'none':
             if not NONE.match(v):
                 raise CouldNotRun('"%s: none" needs its reason: "%s: none - <why>"' % (k, k))
             out.append('not shown %s (%s)' % (what, v[7:]))
-        elif not v and cfg['reach'] == 'require':
-            missing.append('"%s:"' % k)
-    if missing:
-        raise Fail(REACH_HOW % (o.slug, ' and no '.join(missing), o.rel))
     return out
+
+
+def _declared(o):
+    """The inputs an outcome's "valid:" line declares valid (" ;; " between them)."""
+    return [x.strip() for x in (o.get('valid') or '').split(' ;; ') if x.strip()]
 
 
 REJECT_INPUTS, REJECT_ENDINGS, REJECT_ENDING, REJECT_EACH, REJECT_ALL = 200, 8, 3, 10, 60  # counts, characters, seconds
 CRASH = 'Traceback (most recent call last)'
 
 
+def _entry_runs(root, cfg, entry):
+    """(the command line an input is added to, {input: (exit code or None, last output)}, run(input)) for an entry
+    point run with one argument: `python3 <file>` for a .py file of the repository, else the command itself. A run
+    takes at most REJECT_EACH seconds and all of them REJECT_ALL; past that an input is not run and reads (None, '')."""
+    cmd, t0, seen = ('python3 ' if _entry_file(root, entry) else '') + shlex.quote(entry) + ' ', time.time(), {}
+
+    def run(x):
+        if x not in seen and time.time() - t0 < REJECT_ALL:
+            seen[x] = run_proof(root, cmd + shlex.quote(x), min(REJECT_EACH, cfg['proof_timeout']))[:2]
+        return seen.get(x, (None, ''))
+    return cmd, seen, run
+
+
+def _entry_inputs(root, cfg, o):
+    """The strings and numbers of the proof's test files, sorted: what "reject:" and the attempts' comparison start
+    from. None with a backslash, whose meaning depends on the test's language."""
+    return sorted(x for x in _proof_literals(root, cfg, o, LITERAL_ANY) if '\\' not in x)
+
+
+TOKEN = re.compile(r'\d+(?:\.\d+)?|\S')
+VARIANTS = 600  # inputs compared between passing attempts
+
+
+def variants(known):
+    """Inputs one edit away from the proof's examples, always the same ones, at most VARIANTS: each example; with one
+    token taken out, or doubled; cut short after each token; and with each number made larger by digits written after
+    its whole part: 000, 234 and 2345678901 (a decimal keeps its fraction; a whole part of 0 counts as 1). Zeros
+    reach large whole results, mixed digits reach rounding and notation. A token is a number or one other character."""
+    out = {}
+    for x in known:
+        out.setdefault(x)
+        spans = [m.span() for m in TOKEN.finditer(x)][:24]
+        for a, b in spans:
+            for v in (x[:a] + x[b:], x[:b] + x[a:], x[:b]):
+                out.setdefault(v)
+            if x[a].isdigit():
+                whole = x[a:b].split('.')[0]
+                for more in ('000', '234', '2345678901'):
+                    out.setdefault(x[:a] + (whole.lstrip('0') or '1') + more + x[a + len(whole):])
+    return pick([v for v in out if v.strip()], VARIANTS)
+
+
+def crashed(rc, tail):
+    """A run that ended in a Python traceback, or was killed by a signal: never the right answer to any input."""
+    return CRASH in tail or bool(re.search(r'(?m)^  File ".*", line \d+', tail)) or (rc is not None and 128 < rc < 160)
+
+
+HOSTILE = ('', ' ', '\t', '\n', 'x\n', '1\n', '\x01', '\x7f', '١', '１', 'é', '\U0001f4a5', '-', '--', '-h',
+           "'", '"', '\\', '%s', '{0}', '0' * 5000, '9' * 400, '(' * 600, '1' + '+1' * 2400, 'a' * 5000, ' ' * 5000,
+           '1e999', 'nan', 'inf', '0x10', '1_000')
+
+
+def hostile(root, cfg, o):
+    """Backlog item 50, report only: the entry point run on HOSTILE, inputs no ticket mentions and every program
+    meets (empty, control and non-ASCII characters, very long and very deep). The oracle is the one thing true of
+    every program: no input may end in a traceback or a signal. What the program should answer instead is not
+    judged. Returns (what --json records, [points for the claim])."""
+    cmd, seen, run = _entry_runs(root, cfg, _entry_of(o))
+    t0, bad = time.time(), [x for x in HOSTILE if crashed(*run(x))]
+    show = lambda x: shlex.quote(x if len(x) <= 16 else x[:12]) + ('... (%d characters)' % len(x) if len(x) > 16 else '')  # noqa: E731
+    if not bad:
+        return 'no crash on %d hostile inputs, %s s' % (len(seen), round(time.time() - t0, 1)), []
+    why = 'crashes (a traceback or a signal) on %d of %d hostile inputs: %s' % (len(bad), len(seen), ', '.join(map(show, bad[:5])))
+    return '', [why]
+
+
 def rejects(root, cfg, o):
-    """Backlog item 45: "reject: <exit code>" beside "entry:" says how the entry point ends on invalid input. The
-    entry point is run with one argument for each string and number of the proof's test files (at most REJECT_INPUTS;
-    none with a backslash, whose meaning depends on the test's language).
-    An ending is what a rejected example adds to one that is not rejected (at most REJECT_ENDING characters, the
-    REJECT_ENDINGS shortest); every other example that is not rejected, followed by each ending, is a generated input
-    (never one of the proof's own examples) and must be rejected too, and no run may crash. The tool makes the inputs
-    and the declared code is the oracle, so a reading of the requirement shared by the code and its tests does not
-    pass by agreeing with itself. Returns what --json records."""
-    entry, code = o.get('entry'), (o.get('reject') or '').strip()
+    """Backlog item 45, report only: "reject: <exit code>" beside "entry:" says how the entry point ends on invalid
+    input. The entry point is run with one argument for each string and number of the proof's test files (at most
+    REJECT_INPUTS; none with a backslash, whose meaning depends on the test's language). An ending is what a rejected
+    example adds to one that is not rejected (at most REJECT_ENDING characters, the REJECT_ENDINGS shortest); every
+    other example that is not rejected, followed by each ending, is a generated input (never one of the proof's own
+    examples) and is expected to be rejected too. The rule is not true of every kind of input (measured: it holds
+    for arithmetic expressions and raised only false alarms on a list of units in a fixed order), so what it finds
+    is listed for a reader and never fails the outcome; "valid: <input> ;; <input>" in the outcome leaves an
+    ending out. Returns (what --json records, [points for the claim])."""
+    entry, code = _entry_of(o), (o.get('reject') or '').strip()
     if not entry or NONE.match(entry):
         raise CouldNotRun('"reject:" needs "entry:", the command or .py file that is run with each input')
     if not re.match(r'^\d{1,3}$', code) or not 0 < int(code) < 256:
         raise CouldNotRun('"reject:" must be an exit code from 1 to 255, the one %s ends with on invalid input: %s' % (entry, code))
-    code, cmd, t0, seen = int(code), ('python3 ' if _entry_file(root, entry) else '') + shlex.quote(entry) + ' ', time.time(), {}
-
-    def end(x):
-        if x not in seen and time.time() - t0 < REJECT_ALL:
-            seen[x] = run_proof(root, cmd + shlex.quote(x), min(REJECT_EACH, cfg['proof_timeout']))[:2]
-            if CRASH in seen[x][1]:
-                raise Fail('%s%s crashed ("reject: %d" says invalid input ends with exit %d, and no input may end in a '
-                           'traceback):\n%s' % (cmd, shlex.quote(x), code, code, _indent(seen[x][1])))
-        return seen.get(x, (None, ''))[0]
-
-    known = pick(sorted(x for x in _proof_literals(root, cfg, o, LITERAL_ANY) if '\\' not in x), REJECT_INPUTS)
+    code, t0 = int(code), time.time()
+    cmd, seen, run = _entry_runs(root, cfg, entry)
+    end = lambda x: run(x)[0]  # noqa: E731
+    known = pick(_entry_inputs(root, cfg, o), REJECT_INPUTS)
     passing, refused = [x for x in known if end(x) not in (None, code)], [x for x in known if end(x) == code]
     endings = {}
     for b in refused:
         for a in passing:
             if b.startswith(a) and 0 < len(b) - len(a) <= REJECT_ENDING:
                 endings.setdefault(b[len(a):], b)
+    said = _declared(o)
+    for s in [s for s in endings if any(a + s in said for a in passing)]:
+        del endings[s]  # the outcome says an input made with this ending is valid: the rule does not hold for it
     made = pick([(a, s) for s in sorted(endings, key=lambda s: (len(s), s))[:REJECT_ENDINGS] for a in passing
                  if a + s not in known], REJECT_INPUTS)
+    wrong = {}
     for a, s in made:
         rc = end(a + s)
         if rc not in (None, code):
-            raise Fail('%s%s exited %d, not %d ("reject:"): the proof shows %s rejected, so the ending %s after an '
-                       'example that is not rejected (%s) must be rejected too.\n  make %s reject it, and add it to the '
-                       'proof\'s tests; if it is valid input, the proof\'s example %s is the one to change.'
-                       % (cmd, shlex.quote(a + s), rc, code, shlex.quote(endings[s]), shlex.quote(s), shlex.quote(a),
-                          entry, shlex.quote(endings[s])))
+            wrong.setdefault(s, (a, rc))
     ran, secs = sum(1 for a, s in made if seen.get(a + s, (None,))[0] == code), round(time.time() - t0, 1)
+    if wrong:
+        why = ('%d generated input(s) exit otherwise than %d ("reject:"), one for each ending the proof shows rejected: %s. '
+               'For each, either the program is wrong or the rule does not hold for this kind of input; "valid: <input>" in '
+               '%s leaves that ending out' % (
+                   len(made) - ran, code, '; '.join('%s%s exited %d (ending %s, from %s)' % (
+                       cmd, shlex.quote(a + s), rc, shlex.quote(s), shlex.quote(endings[s]))
+                       for s, (a, rc) in sorted(wrong.items())[:REJECT_ENDINGS]), o.rel))
+        return '', [why]
     if not ran:
         return ('reject: nothing was generated, so rejection is not shown beyond the proof\'s examples: none of them is '
-                'an example %s does not reject plus an ending of up to %d characters that exits %d' % (entry, REJECT_ENDING, code))
+                'an example %s does not reject plus an ending of up to %d characters that exits %d' % (entry, REJECT_ENDING, code)), []
     return 'rejection is stable: %d generated input%s (an example of the proof %s does not reject, plus an ending the ' \
            'proof shows rejected: %s) all exit %d%s, %s s' % (
                ran, '' if ran == 1 else 's', entry, ', '.join(shlex.quote(s) for s in sorted(endings, key=lambda s: (len(s), s))[:REJECT_ENDINGS]),
-               code, '' if ran == len(made) else '; %d more not run (they timed out or the %d s limit was reached)' % (len(made) - ran, REJECT_ALL), secs)
+               code, '' if ran == len(made) else '; %d more not run (they timed out or the %d s limit was reached)' % (len(made) - ran, REJECT_ALL), secs), []
 
 
 def reaches(root, cfg, o):
@@ -1634,7 +1703,7 @@ def reaches(root, cfg, o):
     the call and runs the real command with the shim's directory taken out; a .py file by the execution check's trace
     (any of its lines run by a Python process of the proof). Features marked done on unit tests while failing end to
     end are the failure this catches. Returns what --json records."""
-    entry = o.get('entry')
+    entry = _entry_of(o)
     want = _entry_file(root, entry)
     d = tempfile.mkdtemp(prefix='odd-entry-')
     mark = os.path.join(d, 'called')
@@ -1858,18 +1927,44 @@ def _literals(text, pattern=LITERAL):
     return out
 
 
-def _proof_literals(root, cfg, o, pattern=LITERAL):
-    """{literal: the first test file of the proof (run by it, or sealed) that holds it}."""
+def _proof_tests(root, cfg, o):
+    """[(path, text)] of the proof's own test files: those its command runs, and those sealed with it."""
     files = set(zlist(root, 'ls-files', '-z', '-co', '--exclude-standard'))
     proof = proof_runs(o.get('proof'), [p for p in files if matches(p, cfg['test_globs'])])
     proof += [e.rsplit('@', 1)[0] for e in (o.get('sealed') or '').split(', ')[1:] if e.rsplit('@', 1)[0] not in proof]
+    return [(t, read_text(os.path.join(root, t))) for t in proof
+            if os.path.isfile(os.path.join(root, t)) and os.path.getsize(os.path.join(root, t)) <= 2 * 10 ** 6]
+
+
+def _proof_literals(root, cfg, o, pattern=LITERAL):
+    """{literal: the first test file of the proof (run by it, or sealed) that holds it}."""
     known = {}
-    for t in proof:
-        path = os.path.join(root, t)
-        if os.path.isfile(path) and os.path.getsize(path) <= 2 * 10 ** 6:
-            for v in _literals(read_text(path), pattern):
-                known.setdefault(v, t)
+    for t, text in _proof_tests(root, cfg, o):
+        for v in _literals(text, pattern):
+            known.setdefault(v, t)
     return known
+
+
+def anchored(root, cfg, o):
+    """Backlog item 49: why the proof is tied to this one folder, or ''. A proof command or a test of it that names
+    the repository's own absolute path runs that folder's code wherever it is checked: in CI, in an attempt's copy
+    or in a reviewer's clone it passes or fails on code that is not the code under test. Measured: in two of three
+    runs the agent's tests held `cwd="<its folder>"`, and the gate in a copy judged the wrong program."""
+    here = os.path.realpath(root)
+
+    def names(text):  # an absolute path in the text that is this folder or inside it, by any name (a link to it too)
+        for m in itertools.islice(re.finditer(r'(?<![\w.+-])(?:/[\w.+-]+)+', text), 5000):
+            real = os.path.realpath(m.group(0))
+            if real == here or real.startswith(here + os.sep):
+                return True
+        return False
+    where = (['the proof command'] if names(o.get('proof') or '') else []) + [t for t, text in _proof_tests(root, cfg, o) if names(text)]
+    if not where:
+        return ''
+    return ('the proof names this folder\'s own path (%s), in %s: anywhere else (CI, a copy, another clone) it would '
+            'run this folder\'s code, not the code being checked.\n  find the repository from the test file instead '
+            '(e.g. os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) and run the proof from the repository '
+            'root without `cd <absolute path>`.' % (os.path.abspath(root), ', '.join(where)))
 
 
 def copied(root, cfg, o, base, targets):
@@ -2087,7 +2182,7 @@ def target_check(root, cfg, o):
 
 
 def _verify(root, cfg, o, base, changed, say):
-    hidden = masked(o.get('proof'))
+    hidden = masked(o.get('proof')) or anchored(root, cfg, o)
     if hidden:
         raise Fail(hidden)
     _, _, _, product = classify(changed, cfg)
@@ -2125,8 +2220,12 @@ def _verify(root, cfg, o, base, changed, say):
         res['copied'] = copied(root, cfg, o, base, targets)
     if o.get('entry') and not NONE.match(o.get('entry')):
         res['entry'] = reaches(root, cfg, o)
+        res['hostile'], more = hostile(root, cfg, o)
+        beyond += more
     if o.get('reject') and not NONE.match(o.get('reject')):
-        res['reject'] = rejects(root, cfg, o)
+        res['reject'], more = rejects(root, cfg, o)
+        beyond += more + (['not checked: declared valid input by the outcome ("valid:"): %s'
+                           % ', '.join(map(shlex.quote, _declared(o)))] if _declared(o) else [])
     if beyond:
         res['unreached'] = beyond
     if o.get('same') and targets:
@@ -2319,8 +2418,9 @@ def _describe(o, res):
         text += '\n          target: ' + res['target']
     if res.get('entry'):
         text += '\n          ' + res['entry']
-    if res.get('reject'):
-        text += '\n          ' + res['reject']
+    for k in ('hostile', 'reject'):
+        if res.get(k):
+            text += '\n          ' + res[k]
     for line in res.get('unreached') or ():
         text += '\n          ' + line
     if res.get('red_because'):
@@ -2901,8 +3001,10 @@ def cmd_new(a, root):
     hidden = masked(a.proof)
     if hidden:
         raise Fail(hidden)
+    reach = [(k, ' '.join((getattr(a, k) or '').split())) for k, _ in REACH]
     o.f.update([('outcome', sentence), ('proof', a.proof.strip()), ('in', ', '.join(globs))] +
                ([('covers', covers)] if covers else []) + ([('kind', a.kind)] if a.kind else []) +
+               [(k, v) for k, v in reach if v] +
                ([('counterfactual', REFACTOR_SKIP)] if a.kind == 'refactor' else []))
     o.save()
     odd_looking = [g for g in globs if re.search(r'[\s{}]', g)]
@@ -2961,8 +3063,9 @@ def cmd_done(a, root):
         raise Fail('%s\n%s' % (e, next_block(e.items, _rerun(a))) if e.items else e, e.items)  # no item: rerunning fails alike
     _verified(root, o, s, res)
     print('%s: verified. %s' % (a.slug, _describe(o, res)))
-    code, lines = gate(root, a.base)  # a failing gate's lines end with its problems
-    print('\n'.join(['', 'the change as a whole:'] + lines + ([] if code else [DONE_NEXT])))
+    facts = {}
+    code, lines = gate(root, a.base, facts=facts)  # a failing gate's lines end with its problems
+    print('\n'.join(['', 'the change as a whole:'] + lines + [verdict_line(code, facts)]))
 
 
 def background(root, o, s):
@@ -3057,7 +3160,7 @@ Leave alone: %(fixed)s. An attempt that edits them is discarded.
 
 %(read)s
 When you have finished, exit. odd then checks this copy as `odd done %(slug)s` would: the proof passes, fails with the
-change taken out and passes again, and small breaks in the changed lines make it fail. Do not commit, push or run
+change taken out and passes again, and small breaks in the changed lines make it fail.%(check)s Do not commit, push or run
 `odd park` here; if the outcome cannot honestly be reached, say why in your output and exit. If the proof itself is
 wrong (an assertion contradicts the outcome, the request or the proof's own data), do not change it or work around
 it: print one line `odd-dispute: <the assertion, and why it is wrong>` and exit.
@@ -3289,7 +3392,9 @@ def _keep(root, cmd, slug):
 
 def _prompt(root, o, cfg, base, fixed):
     return RACE_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), fixed=', '.join(fixed),
-                              slug=o.slug, read=read_first(root, o, base)) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
+                              slug=o.slug, read=read_first(root, o, base), check=(
+                                  ' To see that check before you exit, run `%s done %s --base %s` here and fix what it '
+                                  'reports.' % (ODD, o.slug, rev(root, base)) if base and rev(root, base) else '')) + METHOD.replace('{trivial}', str(cfg['trivial_lines']))
 
 
 def _worktree(root, run, name, head, fixed, seed=()):
@@ -3395,8 +3500,10 @@ def disagree(cfg, o, ranked):
     passing patches behave differently from the reference fix): each is marked as disputing the proof, so no winner is
     picked and the existing dispute path sends the proof back to its author. Returns the finding, or ''."""
     cmd = o.get('probe')
-    if not cmd or len(ranked) < 2:
+    if len(ranked) < 2:
         return ''
+    if not cmd:
+        return _apart(cfg, o, ranked) if o.get('entry') and not NONE.match(o.get('entry')) else ''
     seen = {}
     for at in ranked:
         rc, _, _, (digest, head) = run_proof(at['wt'], cmd, cfg['proof_timeout'], whole=True)
@@ -3414,6 +3521,40 @@ def disagree(cfg, o, ranked):
     print('  ' + why)
     for at in ranked:
         at['why'], at['dispute'] = 'passes, but disagrees with another passing attempt on "probe:"', why
+    return why
+
+
+def _apart(cfg, o, ranked):
+    """Backlog item 46: with "entry:" and no "probe:", the tool makes the probe. Each passing attempt's entry point
+    is run on variants() of the proof's examples; two attempts differ on an input when their exit codes differ, or
+    both exit 0 with different output (after another exit code only the code is compared: an error's wording, and a
+    traceback's paths, are not behaviour the proof was asked to pin). The proof holds the examples its author thought
+    of and every attempt passes it, so a wrong value on any other input shows only as a difference between them.
+    Differing attempts dispute the proof as with "probe:". Returns the finding, or ''."""
+    entry, inputs = _entry_of(o), variants(_entry_inputs(ranked[0]['wt'], cfg, o))
+    runs = [_entry_runs(at['wt'], cfg, entry)[2] for at in ranked]
+    apart = []
+    for x in inputs:
+        got = [run(x) for run in runs]
+        if any(rc is None for rc, _ in got):
+            continue  # timed out or past the time limit in an attempt: not compared
+        kinds = {}
+        for at, (rc, tail) in zip(ranked, got):
+            kinds.setdefault((rc, tail if rc == 0 else ''), (at, rc, tail))
+        if len(kinds) > 1:
+            apart.append((x, list(kinds.values())[:2]))
+    if not apart:
+        print('  %d inputs made from the proof\'s examples give the same result in all %d passing attempts (%s)'
+              % (len(inputs), len(ranked), entry))
+        return ''
+    say = lambda at, rc, tail: 'attempt %s: exit %d%s' % (  # noqa: E731
+        at['name'], rc, ', ' + (tail.strip().splitlines() or [''])[-1][:120] if rc == 0 else '')
+    why = ('passing attempts differ on %d of %d inputs made from the proof\'s examples (%s), so the proof does not pin '
+           'the behaviour down; add each with its right result to the proof: %s' % (len(apart), len(inputs), entry, '; '.join(
+               '%s (%s; %s)' % (shlex.quote(x), say(*a), say(*b)) for x, (a, b) in apart[:5])))
+    print('  ' + why)
+    for at in ranked:
+        at['why'], at['dispute'] = 'passes, but differs from another passing attempt on an input made from the proof', why
     return why
 
 
@@ -3592,6 +3733,42 @@ def cmd_challenge(a, root):
                'for it, then run %s done %s; if not, the proof stands. Agent log: %s'
                % (ranked[0]['claim'], '\n'.join('    ' + l for l in lines[:60]), '\n    ...' if len(lines) > 60 else '',
                   ODD, o.slug, attempts[0]['log']))
+
+
+def cmd_second(a, root):
+    """Backlog item 48, advisory: a second attempt at a verified outcome, written apart from the first, and the two
+    compared on inputs odd makes (_apart). The attempt starts from the base with the outcome and its proof, so it
+    never sees the first one's code. Exit 1 when the two differ on an input: one of them is wrong there, or the
+    requirement does not say, and neither the proof nor the first attempt's own checks could show it. Nothing is
+    applied, recorded as a failed attempt, or read by the gate."""
+    cfg = load_config(root)
+    agent = _agents(cfg, [a.agent] if a.agent else cfg['agents'][:1], 'race')[0]
+    o, head, base, fixed = _race_start(root, cfg, a.slug, a.base)
+    if not o.get('entry') or NONE.match(o.get('entry')):
+        raise CouldNotRun('a second attempt is compared through the entry point, and %s names none ("entry:")' % o.rel)
+    if o.skip or not standing(root, cfg, o, changed_files(root, base)):
+        raise CouldNotRun('a second attempt is compared with a verified change; verify it first: %s done %s' % (ODD, o.slug))
+    start, found = rev(root, base) if base else None, {}
+    if not start:
+        raise CouldNotRun('a second attempt starts from the base, without your change, and no base was found: pass --base <revision>')
+
+    def compared(root, cfg, o, base, at, fixed):
+        why = _judge(root, cfg, o, base, at, fixed)
+        if not why:
+            found['why'] = _apart(cfg, o, [dict(name='yours', wt=root), dict(at, name='second')])
+        return why
+
+    print('%s second %s: one more attempt, from %s with the outcome and its proof, compared with yours (advisory)'
+          % (ODD, o.slug, start[:10]))
+    attempts, ranked, _, _ = _attempts(root, cfg, o, base, start, fixed, [agent], _keep(root, 'second', o.slug),
+                                       _prompt(root, o, cfg, base, fixed), ['second'], judge=compared, counted=False)
+    if not ranked:
+        print('not compared: the second attempt was not verified (%s). Agent log: %s' % (attempts[0]['why'], attempts[0]['log']))
+        return
+    if found['why']:
+        raise Fail('your change and a second attempt written apart both pass the proof and do not behave the same (the '
+                   'inputs are above).\n  for each input, decide from the requirement which result is right; add it to '
+                   'the proof\'s tests, fix the code if it is yours that is wrong, then run %s done %s.' % (ODD, o.slug))
 
 
 # ---------------------------------------------------------------- cascade: the cheapest agent first, escalate on proof
@@ -3938,6 +4115,7 @@ assume: <each premise the work relies on, with the command that checks it: claim
 red-because: <the part of the proof's failure message you predict before the change>
 entry: <optional: the command, or .py file, a user runs to reach this outcome; the proof must run it>
 reject: <optional, with entry: the exit code it ends with on invalid input; it is tried on inputs made from the proof's>
+valid: <optional, with reject: inputs odd made that are valid after all, " ;; " between them; stated with the claim>
 ---
 why: <one line: why this outcome is shaped and bounded this way>
 
@@ -4129,7 +4307,7 @@ def cmd_gate(a, root):
         raise
     facts.update(exit=code, verdict='FAIL' if code else 'PASS')
     report(a, facts)
-    print('\n'.join(lines))
+    print('\n'.join(lines + [verdict_line(code, facts)]))
     return code
 
 
@@ -4283,13 +4461,21 @@ def cmd_ask(a, root):
           'the outcome (its sentence, proof or notes), then delete the "asked:" line of %s.' % (a.slug, o.rel))
 
 
-def cmd_claim(a, root):
-    """The claim, generated from the checks that ran instead of written by whoever did the work: what is proven (each
-    outcome with its proof and what the proof said without the change), what is not (caveats), and one verdict line.
-    Exit code and verdict are the gate's; a report that pastes this cannot say more than the evidence."""
-    facts = {}
+def verdict_line(code, facts):
+    """The one line a report ends with, from the gate's exit code and its facts: DONE, DONE with what is not proven
+    counted, or NOT DONE. `odd gate` and `odd done` print it last, `odd claim` under its lists."""
+    n = len(facts.get('not_proven', []))
+    return 'VERDICT: ' + ('NOT DONE (the gate did not pass; the reasons are above)' if code else
+                          'DONE, WITH %d POINT%s NOT PROVEN (listed above)' % (n, '' if n == 1 else 'S') if n else 'DONE')
+
+
+def claim_lines(root, base, recompute):
+    """(the gate's exit code, the claim's lines): what is proven (each outcome with its proof and what the proof said
+    without the change), what is not (caveats), and one verdict line, from the checks that ran."""
+    facts, said = {}, []
+    print = said.append  # noqa: A001 (the lines are returned, not printed)
     try:
-        code, lines = gate(root, a.base, a.recompute, lambda s: None, facts)
+        code, lines = gate(root, base, recompute, lambda s: None, facts)
         problems = [l.strip() for l in lines[lines.index(next(x for x in lines if x.startswith('FAIL'))) + 1:]] if code else []
     except (Fail, CouldNotRun) as e:
         if isinstance(e, CouldNotRun):
@@ -4314,10 +4500,37 @@ def cmd_claim(a, root):
         print('  - ' + m.replace('\n', '\n    '))
     if not missing:
         print('  nothing: every check that ran is listed above')
-    n = len(facts.get('not_proven', []))
-    print('VERDICT: ' + ('NOT DONE (the gate did not pass; the reasons are above)' if code else
-                         'DONE, WITH %d POINT%s NOT PROVEN (listed above)' % (n, '' if n == 1 else 'S') if n else 'DONE'))
+    print(verdict_line(code, facts))
+    return code, '\n'.join(said).split('\n')
+
+
+def cmd_claim(a, root):
+    """The claim, generated instead of written by whoever did the work. Exit code and verdict are the gate's; a report
+    that pastes this cannot say more than the evidence."""
+    code, lines = claim_lines(root, a.base, a.recompute)
+    print('\n'.join(lines))
     return code
+
+
+def unreported(root, s, said, points):
+    """For the Stop hook: what the turn's last message (`said`, as Claude Code hands it to a Stop hook) must still
+    carry, else ''. Under "report": "verdict" that is the gate's verdict line, so a report cannot say done when the
+    gate does not (measured twice); with `points` ("claim", backlog 47) also the start of every NOT PROVEN point,
+    and the whole claim is returned. Spacing and line breaks are not compared. Nothing is asked of a tool that
+    sends no last message, or of a turn with no outcome in play whose gate passes (a small edit)."""
+    if not isinstance(said, str) or not said.strip():
+        return ''
+    try:
+        code, lines = claim_lines(root, None, False)
+    except CouldNotRun:
+        return ''
+    if not code and not s['inplay']:
+        return ''
+    flat = lambda t: ' '.join(t.split())  # noqa: E731
+    need = [l for l in lines if l.startswith(('VERDICT:', '  - ') if points else 'VERDICT:')]
+    if all(flat(l.lstrip(' -'))[:80] in flat(said) for l in need):
+        return ''
+    return '\n'.join(lines if points else need)
 
 
 def cmd_owed(a, root):
@@ -4481,34 +4694,21 @@ METHOD = '''## Outcome-driven development (odd)
 
 Work here is done when a proof says so, not when it looks finished. `odd` below means `python3 .odd/odd.py`.
 
-For any change of more than a few lines, on a branch of its own:
+For a change of more than {trivial} lines:
 
-1. State the outcome before writing code: one sentence saying who observes what, a command that exits 0 only when
-   that is true, and the files the change may touch. If the outcome cannot be made checkable from the ticket, ask
-   one precise question instead of guessing (`odd ask <slug> "<question>"` records it), and stop there. List the ticket's requirements in `.odd/requirements/<ticket>.md`
-   (`R1: ...`), and cover each with an outcome (`--covers R1,R2`).
-   `odd new <slug> "<outcome>" --proof "<command>" --in "<globs, comma-separated, relative to the repository root>"`
-   Premises (database, build, data): `assume: <claim> :: <check>`.
-2. Write the proof as a test in a file of its own under a test path (`tests/`, `test_*.py`, `*_test.*`, `*.test.*`,
-   `*.spec.*`). Make it the narrowest command that shows the outcome, not the whole suite. Recommended: `odd seal
-   <slug>` now: it checks the proof fails and fingerprints the test. Predict why it fails: `red-because: <text>`.
-3. Make the change, staying inside the files the outcome names. If more are needed, add them to `in:` in
-   `.odd/outcomes/<slug>.md`. Work that is not part of this outcome is a later outcome.
-4. Finish with `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change
-   taken out, and passes again. Report `odd claim`'s output and nothing beyond it. Once `done` passes with
-   full proof strength and `odd gate` passes, stop and report; do not plan, review or refactor further in this outcome.
-5. When you are blocked, or {park_when}
-   (a test contradicts the outcome, or a pass would take special-casing the test's inputs or editing, weakening or
-   deleting a test), STOP and explain: run `odd park <slug> "<why>"`, say why in your report, and take the attempt
-   out again. Parking is then the expected, correct answer, not a failure. A forced pass is the wrong answer, even
-   when it turns the gate green.
+1. Before writing code, state the outcome: `odd new <slug> "<who observes what>" --proof "<command>" --in "<files
+   the change may touch, comma-separated>"`. The proof is a command that exits 0 only when the outcome holds.
+2. Write the proof as a narrow test in a file of its own under a test path (`tests/`, `test_*.py`, `*.test.*`). Find
+   the repository from the test file; never write an absolute path.
+3. Make the change inside the files the outcome names.
+4. Run `odd done <slug>`, then `odd gate`. `done` passes only when the proof passes, fails with your change taken
+   out, and passes again. Fix what they report; when both pass, stop.
+5. Put the `VERDICT:` line `odd gate` prints in your report, word for word.
+6. If you are blocked, or {park_when}, STOP: run `odd park <slug> "<why>"` and say why. That is
+   the correct answer then, not a failure; a forced pass is the wrong one.
 
-Small edits (up to {trivial} changed lines) need no outcome. If a command can answer a question, run the command.
-Decisions only the owner can make (credentials, billing, deploys, releases, deleting data, relaxing a check) go to
-the owner; decide the rest yourself and note why in the outcome file. Do not edit `.odd/odd.py` or
-`.odd/config.json`.
+Do not edit `.odd/odd.py` or `.odd/config.json`.
 '''.replace('{park_when}', PARK_WHEN)
-DONE_NEXT = 'next: report with `odd claim` (odd gate passed)'  # step 4 of METHOD: stop when proven
 BEGIN, END = '<!-- odd:begin -->', '<!-- odd:end -->'
 CI_HELP = '''
 To make the gate count, add it as the last step of your existing test job. On GitHub Actions, one step:
@@ -4692,19 +4892,27 @@ def cmd_hook(a, root):
     tried = {o.slug: evidence(root, o.slug) for o in s['active']}
     stale = [o.slug for o in s['active'] if any(e.get('ok') for e in tried[o.slug]) and not standing(root, cfg, o, changed)]
     run = 'python3 .odd/odd.py'
+    why = []
     if stale:
-        print(json.dumps({'decision': 'block', 'reason': 'odd: %s was verified and its files have changed since, or its '
-                          'latest check failed. Run `%s done %s` again, or, if %s, STOP and explain (`%s park %s "<why>"`).'
-                          % (', '.join(stale), run, stale[0], PARK_WHEN, run, stale[0])}))
+        why.append('%s was verified and its files have changed since, or its latest check failed. Run `%s done %s` '
+                   'again, or, if %s, STOP and explain (`%s park %s "<why>"`).'
+                   % (', '.join(stale), run, stale[0], PARK_WHEN, run, stale[0]))
     elif not s['inplay'] and n > cfg['trivial_lines']:
-        print(json.dumps({'decision': 'block', 'reason': 'odd: this turn left %d changed line(s) with no outcome. State '
-                          'the outcome (`%s new <slug> "<outcome>" --proof "<command>" --in "<globs>"`) and verify it '
-                          '(`%s done <slug>`), or, if %s, STOP and explain (`%s park <slug> "<why>"`): that is the '
-                          'expected answer then, not a failure.' % (n, run, run, PARK_WHEN, run)}))
+        why.append('this turn left %d changed line(s) with no outcome. State the outcome (`%s new <slug> "<outcome>" '
+                   '--proof "<command>" --in "<globs>"`) and verify it (`%s done <slug>`), or, if %s, STOP and explain '
+                   '(`%s park <slug> "<why>"`): that is the expected answer then, not a failure.' % (n, run, run, PARK_WHEN, run))
     elif cfg['finish_turn'] and open_work(root, s, tried):
-        print(json.dumps({'decision': 'block', 'reason': 'odd: work in this change is still open: %s. Finish it (`%s done '
-                          '<slug>`), or, if it is blocked, say so: `%s park <slug> "<why>"` or `%s ask <slug> "<question>"`.'
-                          % ('; '.join(open_work(root, s, tried)), run, run, run)}))
+        why.append('work in this change is still open: %s. Finish it (`%s done <slug>`), or, if it is blocked, say so: '
+                   '`%s park <slug> "<why>"` or `%s ask <slug> "<question>"`.' % ('; '.join(open_work(root, s, tried)), run, run, run))
+    owed = unreported(root, s, ev.get('last_assistant_message'), cfg['report'] == 'claim') if cfg['report'] != 'off' else ''
+    if owed and cfg['report'] == 'claim':
+        why.append('your report leaves out what the checks did not show. End it with the output of `%s claim`, '
+                   'unchanged, and say nothing that output does not say:\n%s' % (run, owed))
+    elif owed:
+        why.append('your report must carry the gate\'s verdict line, word for word, and say nothing that contradicts '
+                   'it (other closing lines you were asked for still go after it):\n%s' % owed)
+    if why:  # one block carries every reason: odd never blocks twice in a row, so a second reason would be lost
+        print(json.dumps({'decision': 'block', 'reason': 'odd: ' + '\n'.join(why)}))
     else:
         notes = ['not verified yet: ' + ', '.join(o.slug for o in s['active'] if not any(e.get('ok') for e in tried[o.slug]))]
         if not s['active'] and n > cfg['trivial_lines']:
@@ -4729,6 +4937,10 @@ def main(argv=None):
                    'test runner the repository uses (required, except with --kind refactor: the whole suite)')
     s.add_argument('--test', metavar='PATH', help='with --proof auto: the test file the proof runs')
     s.add_argument('--in', dest='in_', required=True, action='append', help='globs, comma-separated (may be repeated)')
+    s.add_argument('--entry', metavar='CMD', help='the command, or .py file, a user runs to reach the outcome; the '
+                   'proof must run it (or "none - <why>")')
+    s.add_argument('--reject', metavar='CODE', help='with --entry: the exit code it ends with on invalid input; the '
+                   'entry point is then tried on inputs made from the proof\'s examples (or "none - <why>")')
     s.add_argument('--covers', metavar='IDS', help='the requirements this outcome covers, comma-separated: R1, R3 (from '
                    '.odd/requirements/<ticket>.md), or <ticket>:R1')
     s.add_argument('--kind', choices=KINDS, help='bug: seal and done require the proof to fail at the base revision '
@@ -4755,6 +4967,10 @@ def main(argv=None):
     s = sub.add_parser('challenge')
     s.add_argument('slug')
     s.add_argument('--agent', help='the challenger\'s agent command, instead of the first of "agents" in .odd/config.json')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('second')
+    s.add_argument('slug')
+    s.add_argument('--agent', help='the second attempt\'s agent command, instead of the first of "agents" in .odd/config.json')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('cascade')
     s.add_argument('slug')
