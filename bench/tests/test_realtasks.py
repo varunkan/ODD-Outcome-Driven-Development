@@ -210,12 +210,16 @@ class BuildTest(unittest.TestCase):
             patch.start()
             self.addCleanup(patch.stop)
 
-    @unittest.skipUnless(shutil.which('git'), 'git is needed to apply the patches')
-    def test_a_task_is_built_and_graded_in_the_environment_its_spec_names(self):
+    def needs_pytest(self):
+        """These tests run a real grade, and a grade is a pytest run; CI installs pytest so they are not skipped there."""
         try:
             import pytest  # noqa: F401
         except ImportError:
             self.skipTest('pytest is needed to run the grade')
+
+    @unittest.skipUnless(shutil.which('git'), 'git is needed to apply the patches')
+    def test_a_task_is_built_and_graded_in_the_environment_its_spec_names(self):
+        self.needs_pytest()
         with unittest.mock.patch.dict(os.environ, HTTPS_PROXY='http://127.0.0.1:1'):
             why = self.mod.build(dict(ROW), self.work, strict=True, python='spec')
         self.assertEqual(why, '')
@@ -239,6 +243,7 @@ class BuildTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('git'), 'git is needed to apply the patches')
     def test_a_test_folder_inside_the_package_keeps_the_conftest_files_above_it(self):
+        self.needs_pytest()
         row = dict(ROW, test_patch='diff --git a/pkg/sub/tests/test_calc.py b/pkg/sub/tests/test_calc.py\n'
                    '--- a/pkg/sub/tests/test_calc.py\n+++ b/pkg/sub/tests/test_calc.py\n@@ -1 +1,4 @@\n'
                    ' from calc import add\n+\n+def test_sum(five):\n+    assert add(2, 3) == five\n')
@@ -252,6 +257,7 @@ class BuildTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('git'), 'git is needed to apply the patches')
     def test_a_refused_task_says_how_its_grade_ended_and_can_be_kept_aside(self):
+        self.needs_pytest()
         rows = os.path.join(self.work, 'rows')
         broken = ROW['test_patch'].replace('+def test_sum', '+import no_such_package_xyz\n+def test_sum') \
             .replace('@@ -1,2 +1,5 @@', '@@ -1,2 +1,6 @@')
