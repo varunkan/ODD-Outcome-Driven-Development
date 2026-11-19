@@ -850,4 +850,6 @@ cost to build.
 - **Done** in the commit "Lean odd": `"coverage"` off by default; `"reach"` removed and `reject:` report only; the
   method text cut from about 2,600 to about 1,200 characters; `verdict_line()` printed last by `done` and `gate`;
   the Stop hook asks for it (`"report": "verdict"`) and gives every reason in one block; four arms retired
-  (`bench/arms/RETIRED.md`), `odd-lean` and `plain-tests` added. Not yet measured: evidence 21.
+  (`bench/arms/RETIRED.md`), `odd-lean` and `plain-tests` added. Measured in
+  [evidence 21](docs/evidence/21-is-the-core-worth-more-than-a-sentence.md): a plain agent told to write and run
+  tests made no false DONE either, at 60% of lean odd's cost; odd's benefit beyond that sentence is not shown.

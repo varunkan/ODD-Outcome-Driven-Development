@@ -5,6 +5,10 @@ head-to-head on a calculator with Haiku 4.5 and an LLM judge to decide. Data: [d
 
 ## Answer
 
+**Read with [evidence 21](21-is-the-core-worth-more-than-a-sentence.md):** a plain agent told in one sentence to write
+and run tests also made no false DONE in 3 runs, for less. The result below is about asking for tests, not yet about
+odd's own check.
+
 **Against a plain agent (added last):** plain passed the hidden tests in 1 of 3 runs and said DONE falsely in 2; odd's
 three one-session rounds passed 9 of 9 with no false DONE, at about the same cost
 ([the baseline](#the-baseline-this-page-lacked-a-plain-agent)).
