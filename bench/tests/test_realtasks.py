@@ -369,7 +369,9 @@ class SessionEnvironmentTest(unittest.TestCase):
         # the session's environment is a copy of its own, outside the bench root (where hidden/ sits beside env/)
         self.assertFalse(seen['tool'].startswith(self.root), seen['tool'])
         self.assertEqual(seen['venv'], os.path.dirname(os.path.dirname(seen['tool'])))
-        self.assertEqual(os.path.dirname(seen['venv']), os.path.dirname(os.path.dirname(seen['cwd'])))
+        # real paths: on macOS the temporary folder is reached through a link, and a process reports its real cwd
+        self.assertEqual(os.path.realpath(os.path.dirname(seen['venv'])),
+                         os.path.realpath(os.path.dirname(os.path.dirname(seen['cwd']))))
         self.assertEqual(seen['pythonpath'], seen['cwd'])
         self.assertFalse(rec['contaminated'], rec['contaminated_by'])  # its path is in the transcript, and is its own
         self.assertIn('VIRTUAL_ENV', rec['env_passed'])
