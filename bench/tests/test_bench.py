@@ -671,7 +671,8 @@ class PiecesTest(unittest.TestCase):
         write(os.path.join(repo, 'odd.py'), 'print(1)\n')
         os.makedirs(os.path.join(repo, 'bench'))
         shutil.copy(RUN, os.path.join(repo, 'bench', 'run.py'))
-        shutil.copy(os.path.join(os.path.dirname(RUN), 'arm_agent.py'), os.path.join(repo, 'bench', 'arm_agent.py'))
+        for name in ('arm_agent.py', 'realtasks.py'):  # what run.py imports
+            shutil.copy(os.path.join(os.path.dirname(RUN), name), os.path.join(repo, 'bench', name))
         g = ['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com']
         for args in (['init', '-q'], ['add', '-A'], ['commit', '-qm', 'x']):
             subprocess.run(g + args, cwd=repo, check=True)
