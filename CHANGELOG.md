@@ -33,6 +33,10 @@ used during development and was never published.
 - The method text is about 1,200 characters (it was about 2,600); `"coverage"` is `off` by default.
 - `odd done` and `odd gate` end with one `VERDICT:` line; with odd's hooks a report must carry it.
 
+**A second reading**
+- `odd reread`: another agent writes a proof from the request without seeing the change; odd runs it on the change.
+  Advisory (54).
+
 **With no setup**
 - `odd check`: the take-out check on any change, with no outcome file; also a Stop hook (`--stop-hook`), an Action
   mode (`mode: check`) and an MCP tool. Report only (53).

@@ -14,6 +14,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd cascade <slug> [--agents C1,C2] [--race N]          agents in order, cheapest first; escalate until one is proven
   odd chain <ticket> [--race N] [--cascade]               .odd/chains/<ticket>.md: each outcome proven, checkpointed
   odd spec <slug> --proof-by CMD [--tries N]              another agent writes only the proof; sealed red first
+  odd reread <slug> [--by CMD] [--ticket FILE]            advisory: a proof written apart from the change, run on it
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
   odd check [--base REF] [--proof CMD]                    no setup: do this change's tests fail without it?
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
@@ -4336,6 +4337,96 @@ def cmd_spec(a, root):
           'refused.' % (who, o.rel, ODD, o.slug, ODD, o.slug))
 
 
+REREAD_NOTE = """
+The code for this outcome exists already, written by someone else. You cannot see it and must not look for it: you
+work at the commit before it. Write the proof as you read the request yourself. Your proof is then run on that code.
+"""
+REREAD_TICKET = """
+The request, as the person wrote it (read this, not only the outcome sentence, which is the other author's reading):
+%s
+"""
+
+
+def cmd_reread(a, root):
+    """Backlog item 54, advisory: a second reading of the request. Another agent writes a proof at the base, where
+    the change does not exist, from the outcome and (with --ticket) the request as written; the proof must fail
+    there (_proof_check, as for `odd spec`); it is then run on a copy of the tree as it is. Exit 1 when it fails
+    there: the two readings disagree and one of them is wrong. Nothing is applied, recorded or read by the gate."""
+    cfg = load_config(root)
+    tries = a.tries if a.tries is not None else cfg['proof_tries']
+    if not 1 <= tries <= 32:
+        raise CouldNotRun('--tries must be between 1 and 32')
+    by = a.by or cfg['reasoner'] or (cfg['agents'][0] if cfg['agents'] else '')
+    if not by.strip():
+        raise CouldNotRun('no second reader: pass --by "<command>" or set "reasoner" in .odd/config.json ({prompt_file} '
+                          'in it becomes the prompt\'s path, else the prompt is on stdin)')
+    try:
+        o = Outcome.load(root, a.slug)
+    except Fail as e:
+        raise CouldNotRun(str(e))
+    base, _ = find_base(root, cfg, a.base)
+    start, head = rev(root, base) if base else None, rev(root, 'HEAD')
+    if not start:
+        raise CouldNotRun('a second reading starts from the base, without your change, and no base was found: pass '
+                          '--base <revision>')
+    changed = changed_files(root, start)
+    if not [p for p in classify(changed, cfg)[3] if o.covers(p)]:
+        raise CouldNotRun('nothing to read again: no changed file inside "in: %s" since %s' % (o.get('in'), start[:10]))
+    rc, tail, _ = run_proof(root, o.get('proof'), cfg['proof_timeout'])
+    if rc != 0:
+        raise CouldNotRun('a second reading is compared with a change that passes its own proof, and its own proof does '
+                          'not pass (%s): %s' % ('timeout' if rc is None else 'exit %d' % rc, says(tail)))
+    ticket = ''
+    if a.ticket:
+        if not os.path.isfile(a.ticket):
+            raise CouldNotRun('no such file: %s' % a.ticket)
+        ticket = REREAD_TICKET % read_text(a.ticket).strip()[:20000]
+    fixed = [o.rel] + (['.odd/config.json'] if os.path.isfile(odd_dir(root, 'config.json')) else [])
+    keep, who, found = _keep(root, 'reread', o.slug), _who(by), {}
+    text = SPEC_PROMPT % dict(outcome=o.get('outcome'), proof=o.get('proof'), ins=o.get('in'), slug=o.slug,
+                              tests=', '.join(cfg['test_globs'])) + REREAD_NOTE + ticket
+
+    def judge(at):
+        why = _proof_check(root, cfg, o, at, fixed)
+        if why:
+            return why
+        here = [p for p in changed if os.path.isfile(os.path.join(root, p)) and not os.path.islink(os.path.join(root, p))]
+        mine = _worktree(root, os.path.dirname(at['wt']), os.path.basename(at['wt']) + '-yours', head, here)
+        for p in changed:  # what the change removed is removed in the copy too
+            if not os.path.lexists(os.path.join(root, p)) and os.path.lexists(os.path.join(mine, p)):
+                os.remove(os.path.join(mine, p))
+        for t in at['tests']:  # the second reader's test files, over the change's own at the same paths
+            if os.path.isfile(os.path.join(at['wt'], t)):
+                os.makedirs(os.path.dirname(os.path.join(mine, t)), exist_ok=True)
+                shutil.copyfile(os.path.join(at['wt'], t), os.path.join(mine, t))
+        found['rc'], found['tail'], _ = run_proof(mine, o.get('proof'), cfg['proof_timeout'])
+        return ''
+
+    print('%s reread %s: %s writes a proof at %s, without your change, %s (advisory; at most %d tries)'
+          % (ODD, o.slug, who, start[:10], 'from the request in %s' % a.ticket if ticket else
+             'from the outcome sentence only (pass --ticket FILE for the request as written)', tries))
+    patch, reasons, at = _authored(root, cfg, by, text, start, fixed, tries, keep, judge,
+                                   lambda at: 'fails before your change: ' + at['red'])
+    if not patch:
+        print('not compared: no proof that fails before the change after %d tries by %s (%s). Prompts and logs: %s'
+              % (tries, who, '; '.join(r[2:].split('\n')[0] for r in reasons), keep))
+        return
+    path = os.path.join(keep, 'second-proof.patch')
+    _patch(root, patch, path, apply=False)
+    if unrunnable(found['rc']):
+        print('not compared: the second proof did not run to completion on your change (%s). It is in %s'
+              % ('timeout' if found['rc'] is None else 'exit %d' % found['rc'], path))
+        return
+    if found['rc'] == 0:
+        print('a proof written apart from your change fails before your change and passes with it: two readings agree.\n'
+              '  agreement is not proof: both readings can be wrong the same way. The second proof is in %s' % path)
+        return
+    raise Fail('a proof written apart from your change fails on it:\n%s\n  one of the two readings is wrong, and '
+               'nothing here can say which: read the failing test against the request. If your change is wrong, fix '
+               'it; if the second proof is, leave it. The second proof (%s) is in %s; nothing was applied.'
+               % (_indent(found['tail']), ', '.join(at['tests']), path))
+
+
 HAS_TEST = re.compile(r'(?m)^\s*(?:async\s+)?def test|^\s*class Test|unittest')
 TEST_EXT = {'pytest': ('.py',), 'unittest': ('.py',), 'go': ('.go',), 'cargo': ('.rs',), 'make': ('',)}
 CHECKED = {  # verdict: (exit code, the last line)
@@ -5144,6 +5235,13 @@ def main(argv=None):
     s = sub.add_parser('second')
     s.add_argument('slug')
     s.add_argument('--agent', help='the second attempt\'s agent command, instead of the first of "agents" in .odd/config.json')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('reread', help='advisory: another agent writes a proof from the request, without seeing the '
+                       'change; it is run on the change')
+    s.add_argument('slug')
+    s.add_argument('--by', metavar='CMD', help='the second reader\'s agent command (default: "reasoner", else the first of "agents")')
+    s.add_argument('--ticket', metavar='FILE', help='the request as the person wrote it, given to the second reader')
+    s.add_argument('--tries', type=int, help='tries for a proof that fails before the change (default: "proof_tries", 3)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
     s = sub.add_parser('cascade')
     s.add_argument('slug')

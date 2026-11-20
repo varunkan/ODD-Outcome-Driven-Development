@@ -50,6 +50,11 @@ TOOLS = (  # name, description, arguments (name, schema, description), the requi
      [BASE, ('proof', S, 'the command to run, instead of the test files this change brings'),
       ('tests', S, 'more paths that hold tests, comma-separated globs'),
       ('require-change', B, 'exit 1 when only test files changed and they pass')], ()),
+    ('reread', 'Advisory: another agent writes a proof from the request at the base, where it cannot see the change; '
+               'the proof must fail there and is then run on the change. Exit 1 when it fails on the change: two '
+               'readings of the request disagree and one is wrong. Nothing is applied.',
+     [SLUG, ('by', S, 'the second reader\'s agent command (default: "reasoner", else the first of "agents")'),
+      ('ticket', S, 'a file holding the request as the person wrote it'), BASE], ('slug',)),
     ('race', 'Run the outcome as N parallel agent attempts, each in its own git worktree; each is verified as done '
              'would, and the verified one with the strongest proof and fewest changed lines is applied.',
      [SLUG, ('n', S, 'how many attempts, as a number (default: one per configured agent, or 3)'),
