@@ -1797,7 +1797,7 @@ class Adoption(Repo):
                      tool='.odd/odd_mcp.py')
         self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
         self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
-        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'chain', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec', 'stats'])
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'chain', 'check', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec', 'stats'])
         self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
         done = r[4]['result']
         self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)

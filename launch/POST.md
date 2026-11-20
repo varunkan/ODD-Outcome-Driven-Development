@@ -1,7 +1,6 @@
 # Coding agents say "done". Make them prove it.
 
-*Draft launch post. Every figure links to its source in the repository; nothing here is from the comparison, which
-has not run yet.*
+*Draft launch post. Every figure links to its source in the repository.*
 
 I spent three months building a production restaurant point-of-sale system with coding agents: several tills, money,
 offline sync, a printer. It worked. It also produced 1,856 instructions from me to the agents, a 100 KB instruction
@@ -34,15 +33,28 @@ skills): in each of them, "done" is the model's claim or a ticked checklist. ODD
 
 [60-second demo: an agent's test that asserts nothing gets refused, then a real one passes](demo.sh)
 
+## What the measurements say
+
+I compared it with a plain agent told in one sentence to write tests, run them, and say DONE only if they pass.
+
+- On 24 real bug fixes from pytest, sphinx, sympy and pylint, with hidden tests, one model and one run each: ODD
+  said DONE wrongly once, the plain agent five times; the hidden tests passed on 18 against 12
+  ([22](../docs/evidence/22-real-bug-fixes.md), [23](../docs/evidence/23-real-bug-fixes-pass-rate.md)).
+- Three of the plain agent's five wrong DONE were runs where it changed no product code at all: it wrote a test
+  that passed on the code as it was ([24](../docs/evidence/24-the-check-with-no-setup.md)).
+
 ## What I am not claiming
 
-Not that it makes agents faster or cheaper; not that it beats anything. The evidence is one project, measured by
-itself. A same-task comparison (16 tasks with hidden tests, five ways of working, three runs each on two models) is in the repo
-and its numbers will be published with their spread, whatever they show.
+Not that it beats anything. Neither difference above reached the threshold fixed before the runs; 24 tasks give a
+hint, not a rate. ODD cost about a tenth more. On a small task the one sentence did as well for less
+([21](../docs/evidence/21-is-the-core-worth-more-than-a-sentence.md)), and on easy tasks every way of working got
+everything right ([15](../docs/evidence/15-comparison.md)). The experiments that did not go my way are published
+with the rest.
 
 It also has limits I would rather you hear from me: it checks that the proof depends on the change, not that the proof
 is thorough; on your laptop an agent with a shell can get around any local check, so the gate counts only as a
 required CI check; and only Claude Code has been run with it so far.
 
-Try it: `pipx install odd-tool && odd init`, or one line in GitHub Actions. Everything, including the waste record and
+Try the one check with no setup: `pipx install odd-tool`, then `odd check` in any git repository. The whole method:
+`odd init`, or one line in GitHub Actions. Everything, including the waste record and
 every ruling on those 1,856 instructions, is at github.com/varunkan/ODD-Outcome-Driven-Development.

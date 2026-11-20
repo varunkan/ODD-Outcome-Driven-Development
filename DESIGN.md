@@ -679,6 +679,36 @@ folder outside the repository (`cd /tmp/x && ...`), the verification and the cla
 there is not in the change, so nobody else can rerun the proof. Seen once on a real task; it reports until it has
 passed the admission rule of 3r.
 
+### 3s. The check with no setup: `odd check`
+
+Backlog item 53. `odd check [--base REF] [--proof CMD]` is the take-out check on a change as it stands. It reads no
+outcome file and writes nothing. The test files are the changed paths under the test paths (more with `--tests`);
+every other changed file that is not exempt is the change. The proof is those test files under the repository's
+runner, one run for all of them (or `--proof`). A Python file with no test in it is not run; under `unittest`, a
+Python test file that names no `unittest` goes to pytest. Then: the proof as left, the proof with the change taken
+out (the same journal and put-back as `odd done`), the proof again.
+
+| it says | when | exit |
+|---|---|---|
+| `SHOWN` | the tests pass, fail without the change, pass again | 0 |
+| `NOT SHOWN` | they pass without the change, do not pass as left, or do not pass again | 1 |
+| `NO CHANGE` | only test files changed, and they pass: nothing was changed or fixed | 0; 1 with `--require-change` |
+| `NOT CHECKED` | the change has no test of its own | 0; 1 with `--require-tests` |
+| `NOTHING TO CHECK` | no file differs from the base | 0 |
+
+`--stop-hook` makes it a Claude Code Stop hook: it blocks the end of a turn once, with the result, when the check
+exits 1 (a change of tests only included), never twice in a row, and any error ends the turn as usual. The Action
+runs it with `mode: check`. `--json` prints the facts. Settings it cannot read do not stop it: it says so and uses
+the defaults. Tests that name the folder's own path are noted (3p-3) and fail nothing here.
+
+**It reports.** Replayed with no model on 81 kept runs, no correct work reads "passes without the change" or "no
+change"; two runs cut off mid-work read "the tests do not pass" though the hidden tests pass
+([evidence 24](docs/evidence/24-the-check-with-no-setup.md)). That is rule 2 of 3r for the first two verdicts only. Rules 3 and 4 are not met:
+every alarm is on runs it was shaped on, and no model round has run with the hook. So `odd init` does not install
+it, and nothing here says it makes work better. Limits: it knows the tests only by their paths; it takes out every
+changed product file at once, so it cannot say which part the tests depend on; "shown" is not "correct" (6 of 30
+shown runs fail the hidden tests).
+
 ### 3q. The report carries the claim: `"report": "claim"`
 
 Backlog item 47. `odd claim` (3m) prints what the checks did and did not show, and

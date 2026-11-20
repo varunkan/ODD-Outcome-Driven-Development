@@ -72,6 +72,8 @@ What the secondary numbers say, as counts and nothing more:
   with its change taken out (they show nothing about the change); on 13615 they fail without it, so the check would
   have let that one through. One plain run that passed (13647) wrote no test of its own. Control: every lean-odd run
   whose gate passed has tests that fail without the change.
+  *Corrected by [evidence 24](24-the-check-with-no-setup.md): on 13877 and 20154 the agent changed no product
+  file at all, only tests. odd would have refused both, but for having nothing to take out.*
 - **Lean odd did not always finish.** Five of its twelve runs ended at the money limit with no claim, and in three
   of those the hidden file fails. Its own gate failed at the end of three runs (sphinx-9673, sympy-19040, 23262),
   and passed on two whose hidden file fails (sympy-13615 and 18698, both cut off with no claim): a passing gate is

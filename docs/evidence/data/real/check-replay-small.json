@@ -1,0 +1,414 @@
+[
+ {
+  "task": "calculator",
+  "arm": "odd",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "odd",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "odd",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "speckit",
+  "repeat": 1,
+  "claim": "none",
+  "hidden_passes": false,
+  "check": "tests name their own folder",
+  "check_said": "passes without the change",
+  "named": [
+   "tests/test_calculator.py"
+  ],
+  "proof": "python3 -m unittest -q tests/test_calculator.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "speckit",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_basic_arithmetic.py tests/test_cli_arguments.py tests/test_decimal_numbers.py tests/test_division_by_zero.py tests/test_integration.py tests/test_invalid_expressions.py tests/test_output_formatting.py tests/test_parentheses.py tests/test_precedence.py tests/test_unary_operators.py tests/test_whitespace.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "speckit",
+  "repeat": 3,
+  "claim": "none",
+  "hidden_passes": false,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calculator.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-cases",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-cases",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-cases",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-reach",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-reach",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-reach",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-pair",
+  "repeat": 1,
+  "claim": "NOT DONE",
+  "hidden_passes": false,
+  "check": "tests name their own folder",
+  "check_said": "not passing as left",
+  "named": [
+   "tests/test_calc.py"
+  ],
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-pair",
+  "repeat": 2,
+  "claim": "NOT DONE",
+  "hidden_passes": false,
+  "check": "not passing as left",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-pair",
+  "repeat": 3,
+  "claim": "none",
+  "hidden_passes": false,
+  "check": "tests name their own folder",
+  "check_said": "not passing as left",
+  "named": [
+   "tests/test_calc.py"
+  ],
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-second",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": false,
+  "check": "tests name their own folder",
+  "check_said": "passes without the change",
+  "named": [
+   "tests/test_calc.py"
+  ],
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-second",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "tests name their own folder",
+  "check_said": "fails without the change",
+  "named": [
+   "tests/test_calc.py"
+  ],
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-second",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-lean",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-lean",
+  "repeat": 2,
+  "claim": "none",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "odd-lean",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "plain-tests",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "plain-tests",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "calculator",
+  "arm": "plain-tests",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_calc.py",
+  "settings": null
+ },
+ {
+  "task": "duration",
+  "arm": "odd-claim",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_dur.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "duration",
+  "arm": "odd-claim",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_duration.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "duration",
+  "arm": "odd-claim",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "tests name their own folder",
+  "check_said": "passes without the change",
+  "named": [
+   "tests/test_dur.py"
+  ],
+  "proof": "python3 -m unittest -q tests/test_dur.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "duration",
+  "arm": "odd",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "tests name their own folder",
+  "check_said": "passes without the change",
+  "named": [
+   "tests/test_dur.py"
+  ],
+  "proof": "python3 -m unittest -q tests/test_dur.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "duration",
+  "arm": "odd",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "tests name their own folder",
+  "check_said": "passes without the change",
+  "named": [
+   "tests/test_dur.py"
+  ],
+  "proof": "python3 -m unittest -q tests/test_dur.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "duration",
+  "arm": "odd",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_dur.py",
+  "settings": "settings not read, the defaults are used: .odd/config.json: \"reach\" is not a setting (the settings are: trivial_lines, proof_timeout, default_branch, exempt, test_globs, strength, mutants, agents, race_timeout, race_seal, proof_tries, coverag"
+ },
+ {
+  "task": "duration",
+  "arm": "plain",
+  "repeat": 1,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_dur.py",
+  "settings": null
+ },
+ {
+  "task": "duration",
+  "arm": "plain",
+  "repeat": 2,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_dur.py",
+  "settings": null
+ },
+ {
+  "task": "duration",
+  "arm": "plain",
+  "repeat": 3,
+  "claim": "DONE",
+  "hidden_passes": true,
+  "check": "fails without the change",
+  "check_said": null,
+  "named": null,
+  "proof": "python3 -m unittest -q tests/test_dur.py",
+  "settings": null
+ }
+]

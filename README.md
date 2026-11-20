@@ -47,12 +47,20 @@ ODD keeps the one part that does not depend on the model agreeing: "done" is dec
 It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
 the model. Questions and objections: [FAQ](FAQ.md).
 
-> **Status: early (0.5.0).** The tool passes its own tests (132), including the ways an agent could fake "done". It
+> **Status: early (0.5.0).** The tool passes its own tests (418), including the ways an agent could fake "done". It
 > has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
 >
 > **Does it work better? Measured, and mostly no difference.** In a same-task comparison (16 tasks with hidden
 > acceptance tests, five ways of working, three runs each, two models, 480 runs) every arm, plain Claude Code included, got every doable task right on both Sonnet and Haiku (42 of 42 runs; one Superpowers miss on Sonnet). ODD did not make the code more correct; nothing did. The arms separated only on the impossible tasks with Haiku: ODD and Superpowers claimed "done" falsely in 2 of 6 runs, plain, BMAD and Spec Kit in 3 of 6, and ODD never edited a visible test: a hint, not a finding. ODD cost about a quarter to a half more than plain; BMAD and Spec Kit two to five times as much. These runs used an early copy of ODD (commit 0e38e3e), without proof strength, sealed proofs, or the race, cascade and spec commands.
 > Full results and both grades: [15](docs/evidence/15-comparison.md).
+>
+> **On real bug fixes** (24 issues from pytest, sphinx, sympy and pylint, one run each, one model): against a plain
+> agent told in one sentence to write and run tests, lean odd passed the hidden tests on 18 against 12 and said DONE
+> wrongly once against five times. Neither difference reached the threshold fixed before the runs, lean odd cost
+> about a tenth more, and on a small task the one sentence did as well for less. Three of the plain agent's five
+> wrong DONE were runs that changed only tests and no product code. Counts, not rates:
+> [21](docs/evidence/21-is-the-core-worth-more-than-a-sentence.md), [22](docs/evidence/22-real-bug-fixes.md),
+> [23](docs/evidence/23-real-bug-fixes-pass-rate.md), [24](docs/evidence/24-the-check-with-no-setup.md).
 
 ## The idea
 
@@ -70,7 +78,19 @@ so, and that is an acceptable result.
 
 ## Try it
 
-Install it either way; both give the same single file.
+**The one check, with no setup.** In any git repository, after you or an agent made a change with tests:
+
+```bash
+pipx install odd-tool                # or copy odd.py and run: python3 odd.py check
+odd check                            # runs the tests this change brings, takes the change out, runs them again
+```
+
+It ends with one line: `SHOWN` (the tests fail without the change), `NOT SHOWN` (they pass without it, or do not
+pass), `NO CHANGE` (only tests changed: nothing was fixed) or `NOT CHECKED` (the change has no test). Nothing is
+written and nothing is recorded. It reports; what it has and has not been shown to catch is in
+[evidence 24](docs/evidence/24-the-check-with-no-setup.md), and its options in [DESIGN.md](DESIGN.md) section 3s.
+
+**The whole method.** Install it either way; both give the same single file.
 
 ```bash
 pipx install odd-tool                # or: pip install odd-tool        (then the command is `odd`)
@@ -318,6 +338,9 @@ On GitHub Actions the gate is one step at the end of your test job:
 - uses: varunkan/ODD-Outcome-Driven-Development@v0.5.0
 ```
 
+With `with: mode: check` the step runs `odd check` instead: no outcome files and no `.odd` folder are needed, and
+it fails when the tests a pull request brings pass without the rest of it, or do not pass.
+
 It fetches the history it needs, judges the change with the action's own pinned copy of the tool (never the copy the
 pull request carries) and reads the settings at the tip of the target branch. Pin a tag or a commit, and make the step
 a required check. Other CI systems use the two lines `odd init` prints; they do the same.
@@ -384,8 +407,9 @@ given over three months, each measured and ruled on. Most were dropped.
 
 ## Limits
 
-- Evidence so far is one project, measured by itself. The comparison harness is in [`bench/`](bench/SPEC.md); its
-  results will be published with their spread, whatever they show. Its report states trust as numbers per arm: claim
+- The method came from one project, measured by itself. The comparisons since are small: one model, one run a
+  task, and no difference on real bug fixes has reached its threshold (see the status note above). The harness is
+  in [`bench/`](bench/SPEC.md). Its report states trust as numbers per arm: claim
   precision, silent failures, the cheat and park rates on impossible tasks, and the own check against the hidden tests
   by change size. A cheat is counted only by the routes a script can see (a DONE claim, an edited visible test, a test
   input quoted into the code).
