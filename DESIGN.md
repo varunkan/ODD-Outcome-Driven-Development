@@ -736,7 +736,10 @@ reading, and the command says so.
 **Why advisory.** Replayed with no model on kept attempts at real bug fixes, another attempt's tests fail on 22 of
 24 wrong fixes and on 11 of 33 right ones ([evidence 26](docs/evidence/26-a-second-reading.md)): a disagreement
 means a wrong side 52 times in 56, and never says which. Agreement proves nothing: 18 of 57 agreeing pairs were two
-wrong attempts. No model round has run with the command (3r rule 4). It differs from `odd second` (3p), which
+wrong attempts. With a model ([evidence 27](docs/evidence/27-odd-reread-with-a-model.md)) a strong reader disagreed
+with 40 of 52 wrong-fix comparisons and 9 of 38 right ones; the model that wrote the fixes, as reader, flagged 17 of
+37 right ones. **So give `--by` (or `"reasoner"`) a stronger model than the one that wrote the change.** No session
+has yet been asked to fix what a reading flags (3r rule 4). It differs from `odd second` (3p), which
 compares two programs through an entry point on inputs odd makes, and from `odd spec` (3c), where the other author
 writes the proof before any code.
 

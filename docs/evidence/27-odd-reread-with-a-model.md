@@ -59,4 +59,38 @@ no fix of its own, and is one reader, not up to four.
 
 ## Results
 
-Not run yet.
+*Run 2026-11-20. 64 sessions on all 32 hosts, $5.60 of the $14.40 cap. No session was void and none lacked a cost.
+Records: [reread-runs.json](data/real/reread-runs.json).*
+
+| reader | wrong-fix comparisons that disagree (A) | right-fix comparisons that disagree (B) | no accepted proof (C) | tasks with a catch | cost | band |
+|---|---|---|---|---|---|---|
+| Haiku 4.5 | 33 of 45 | 17 of 37 | 3 of 32 | 3 of 5 | $3.82 | **WORSE** |
+| Sonnet 5.5 | 40 of 52 | 9 of 38 | 0 of 32 | 5 of 5 | $1.78 | **LIKE the replay** |
+| one other attempt's tests, in the replay | 21 of 41 | 11 of 39 | | | | |
+
+- **With the cheap model as reader the command is worse than the bar: it flags 17 of 37 right fixes.** It catches
+  wrong fixes well (33 of 45), but a disagreement from it says little: nearly half the time the fix was right.
+  Three of its readers wrote no proof that fails before the change.
+- **With the stronger model as reader it behaves as the replay said, and catches more:** 40 of 52 wrong-fix
+  comparisons, a catch on every one of the five tasks, 9 of 38 right fixes flagged. It misses BETTER on false
+  alarms (24% where 15% was needed).
+- **The stronger reader is better, by the rule fixed beforehand:** A minus B is 53 points against 27. It was also
+  cheaper: a median of 3 turns and $0.06 a reading, against 10 turns and $0.10.
+- **On the host alone, in the command's own words:** the stronger reader disagreed with 9 of the 13 wrong fixes and
+  with 4 of the 19 right ones; the cheap reader with 7 of 13 and 10 of 19. The command's words and the harness's
+  rerun differ on one host in each arm.
+- **What neither reader catches:** sympy-18698, where the hidden test wants more than the ticket shows: 0 of 8
+  comparisons for the cheap reader, 2 of 8 for the stronger. A second reading of a ticket that does not say cannot
+  find what it does not say.
+
+**What stands.**
+- `odd reread` with a strong reader does what the replay promised: a proof written from the ticket, without the
+  fix, disagrees with most of these wrong fixes. A disagreement is worth a person's look and proves nothing: about
+  one in four right fixes was flagged too. A reading cost about $0.06.
+- **Use a strong reader.** With the model that wrote the fixes as reader, the command flags right work about as
+  often as not. DESIGN 3t and the command's help now say so.
+- **Advisory, as said beforehand.** Nothing here lets it fail work (DESIGN 3r).
+- **Limits.** The reader had a neutral outcome sentence, not the first author's: the best case. These are public
+  issues, and a reader that finishes in 3 turns may be recalling the fix or its tests; nothing here rules that out.
+  Five tasks carry all the wrong fixes, 12489 alone 20 of the 52 comparisons. The same reader's proof is counted on
+  several fixes, so the comparisons are not independent. Counts, not rates.

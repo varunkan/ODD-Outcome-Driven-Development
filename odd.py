@@ -5253,7 +5253,8 @@ def main(argv=None):
     s = sub.add_parser('reread', help='advisory: another agent writes a proof from the request, without seeing the '
                        'change; it is run on the change')
     s.add_argument('slug')
-    s.add_argument('--by', metavar='CMD', help='the second reader\'s agent command (default: "reasoner", else the first of "agents")')
+    s.add_argument('--by', metavar='CMD', help='the second reader\'s agent command (default: "reasoner", else the first of '
+                   '"agents"); use a stronger model than the one that wrote the change')
     s.add_argument('--ticket', metavar='FILE', help='the request as the person wrote it, given to the second reader')
     s.add_argument('--tries', type=int, help='tries for a proof that fails before the change (default: "proof_tries", 3)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
