@@ -4350,6 +4350,27 @@ CHECKED = {  # verdict: (exit code, the last line)
     'nothing to check': (0, 'NOTHING TO CHECK (no product file differs from %s)')}
 
 
+def tests_proof(root, tests):
+    """The command that runs the test files `tests` under the repository's runner, or '' when none of them holds a
+    test. One run takes every file a runner accepts, so a support file under a test path fails nothing."""
+    found = runners(root)
+    ext = TEST_EXT.get(found[0][0], ('.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs')) if found else ()
+    runs = [t for t in tests if not COLLECT.search(t) and t.endswith(ext) and os.path.isfile(os.path.join(root, t))]
+    # a Python file under a test path that holds no test (an empty __init__.py, a fixture module) is not run on
+    # its own: pytest exits 5 on it. Measured: that failed 7 correct programs of the kept small-task runs.
+    runs = [t for t in runs if not t.endswith('.py') or HAS_TEST.search(read_text(os.path.join(root, t)))]
+    by = collections.OrderedDict()
+    for t in runs:  # unittest finds only unittest.TestCase classes: a Python test file that names none is pytest's
+        pytest = found[0][0] == 'unittest' and 'unittest' not in read_text(os.path.join(root, t))
+        by.setdefault('pytest' if pytest else found[0][0], []).append(t)
+    cmds = []
+    for name, ts in by.items():
+        cmd = [c for n, c, _ in PROOFS if n == name][0]
+        cmds += [cmd.format(test=' '.join(map(shlex.quote, ts)))] if '{test}' in cmd else \
+            [suggest_proof(root, 'check', t)[0] for t in ts]
+    return ' && '.join(collections.OrderedDict.fromkeys(cmds))
+
+
 def check(root, cfg, base, proof=None):
     """Backlog item 53: the take-out check on a change as it stands, with no outcome file. The proof is the test files
     the change brings (or `proof`); it must pass as left, fail with every changed product file taken out, and pass
@@ -4359,26 +4380,9 @@ def check(root, cfg, base, proof=None):
     if not product and not tests:
         return dict(res, verdict='nothing to check')
     if not proof:
-        found = runners(root)
-        ext = TEST_EXT.get(found[0][0], ('.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs')) if found else ()
-        runs = [t for t in tests if not COLLECT.search(t) and t.endswith(ext) and os.path.isfile(os.path.join(root, t))]
-        # a Python file under a test path that holds no test (an empty __init__.py, a fixture module) is not run on
-        # its own: pytest exits 5 on it. Measured: that failed 7 correct programs of the kept small-task runs.
-        runs = [t for t in runs if not t.endswith('.py') or HAS_TEST.search(read_text(os.path.join(root, t)))]
-        if not runs:
+        proof = tests_proof(root, tests)
+        if not proof:
             return dict(res, verdict='no test of its own')
-        # unittest finds only unittest.TestCase classes: a Python test file that names no unittest is pytest's. One
-        # run takes every file a runner accepts, so a support file under a test path (a fixture module) fails nothing
-        by = collections.OrderedDict()
-        for t in runs:
-            pytest = found[0][0] == 'unittest' and 'unittest' not in read_text(os.path.join(root, t))
-            by.setdefault('pytest' if pytest else found[0][0], []).append(t)
-        cmds = []
-        for name, ts in by.items():
-            cmd = [c for n, c, _ in PROOFS if n == name][0]
-            cmds += [cmd.format(test=' '.join(map(shlex.quote, ts)))] if '{test}' in cmd else \
-                [suggest_proof(root, 'check', t)[0] for t in ts]
-        proof = ' && '.join(collections.OrderedDict.fromkeys(cmds))
         res['proof'] = proof
     o = Outcome(root, 'check')
     o.f['proof'] = proof
