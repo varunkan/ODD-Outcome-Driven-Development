@@ -28,21 +28,41 @@ and CI fails when it is out of date.
 
 ## The problem
 
-Coding agents report "done" for work that is not done. The tests pass, but they test nothing the change does; the bug
-is still there; the summary says fixed. Writing more rules for the agent does not fix this, because a rule is
-something the model may or may not follow. In the project this method came from, 1,856 instructions were given to
-agents over three months, and the two most expensive mistakes were the process's own rules.
+**A coding agent says "done" when the work is not done, and nothing in the loop checks the claim.** Measured on 24
+real bug fixes (pytest, sphinx, sympy and pylint issues, with hidden tests), a plain agent told to write tests, run
+them and say DONE only if they pass said DONE wrongly on 5. It happens in three ways, and each needs a different
+answer:
 
-ODD keeps the one part that does not depend on the model agreeing: "done" is decided by a command, on the code.
-
-## Who it is for
-
-| you are | the problem it solves | how you use it |
+| what goes wrong | how often it was seen | what odd does about it |
 |---|---|---|
-| a developer working with an AI agent | the agent says done; the tests pass but test nothing | `odd init` once; the agent follows `AGENTS.md` and runs `odd done` before it reports done |
-| a team letting agents open pull requests | reviewers cannot tell whether an agent's PR really works | one CI step, made a required check: a PR whose changed files are not covered by a proof that fails without them cannot merge |
-| anyone running agents unattended | nobody is watching the "done" claims | the gate is the referee, and `odd park` gives the agent an honest "blocked" instead of a fake done |
-| a user of Spec Kit, BMAD or Superpowers | specs and plans, but nothing proves the code meets them | ODD sits underneath as the last check; it replaces none of them |
+| **Nothing was changed.** The agent wrote a test that passes on the code as it was, and said DONE | 3 of those 5 wrong DONE | `odd check` says `NO CHANGE`; `odd done` refuses it |
+| **The tests prove nothing.** They pass whether the change is there or not | once in 48 runs | the take-out check: the proof must fail with the change removed |
+| **The fix is wrong the same way as its tests.** One author misread the request and wrote both | 6 of 30 changes whose tests did depend on them | no check on those tests can see it. `odd reread` gets a second reading from another agent and reports a disagreement for a person to settle |
+
+Writing more rules for the agent does not fix any of these, because a rule is something the model may or may not
+follow. In the project this method came from, 1,856 instructions were given to agents over three months, and the
+two most expensive mistakes were the process's own rules. ODD keeps the part that does not depend on the model
+agreeing: "done" is decided by a command, on the code.
+
+**What it does not solve.** It does not make the work correct. A request that does not say what is wanted stays
+unsolved by any check, and in the measurements a stronger model did more for correctness than odd did
+([25](docs/evidence/25-the-six-that-fail.md)). odd narrows what an agent can claim without having shown it.
+
+## Where to use it
+
+| the situation | the risk | what to run |
+|---|---|---|
+| **You work with an agent at your desk** | it reports done and you take its word | `odd check` after it finishes: one command, no setup. Or `odd init`, and the agent runs `odd done` before it reports |
+| **Agents open pull requests** | a reviewer cannot tell whether the PR's tests show anything | one GitHub Actions step. `mode: check` needs no setup; the full gate requires every changed file to sit inside a proven outcome |
+| **Agents run unattended** (overnight, in a queue, in CI) | nobody reads the "done" claims | the gate decides, and `odd park` gives the agent an honest "blocked" in place of a false done |
+| **A Claude Code session should not end on a false done** | the last message says fixed | `odd check --stop-hook`, or `odd init --claude-hooks`: a turn that would end on it is sent back once, with the result |
+| **A bug fix that matters** (money, data, security) | the fix and its tests share one misreading | `odd reread <slug> --by "<a stronger model>" --ticket <the request>`: a second reading, written without seeing the fix |
+| **You use Spec Kit, BMAD or Superpowers** | specs and plans, and "done" is still the model's word | odd sits underneath as the last check; it replaces none of them |
+| **You compare agents or models** | pass rates alone hide false claims | the harness in [`bench/`](bench/SPEC.md) counts right DONE, wrong DONE and unfinished apart |
+
+**Where it is not worth it.** Easy tasks, where every way of working got everything right
+([15](docs/evidence/15-comparison.md)). Work you review line by line anyway. A change with no test and no way to
+write one: odd then has nothing to run. And as a replacement for a better model or a clearer request, it is none.
 
 It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
 the model. Questions and objections: [FAQ](FAQ.md).
