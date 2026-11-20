@@ -5468,6 +5468,28 @@ class Reread(ProofAuthors, Agents):
         self.assertEqual(self.runs('reader'), 2)
         self.assertIn('not compared: no proof that fails before the change', out)
 
+    def test_a_reader_whose_tests_the_proof_does_not_run_is_refused_not_counted_as_agreeing(self):
+        """Found by the judge reading the code: the proof then ran the change's own test, and that read as agreement."""
+        self.write('calc.py', SPECIAL)
+        by = self.agent('elsewhere', 'mkdir -p tests; printf %%s %s > tests/test_other.py' % shlex.quote(self.STRICT))
+        rc, out = self.odd('reread', 'add', '--by', by, '--tries', '1')
+        self.assertEqual(rc, 0, out)
+        self.assertIn('not compared', out)
+        self.assertIn('wrote no test file the proof command runs', out)
+        self.assertNotIn('two readings agree', out)
+
+    def test_a_proof_that_runs_no_test_is_not_red(self):
+        """Found the same way: any non-zero exit counted as failing before the change, a runner that collected nothing too."""
+        self.write('calc.py', FIXED)
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace(PROOF, 'python3 -m pytest -q tests/test_calc.py'))
+        try:
+            import pytest  # noqa: F401
+        except ImportError:
+            self.skipTest('pytest is needed: its exit 5 is the case')
+        rc, out = self.reread(FIXED, 'VALUE = 5\n', more=('--tries', '1'))
+        self.assertIn('not compared', out)
+        self.assertIn('ran no test', out)
+
     def test_it_needs_a_change_whose_own_proof_passes(self):
         self.assertIn('its own proof does not pass', self.reread(BROKEN + '# touched\n', self.STRICT)[1])
         os.remove(self.path('tests/test_calc.py'))
