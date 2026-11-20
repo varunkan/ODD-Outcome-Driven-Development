@@ -9,7 +9,9 @@ takes every other changed file out and runs them again. An arm's own files (OWN)
 pytest's testing/ folder counts as tests.
 
 Verdicts, odd check's own: "no test of its own", "not passing as left", "fails without the change" (a real proof),
-"passes without the change" (the tests show nothing about it), "not passing again", "nothing to check".
+"passes without the change" (the tests show nothing about it), "only tests changed", "not passing again", "nothing
+to check"; and this script's own "tests name their own folder" (their tests hold the kept tree's absolute path, so a
+copy cannot measure them).
 
 usage: ownproof.py --root ROOT [--base main] RECORD.json [RECORD.json ...]
        ROOT holds tasks/<id>/ (for the task's environment); each record names its kept tree in session_dir.
@@ -47,9 +49,15 @@ def own_proof(tree, task_dir, base='main'):
         except subprocess.TimeoutExpired:
             return dict(verdict='could not run', said='timed out after %d s' % TIMEOUT)
         try:
-            return json.loads(p.stdout)
+            res = json.loads(p.stdout)
         except ValueError:
             return dict(verdict='could not run', said=(p.stderr or p.stdout).strip()[-400:])
+        # tests that name the kept tree's own path run THAT tree's program from the copy, so taking the change out
+        # of the copy changes nothing for them: the copy cannot measure such a run, and it is listed, not counted
+        here = (tree.rstrip('/'), os.path.realpath(tree))
+        named = [t for t in res.get('tests', []) if os.path.isfile(os.path.join(tree, t))
+                 and any(h in open(os.path.join(tree, t), errors='replace').read() for h in here)]
+        return dict(res, verdict='tests name their own folder', check_said=res['verdict'], named=named) if named else res
     finally:
         shutil.rmtree(work, True)
 

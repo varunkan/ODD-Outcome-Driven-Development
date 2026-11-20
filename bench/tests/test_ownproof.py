@@ -69,6 +69,12 @@ class OwnProofTest(unittest.TestCase):
         res = self.verdict()
         self.assertEqual((res['tests'], res['verdict']), (['testing/python/integration.py'], 'fails without the change'), res)
 
+    def test_tests_that_name_the_kept_tree_are_listed_not_measured(self):
+        self.write('calc.py', FIXED)
+        self.write('tests/test_calc.py', REAL + '\nHERE = %r\n' % self.tree)
+        res = self.verdict()
+        self.assertEqual((res['verdict'], res['named']), ('tests name their own folder', ['tests/test_calc.py']), res)
+
     def test_an_arms_own_files_are_neither_test_nor_product(self):
         self.write('calc.py', FIXED)
         self.write('tests/test_calc.py', REAL)

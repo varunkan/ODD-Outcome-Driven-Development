@@ -5406,6 +5406,13 @@ class Check(Repo):
         self.assertIn('settings not read, the defaults are used: .odd/config.json: "reach" is not a setting', out)
         self.assertIn('CHECK: SHOWN', out)
 
+    def test_tests_that_name_this_folder_are_noted_and_fail_nothing(self):
+        self.solve()
+        self.write('tests/test_calc.py', TEST + '\nHERE = %r\n' % os.path.realpath(self.dir))
+        out = self.ok('check')
+        self.assertIn("note: the proof names this folder's own path", out)
+        self.assertIn('CHECK: SHOWN', out)
+
     def test_one_run_takes_every_test_file_so_a_support_module_fails_nothing(self):
         self.solve()
         self.write('tests/support.py', 'import unittest\n\nVALUE = 5\n')

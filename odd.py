@@ -4382,6 +4382,7 @@ def check(root, cfg, base, proof=None):
         res['proof'] = proof
     o = Outcome(root, 'check')
     o.f['proof'] = proof
+    res['anchored'] = anchored(root, cfg, o)  # report only here: elsewhere these tests would run this folder's code
     rc, tail, s1 = run_proof(root, proof, cfg['proof_timeout'])
     if rc is None:
         raise CouldNotRun('the proof timed out (%ss): %s' % (cfg['proof_timeout'], proof))
@@ -4450,6 +4451,8 @@ def cmd_check(a, root):
     elif res['verdict'] == 'no test of its own':
         say('  no test file differs from the base, so nothing shows the change works: add a test, or name a command '
               'with --proof, or more test paths with --tests')
+    if res.get('anchored'):
+        say('  note: ' + res['anchored'])
     say('CHECK: ' + last)
     if a.stop_hook:
         if code:
