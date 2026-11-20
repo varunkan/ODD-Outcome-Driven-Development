@@ -298,6 +298,82 @@ dollars; and proofs piped into `tail` or `grep -q .` refused, since the pipe hid
 command with the change and with it taken out; its exit code and whole output must be identical, or `done` names the
 first differing line. Details: [DESIGN.md](DESIGN.md) section 4e.
 
+## In your editor: Claude Code, Cursor, GitHub Copilot
+
+The steps are the same three everywhere, because odd is a command the agent runs in a terminal:
+
+```bash
+pipx install odd-tool        # 1. once on your machine (or: pip install odd-tool). Needs Python 3.8+, git 2.23+, a POSIX shell
+cd your-project
+odd init                     # 2. once per project: writes .odd/ (its own copy of the tool) and the method into AGENTS.md
+git add .odd AGENTS.md && git commit -m "adopt odd"
+```
+
+3. Ask the agent for the work as you always do. It reads the method in `AGENTS.md`, states an outcome with
+   `odd new`, makes the change, runs `odd done` and `odd gate`, and ends its report with the `VERDICT:` line.
+
+If you want only the check and no method, skip step 2 and run `odd check` yourself, in the editor's terminal, when
+the agent says it is finished.
+
+**Only Claude Code has been run with odd.** The Cursor and Copilot steps below rest on those tools' own
+documentation; if one does not behave as written, please open an issue.
+
+### Claude Code
+
+- **Install and set up:** the three steps above. Claude Code reads `AGENTS.md`; where the project has a
+  `CLAUDE.md`, `odd init` adds the line `@AGENTS.md` to it so the method is loaded.
+- **Use:** `claude`, then give it the task. To check a finished change yourself: `! odd check` in the session, or
+  `odd check` in a terminal.
+- **Stop a turn from ending on unproven work (optional):** `odd init --claude-hooks` adds three hooks for your
+  machine only (`.claude/settings.local.json`, never committed): a status line at session start, and a Stop hook
+  that sends the agent back once when the gate does not pass or its report leaves out the verdict.
+- **Only the check, as a hook (optional):** with no `odd init`, put this in `.claude/settings.json`:
+
+  ```json
+  {"hooks": {"Stop": [{"hooks": [{"type": "command", "timeout": 600,
+    "command": "odd check --stop-hook 2>/dev/null || true"}]}]}}
+  ```
+
+- **odd as tools, not shell commands (optional):** `odd init --mcp` adds odd's server to the project's `.mcp.json`,
+  which Claude Code loads; it asks you once to approve the server.
+
+### Cursor
+
+- **Install and set up:** the three steps above. Cursor's agent reads the `AGENTS.md` at the project root.
+- **Use:** open the project, switch the chat to Agent, and give it the task. The agent runs `python3 .odd/odd.py
+  ...` in Cursor's terminal; allow those commands when it asks, or add them to the allowlist. To check a finished
+  change yourself, run `odd check` in the integrated terminal.
+- **odd as tools (optional):** Cursor reads MCP servers from `.cursor/mcp.json`, in the format `odd init --mcp`
+  writes:
+
+  ```bash
+  odd init --mcp && mkdir -p .cursor && cp .mcp.json .cursor/mcp.json
+  ```
+
+  Then enable the `odd` server under Cursor's MCP settings.
+- **If the agent ignores the method:** add a project rule (`.cursor/rules/`) with one line, "Follow AGENTS.md".
+
+### GitHub Copilot
+
+- **Install and set up:** the three steps above. Copilot in VS Code reads the workspace's `AGENTS.md` (the setting
+  `chat.useAgentsMdFile`, on by default); so do Copilot's cloud agent and CLI.
+- **Use:** in VS Code, open Chat, choose Agent mode, and give it the task. It runs odd in the terminal; approve
+  the commands when asked. To check a finished change yourself, run `odd check` in the integrated terminal.
+- **Copilot Chat outside VS Code** (JetBrains, Visual Studio, github.com): it reads
+  `.github/copilot-instructions.md`, not `AGENTS.md`. Put one line there: "Follow the method in AGENTS.md."
+- **Copilot's cloud agent opening pull requests:** it works in GitHub's own runner, so `pipx install` on your
+  machine does not reach it. Commit `.odd/` (step 2) and it runs `python3 .odd/odd.py`; make the gate a required
+  check (see [In CI](#in-ci)) so its pull request cannot merge on its word alone.
+- **odd as tools (optional):** `odd init --mcp`, then add the server in VS Code with **MCP: Add Server**
+  (command `python3`, argument `.odd/odd_mcp.py`), or use the workspace-root `.mcp.json` where your version
+  offers it.
+
+### Any other tool
+
+Codex, Junie and Windsurf read `AGENTS.md` too; Gemini CLI and Aider need one line ([Works with](#works-with)). A
+tool that reads no instruction file still works: paste "Follow AGENTS.md" into the task, or run `odd check`
+yourself.
+
 ## What it checks, and what it does not
 
 It checks that the proof **depends on the change**: with the change removed, the proof fails. It checks that nothing
@@ -406,8 +482,8 @@ PROVEN`, or `NOT DONE`), and step 5 tells the agent to put that line in its repo
 The table rests on each tool's documentation ([sources](docs/evidence/10-design-review.md)). Only Claude Code has
 been run with it so far. The command and the gate are the same for every tool and for a person.
 
-Optional, for Claude Code only: `odd init --claude-hooks` adds two hooks for your machine (never committed) that give
-one line of status at session start and stop a turn from ending on unproven work.
+Optional, for Claude Code only: `odd init --claude-hooks` adds three hooks for your machine (never committed) that
+give one line of status at session start and send a turn back once when it would end on unproven work.
 
 Optional, for any MCP client: `odd init --mcp` adds odd's MCP server to the project's `.mcp.json` (other servers are
 kept), so an agent calls `new`, `seal`, `done`, `gate`, `park` and `escaped` as tools and gets odd's exit code and
