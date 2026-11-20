@@ -862,3 +862,18 @@ cost to build.
   still on the machine ([evidence 22](docs/evidence/22-real-bug-fixes.md)).
 - **Done** in the commit "B52: a proof that runs outside the repository is reported" (`outside()`; a test in
   `Anchored`). Report only by the admission rule; seen once.
+
+### 53. The take-out check with no setup: `odd check`
+- **Outcome:** in any git repository, with no outcome file and no `.odd` folder, one command says whether the tests
+  a change brings fail without the rest of the change; a change of tests only is named.
+- **Evidence:** a plain agent told to write tests does most of what odd's method asks; what a sentence cannot do is
+  check the tests it wrote. Replayed with no model on 48 kept real bug-fix runs and 33 small-task runs
+  ([evidence 24](docs/evidence/24-the-check-with-no-setup.md)): no correct fix read as "passes without the change" or "no change"; the fault it was
+  built for seen once; three of the plain agent's five false DONE changed only tests, which it names.
+- **Done** (`check()`, `cmd_check`, the Action's `mode: check`, the MCP tool `check`; tests in `Check`).
+  `bench/ownproof.py` runs this command instead of a second copy of the logic. Report only by the admission rule:
+  it exits 1 only where someone runs it, and `odd init` does not install it. Also here: a proof that begins by
+  changing into the repository's own absolute path is rewritten, not refused (`unanchor()`): that refusal cost a
+  turn in 4 of 12 runs (evidence 23).
+- **Not done:** the model round the admission rule asks for (arms `plain-check` and `plain-persist` exist and have
+  not been run). The judge's count for a fair test of "fewer false DONE with the hook": about 150 new tasks.

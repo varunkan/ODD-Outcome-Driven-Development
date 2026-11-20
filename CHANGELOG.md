@@ -33,6 +33,11 @@ used during development and was never published.
 - The method text is about 1,200 characters (it was about 2,600); `"coverage"` is `off` by default.
 - `odd done` and `odd gate` end with one `VERDICT:` line; with odd's hooks a report must carry it.
 
+**With no setup**
+- `odd check`: the take-out check on any change, with no outcome file; also a Stop hook (`--stop-hook`), an Action
+  mode (`mode: check`) and an MCP tool. Report only (53).
+- A proof that begins with `cd` into the repository's own absolute path is rewritten, not refused.
+
 **Reports**
 - `odd claim`: what is proven, what is not, one verdict line, generated from the gate's facts (43).
 - `odd ask`, `odd ask --open`; requirement coverage (`covers:`); the auto-merge lane; `odd ship`; `odd owed`.

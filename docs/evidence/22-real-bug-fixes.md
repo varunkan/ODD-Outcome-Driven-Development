@@ -167,6 +167,9 @@ not shown to be worth more than the sentence.*
   change. A = 1: one correct `plain-tests` fix (sphinx 8035) was left with tests of its own that do not pass, which
   odd would also have refused. In the twelve `odd-lean` sessions the check refused nothing. Control: of the 10
   `odd-lean` runs whose gate passed, 9 read "fails without the change" and 1 "no test of its own" (below).
+  *Corrected by [evidence 24](24-the-check-with-no-setup.md): in that run the agent changed no product file at
+  all, only tests. odd would have refused it, but for having nothing to take out, not for a test that passes
+  anyway.*
 - **`odd-lean`'s one false DONE had a real proof of the wrong thing.** On sphinx 8638 its gate passed, its own tests
   fail without its change, and the hidden file fails: the limit of evidence 18 again, a proof reaches as far as its
   cases. The gate also passed on sympy 12489, where the run was cut off and the hidden file fails. So the gate
