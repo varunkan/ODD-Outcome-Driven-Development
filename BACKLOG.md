@@ -887,5 +887,7 @@ cost to build.
   side; 18 of 57 agreements are two wrong attempts.
 - **Done** (`cmd_reread`, with `odd spec`'s author and red-first check; tests in `Reread`; `bench/crosstest.py`).
   Advisory: it fails no work, applies nothing and the gate does not read it.
-- **Not done:** a model round with the command; whether a reader that writes only tests reads as well as an
-  attempt that also wrote a fix.
+- **Measured with a model** ([evidence 27](docs/evidence/27-odd-reread-with-a-model.md), 64 reader sessions,
+  $5.60): a strong reader disagrees with 40 of 52 wrong-fix comparisons and 9 of 38 right ones, like the replay; the
+  model that wrote the fixes flags 17 of 37 right ones, worse than the bar. Use a stronger reader than the author.
+- **Not done:** whether a session told of a disagreement then fixes the fix; anything off these five tasks.

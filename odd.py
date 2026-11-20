@@ -999,6 +999,12 @@ RUNNERS = re.compile(r'^(python[\d.]*|pypy[\d.]*|(ba|z|da|k)?sh|node|deno|bun|ru
                      r'mocha|rspec|phpunit)$')
 
 
+def ran_nothing(rc, tail):
+    """The runner ended without running a test: pytest's exit 5, or a runner saying it collected or found none."""
+    return rc == 5 or bool(re.search(r'NO TESTS RAN|no tests ran|collected 0 items|Ran 0 tests|file or directory not found',
+                                     tail or ''))
+
+
 def proof_runs(proof, targets):
     """The targets a proof itself runs: its command words, and files or modules handed to an interpreter or a test
     runner. A proof that lives inside the change fails without it for the wrong reason. This reads the command as
@@ -2233,7 +2239,7 @@ def _verify(root, cfg, o, base, changed, say):
         raise Fail('the proof fails (exit %d): %s\n%s%s' % (rc, o.get('proof'), _indent(tail), (
             '\n  it ran no tests: the runner may be wrong for these tests (pytest exits 5 when it collects none; '
             'unittest finds only unittest.TestCase classes); pick the runner in the proof yourself.')
-            if rc == 5 or re.search(r'NO TESTS RAN|no tests ran|collected 0 items|Ran 0 tests', tail or '') else ''),
+            if ran_nothing(rc, tail) else ''),
                    [('proof', failing(tail))])
     empty = hollow(o.get('proof'), tail, s1, root, targets)
     if empty:
@@ -4107,6 +4113,9 @@ def _proof_check(root, cfg, o, at, fixed):
             'timeout' if rc is None else 'exit %d' % rc, _indent(tail))
     if rc == 0:
         return 'the proof passes before the code, so it cannot show the code is needed: %s' % o.get('proof')
+    if ran_nothing(rc, tail):
+        return 'the proof ran no test, so it is not red: write the test files the proof command runs (%s)\n%s' % (
+            o.get('proof'), _indent(tail))
     at['tests'], at['red'] = tests, says(tail)
     return ''
 
@@ -4390,6 +4399,8 @@ def cmd_reread(a, root):
         why = _proof_check(root, cfg, o, at, fixed)
         if why:
             return why
+        if not proof_runs(o.get('proof'), at['tests']):  # else the proof would run the change's own tests: no second reading
+            return 'wrote no test file the proof command runs (%s); it wrote %s' % (o.get('proof'), ', '.join(at['tests'][:6]))
         here = [p for p in changed if os.path.isfile(os.path.join(root, p)) and not os.path.islink(os.path.join(root, p))]
         mine = _worktree(root, os.path.dirname(at['wt']), os.path.basename(at['wt']) + '-yours', head, here)
         for p in changed:  # what the change removed is removed in the copy too
@@ -4399,6 +4410,9 @@ def cmd_reread(a, root):
             if os.path.isfile(os.path.join(at['wt'], t)):
                 os.makedirs(os.path.dirname(os.path.join(mine, t)), exist_ok=True)
                 shutil.copyfile(os.path.join(at['wt'], t), os.path.join(mine, t))
+        for t in proof_runs(o.get('proof'), classify(changed, cfg)[2]):  # a test of the change's own that the
+            if t not in at['tests'] and os.path.isfile(os.path.join(mine, t)):  # reader did not rewrite is not run
+                os.remove(os.path.join(mine, t))
         found['rc'], found['tail'], _ = run_proof(mine, o.get('proof'), cfg['proof_timeout'])
         return ''
 
@@ -5239,7 +5253,8 @@ def main(argv=None):
     s = sub.add_parser('reread', help='advisory: another agent writes a proof from the request, without seeing the '
                        'change; it is run on the change')
     s.add_argument('slug')
-    s.add_argument('--by', metavar='CMD', help='the second reader\'s agent command (default: "reasoner", else the first of "agents")')
+    s.add_argument('--by', metavar='CMD', help='the second reader\'s agent command (default: "reasoner", else the first of '
+                   '"agents"); use a stronger model than the one that wrote the change')
     s.add_argument('--ticket', metavar='FILE', help='the request as the person wrote it, given to the second reader')
     s.add_argument('--tries', type=int, help='tries for a proof that fails before the change (default: "proof_tries", 3)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
