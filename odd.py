@@ -15,6 +15,7 @@ outcome; with --recompute (CI) it trusts nothing recorded.
   odd chain <ticket> [--race N] [--cascade]               .odd/chains/<ticket>.md: each outcome proven, checkpointed
   odd spec <slug> --proof-by CMD [--tries N]              another agent writes only the proof; sealed red first
   odd gate [--base REF] [--recompute]                     exit 0 pass, 1 fail, 2 could not run
+  odd check [--base REF] [--proof CMD]                    no setup: do this change's tests fail without it?
   odd park <slug> "<reason>"                              blocked, or cannot be done as specified
   odd escaped <slug> "<what went wrong, where found>"     a defect got past this outcome; record it
   odd stats [--json]                                      counts and escaped defects by group (a snapshot)
@@ -1967,6 +1968,24 @@ def anchored(root, cfg, o):
             'root without `cd <absolute path>`.' % (os.path.abspath(root), ', '.join(where)))
 
 
+def unanchor(root, o):
+    """A proof that begins by changing into this repository by its absolute path (`cd /here && ...`) is rewritten to
+    run from the root, where every proof runs anyway, and the outcome file is saved: '' or what was done. Measured: in
+    4 of 12 runs (evidence 23) the agent's first proof began this way, was refused (anchored) and cost a turn. A
+    sealed proof is left as it is."""
+    m = re.match(r'\s*cd\s+("[^"]+"|\'[^\']+\'|[^\s;&|]+)\s*(?:&&|;)\s*', o.get('proof') or '')
+    if not m or o.get('sealed') or not os.path.isabs(m.group(1).strip('"\'')):
+        return ''
+    here, real = os.path.realpath(root), os.path.realpath(m.group(1).strip('"\''))
+    if real != here and not real.startswith(here + os.sep):
+        return ''
+    rest = o.get('proof')[m.end():]
+    o.f['proof'] = rest if real == here else 'cd %s && %s' % (shlex.quote(os.path.relpath(real, here)), rest)
+    o.save()
+    return ('proof rewritten in %s to run from the repository root, not from this folder\'s absolute path: %s'
+            % (o.rel, o.get('proof')))
+
+
 def outside(root, o):
     """Report only (backlog item 52): the folders outside the repository that the proof command changes into (`cd
     /tmp/x && ...`). What is there is not in the change, so CI or a reviewer cannot rerun the proof, and the take-out
@@ -3022,6 +3041,9 @@ def cmd_new(a, root):
                [(k, v) for k, v in reach if v] +
                ([('counterfactual', REFACTOR_SKIP)] if a.kind == 'refactor' else []))
     o.save()
+    note = unanchor(root, o)
+    if note:
+        print(note)
     odd_looking = [g for g in globs if re.search(r'[\s{}]', g)]
     print('%s created (paths and the proof are relative to the repository root).%s\n'
           'next: write the proof under a test path, make the change inside "%s", then: %s done %s'
@@ -3062,7 +3084,11 @@ def _verified(root, o, s, res):
 
 
 def cmd_done(a, root):
-    o, s = Outcome.load(root, a.slug), survey(root, a.base)
+    o = Outcome.load(root, a.slug)
+    note = unanchor(root, o)
+    if note:
+        print(note)
+    s = survey(root, a.base)
     cfg, base = s['cfg'], s['base']
     if getattr(a, 'background', False):
         return background(root, o, s)
@@ -4310,6 +4336,114 @@ def cmd_spec(a, root):
           'refused.' % (who, o.rel, ODD, o.slug, ODD, o.slug))
 
 
+TEST_EXT = {'pytest': ('.py',), 'unittest': ('.py',), 'go': ('.go',), 'cargo': ('.rs',), 'make': ('',)}
+CHECKED = {  # verdict: (exit code, the last line)
+    'fails without the change': (0, 'SHOWN (the tests in this change fail without it)'),
+    'passes without the change': (1, 'NOT SHOWN (the tests in this change pass with it taken out: they show nothing about it)'),
+    'not passing as left': (1, 'NOT SHOWN (the tests in this change do not pass)'),
+    'not passing again': (1, 'NOT SHOWN (the tests passed, failed without the change, and did not pass again: they '
+                             'do not give the same answer each time)'),
+    'no test of its own': (0, 'NOT CHECKED (this change has no test of its own)'),
+    'only tests changed': (0, 'NOTHING TO CHECK (only test files differ from %s: no product file changed)'),
+    'nothing to check': (0, 'NOTHING TO CHECK (no product file differs from %s)')}
+
+
+def check(root, cfg, base, proof=None):
+    """Backlog item 53: the take-out check on a change as it stands, with no outcome file. The proof is the test files
+    the change brings (or `proof`); it must pass as left, fail with every changed product file taken out, and pass
+    again. Returns the facts with a verdict from CHECKED. Nothing is recorded and no file is written."""
+    _, _, tests, product = classify(changed_files(root, base), cfg)
+    res = {'base': base, 'tests': tests, 'product': product, 'proof': proof}
+    if not product:
+        return dict(res, verdict='only tests changed' if tests else 'nothing to check')
+    if not proof:
+        found = runners(root)
+        ext = TEST_EXT.get(found[0][0], ('.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs')) if found else ()
+        runs = [t for t in tests if not COLLECT.search(t) and t.endswith(ext) and os.path.isfile(os.path.join(root, t))]
+        if not runs:
+            return dict(res, verdict='no test of its own')
+        # unittest finds only unittest.TestCase classes: a Python test file that names no unittest is pytest's. One
+        # run takes every file a runner accepts, so a support file under a test path (a fixture module) fails nothing
+        by = collections.OrderedDict()
+        for t in runs:
+            pytest = found[0][0] == 'unittest' and 'unittest' not in read_text(os.path.join(root, t))
+            by.setdefault('pytest' if pytest else found[0][0], []).append(t)
+        cmds = []
+        for name, ts in by.items():
+            cmd = [c for n, c, _ in PROOFS if n == name][0]
+            cmds += [cmd.format(test=' '.join(map(shlex.quote, ts)))] if '{test}' in cmd else \
+                [suggest_proof(root, 'check', t)[0] for t in ts]
+        proof = ' && '.join(collections.OrderedDict.fromkeys(cmds))
+        res['proof'] = proof
+    o = Outcome(root, 'check')
+    o.f['proof'] = proof
+    rc, tail, s1 = run_proof(root, proof, cfg['proof_timeout'])
+    if rc is None:
+        raise CouldNotRun('the proof timed out (%ss): %s' % (cfg['proof_timeout'], proof))
+    empty = hollow(proof, tail, s1, root, product) if rc == 0 else ''
+    if rc != 0 or empty:
+        return dict(res, verdict='not passing as left', said=empty or says(tail), tail=tail)
+    crc, ctail, s2 = without_change(root, cfg, o, base, product)
+    if crc == 0:
+        return dict(res, verdict='passes without the change', seconds=[s1, s2])
+    if unrunnable(crc):
+        raise CouldNotRun('with the change taken out the proof did not fail, it could not run (%s). A proof must run '
+                          'to completion and exit non-zero.\n%s' % ('timeout' if crc is None else 'exit %d' % crc, _indent(ctail)))
+    rc3, tail3, s3 = run_proof(root, proof, cfg['proof_timeout'])
+    if rc3 != 0:
+        return dict(res, verdict='not passing again', said=says(tail3), tail=tail3, seconds=[s1, s2, s3])
+    return dict(res, verdict='fails without the change', said=says(ctail), seconds=[s1, s2, s3])
+
+
+def cmd_check(a, root):
+    """`odd check`. With --stop-hook it is a Claude Code Stop hook: it reads the event on standard input, never
+    blocks twice in a row, and blocks only when the check exits 1; whatever goes wrong, the turn ends (main)."""
+    if a.stop_hook:
+        try:
+            ev = json.loads(sys.stdin.read() or '{}')
+        except ValueError:
+            ev = {}
+        if ev.get('stop_hook_active'):
+            return 0
+    cfg = load_config(root)
+    for key, args in (('test_globs', a.tests), ('exempt', a.exempt)):
+        cfg[key] = cfg[key] + [g.strip() for arg in args or [] for g in arg.split(',') if g.strip()]
+    base, _ = find_base(root, cfg, a.base)
+    res = check(root, cfg, base, a.proof)
+    code, last = CHECKED[res['verdict']]
+    code = 1 if a.require_tests and res['verdict'] == 'no test of its own' else code
+    if '%s' in last:
+        last = last % ((base or 'the first commit')[:10] + ('; for work already committed here pass --base <revision>'
+                                                             if base and base == rev(root, 'HEAD') else ''))
+    if a.json:
+        print(json.dumps(dict({k: v for k, v in res.items() if k != 'tail'}, exit=code)))
+        return code
+    said = []  # as a hook, every line below goes to the agent as the reason its turn cannot end yet, or nowhere
+    say = said.append if a.stop_hook else print
+    say('%s check: base %s, %d product file(s) and %d test file(s) in this change'
+          % (ODD, (base or 'the first commit')[:10], len(res['product']), len(res['tests'])))
+    if res['proof']:
+        say('  proof: ' + res['proof'])
+    if res['verdict'] == 'fails without the change':
+        say('  passes as left; fails with the change taken out (%s); passes again' % res['said'])
+    elif res['verdict'] == 'passes without the change':
+        say('  passes as left, and passes with the change taken out\n  taken out: %s' % ', '.join(res['product'][:8]))
+    elif res.get('tail') is not None:
+        say('  %s\n%s' % (res['said'], _indent(res['tail'])))
+    elif res['verdict'] == 'no test of its own':
+        say('  no test file differs from the base, so nothing shows the change works: add a test, or name a command '
+              'with --proof, or more test paths with --tests')
+    say('CHECK: ' + last)
+    if a.stop_hook:
+        if code:
+            print(json.dumps({'decision': 'block', 'reason': '\n'.join(said + [
+                'Make the tests show the change (they must pass with it and fail without it), or fix the change. Run `%s '
+                'check` yourself until it says SHOWN; say DONE only then, otherwise say NOT DONE.' % ODD])}))
+        return 0
+    return code
+
+
+
 def cmd_gate(a, root):
     facts = {}
     try:
@@ -5012,6 +5146,15 @@ def main(argv=None):
                    'stronger model; default: "reasoner"); {prompt_file} becomes the prompt\'s path, else stdin')
     s.add_argument('--tries', type=int, help='tries for a proof that fails before the code (default: "proof_tries", 3)')
     s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s = sub.add_parser('check', help='no setup: do the tests in this change fail without it?')
+    s.add_argument('--base', help='measure from this revision instead of the target branch')
+    s.add_argument('--proof', metavar='CMD', help='the command to run, instead of the test files this change brings')
+    s.add_argument('--tests', metavar='GLOBS', action='append', help='more paths that hold tests, comma-separated')
+    s.add_argument('--exempt', metavar='GLOBS', action='append', help='more paths that are neither test nor product')
+    s.add_argument('--require-tests', action='store_true', help='exit 1 when the change has no test of its own')
+    s.add_argument('--json', action='store_true', help='print the facts as one JSON object instead')
+    s.add_argument('--stop-hook', action='store_true', help='run as a Claude Code Stop hook: block the end of a '
+                   'turn once, with the result, when the check exits 1')
     s = sub.add_parser('gate')
     s.add_argument('--base')
     s.add_argument('--recompute', action='store_true')
@@ -5050,6 +5193,12 @@ def main(argv=None):
     if os.path.basename(sys.argv[0]) == 'odd.py':
         rel = os.path.relpath(os.path.abspath(sys.argv[0]))
         ODD = 'python3 ' + (rel if not rel.startswith('..') else sys.argv[0])
+    if a.cmd == 'check' and a.stop_hook:  # a hook must never strand a session: any error ends the turn as usual
+        try:
+            cmd_check(a, find_root())
+        except BaseException:
+            pass
+        return 0
     if a.cmd == 'hook':  # a hook must never strand a session: any error passes, and `odd init` reports it
         root = None
         try:

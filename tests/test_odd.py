@@ -1871,7 +1871,7 @@ class Distribution(Repo):
         self.assertIn('split: verified', r.stdout)
         self.assertEqual(r.stdout.count('\nPASS'), 2)
 
-    STEP_INPUTS = ('TARGET', 'ODD_COMMENT', 'ODD_TOKEN', 'ODD_AUTHOR')  # set only for a step whose env names them
+    STEP_INPUTS = ('TARGET', 'ODD_MODE', 'ODD_COMMENT', 'ODD_TOKEN', 'ODD_AUTHOR')  # set only for a step whose env names them
 
     def action_steps(self):
         """Each step the Action runs, read out of action.yml (stdlib only, so no YAML parser): (env names, shell)."""
@@ -1921,6 +1921,18 @@ class Distribution(Repo):
         rc, out = self.ci()
         self.assertEqual(rc, 1, out)
         self.assertIn('outside every outcome', out)
+
+    def test_the_action_in_check_mode_needs_no_outcome_and_fails_tests_that_show_nothing(self):
+        self.solve()
+        self.commit('a fix and its test, no outcome file')
+        rc, out = self.ci(ODD_MODE='check')
+        self.assertEqual(rc, 0, out)
+        self.assertIn('CHECK: SHOWN', out)
+        self.write('tests/test_calc.py', Check.VACUOUS)
+        self.commit('a test that asserts nothing about the change')
+        rc, out = self.ci(ODD_MODE='check')
+        self.assertEqual(rc, 1, out)
+        self.assertIn('CHECK: NOT SHOWN (the tests in this change pass with it taken out', out)
 
     def test_the_action_judges_with_its_own_copy_never_the_one_the_change_carries(self):
         self.ok('init')
@@ -4510,18 +4522,29 @@ class Anchored(Repo):
         self.assertIn('in tests/test_calc.py', out)
         self.assertIn('os.path.abspath(__file__)', out)
 
-    def test_a_proof_command_that_changes_into_its_own_folder_is_refused(self):
-        self.outcome(proof='cd %s && %s' % (self.dir, PROOF))
+    def test_a_proof_command_that_names_its_own_folder_is_refused(self):
+        self.outcome(proof='%s && test -f %s/calc.py' % (PROOF, self.dir))
         self.solve()
         self.assertIn('in the proof command', self.no('done', 'add'))
 
-    def test_the_folder_under_another_name_is_still_this_folder(self):
+    def test_a_proof_that_begins_by_changing_into_its_own_folder_is_rewritten_not_refused(self):
         link = self.dir + '-link'
         os.symlink(self.dir, link)
         self.addCleanup(os.remove, link)
-        self.outcome(proof='cd %s && %s' % (link, PROOF))
+        for here in (self.dir, link):  # the folder under another name is still this folder
+            out = self.ok('new', 'add', SENTENCE, '--proof', 'cd %s && %s' % (here, PROOF), '--in', 'calc.py')
+            self.assertIn('proof rewritten in .odd/outcomes/add.md to run from the repository root', out)
+            self.assertIn('proof: %s\n' % PROOF, self.read('.odd/outcomes/add.md'))
+            os.remove(self.path('.odd/outcomes/add.md'))
+
+    def test_a_hand_written_outcome_is_rewritten_by_done_and_a_subfolder_becomes_relative(self):
+        self.outcome()
         self.solve()
-        self.assertIn('in the proof command', self.no('done', 'add'))
+        self.write('.odd/outcomes/add.md', self.read('.odd/outcomes/add.md').replace(
+            'proof: ' + PROOF, 'proof: cd %s/tests && cd .. && %s' % (self.dir, PROOF)))
+        out = self.ok('done', 'add')
+        self.assertIn('proof: cd tests && cd .. && %s\n' % PROOF, self.read('.odd/outcomes/add.md'))
+        self.assertIn('proof rewritten', out)
 
     def test_a_proof_that_runs_in_a_folder_outside_the_repository_is_reported_and_carried_into_the_claim(self):
         away = tempfile.mkdtemp(prefix='odd-away-')
@@ -5264,6 +5287,106 @@ class PreFlight(Repo):
         self.commit('state')
         self.assertIn('a premise is false: the fixture exists', self.no('race', 'sub', '--n', '1'))
         self.assertFalse(os.path.exists(mark), 'no attempt is spent on a task whose premise is false')
+
+
+class Check(Repo):
+    """Backlog item 53: `odd check` is the take-out check with no setup: no outcome file, no .odd folder. The tests a
+    change brings must pass as left and fail with the rest of the change taken out. Measured on 48 kept runs of real
+    bug fixes (evidence 22 and 23): the 5 whose tests pass without the change all fail the hidden tests, and the 3
+    with no test of their own all pass them, so no test is reported and fails nothing unless asked."""
+    VACUOUS = 'import unittest\n\n\nclass T(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(2 + 3, 5)\n'
+
+    def test_tests_that_fail_without_the_change_are_shown_and_nothing_is_left_behind(self):
+        self.solve()
+        out = self.ok('check')
+        self.assertIn('proof: python3 -m unittest -q tests/test_calc.py', out)
+        self.assertIn('fails with the change taken out', out)
+        self.assertEqual(out.strip().splitlines()[-1], 'CHECK: SHOWN (the tests in this change fail without it)')
+        self.assertEqual(self.read('calc.py'), FIXED)
+        self.assertFalse(os.path.exists(self.path('.odd')), 'no setup is made')
+
+    def test_tests_that_pass_without_the_change_are_not_shown(self):
+        self.write('calc.py', FIXED)
+        self.write('tests/test_calc.py', self.VACUOUS)
+        out = self.no('check')
+        self.assertIn('CHECK: NOT SHOWN (the tests in this change pass with it taken out: they show nothing about it)', out)
+        self.assertIn('taken out: calc.py', out)
+        self.assertEqual(self.read('calc.py'), FIXED)
+
+    def test_tests_that_do_not_pass_are_not_shown(self):
+        self.write('tests/test_calc.py', TEST)
+        self.write('calc.py', BROKEN + '# touched\n')
+        out = self.no('check')
+        self.assertIn('CHECK: NOT SHOWN (the tests in this change do not pass)', out)
+
+    def test_a_change_with_no_test_is_reported_and_fails_only_when_asked(self):
+        self.write('calc.py', FIXED)
+        out = self.ok('check')
+        self.assertIn('CHECK: NOT CHECKED (this change has no test of its own)', out)
+        self.assertIn('NOT CHECKED', self.no('check', '--require-tests'))
+
+    def test_a_change_to_no_product_file_has_nothing_to_check(self):
+        self.write('README.md', 'calc, explained\n')
+        self.assertIn('CHECK: NOTHING TO CHECK (no product file differs from', self.ok('check'))
+        self.write('tests/test_calc.py', TEST.replace('5)', '0)'))
+        self.assertIn('CHECK: NOTHING TO CHECK (only test files differ from', self.ok('check'))
+
+    def test_a_proof_can_be_given_and_committed_work_is_measured_from_the_base(self):
+        self.solve()
+        self.commit('fix')
+        out = self.ok('check', '--proof', 'python3 -m unittest -q tests.test_calc')
+        self.assertIn('proof: python3 -m unittest -q tests.test_calc', out)
+        self.assertIn('CHECK: SHOWN', out)
+
+    def test_json_carries_the_verdict_and_the_files(self):
+        self.solve()
+        rc, out = self.odd('check', '--json')
+        got = json.loads(out)
+        self.assertEqual((rc, got['verdict'], got['tests'], got['product']),
+                         (0, 'fails without the change', ['tests/test_calc.py'], ['calc.py']))
+
+    def test_more_test_paths_can_be_named(self):
+        self.write('calc.py', FIXED)
+        self.write('checks/calc_check.py', TEST)
+        self.assertIn('NOT CHECKED', self.ok('check'))
+        out = self.ok('check', '--tests', 'checks/**', '--proof', 'python3 -m unittest -q checks/calc_check.py')
+        self.assertIn('CHECK: SHOWN', out)
+
+    def test_a_python_test_file_without_unittest_runs_under_pytest(self):
+        self.write('calc.py', FIXED)
+        self.write('tests/test_calc.py', 'from calc import add\n\n\ndef test_add():\n    assert add(2, 3) == 5\n')
+        out = self.odd('check')[1]
+        self.assertIn('proof: python3 -m pytest -q tests/test_calc.py', out)
+        try:
+            import pytest  # noqa: F401
+        except ImportError:
+            return  # the runner is chosen either way; CI installs pytest, so the verdict is checked there
+        self.assertIn('CHECK: SHOWN', out)
+
+    def test_as_a_stop_hook_it_blocks_once_with_the_result_and_never_strands_a_session(self):
+        self.write('calc.py', FIXED)
+        self.write('tests/test_calc.py', self.VACUOUS)
+        rc, out = self.odd('check', '--stop-hook', stdin='{}')
+        said = json.loads(out)
+        self.assertEqual((rc, said['decision']), (0, 'block'))
+        self.assertIn('CHECK: NOT SHOWN (the tests in this change pass with it taken out', said['reason'])
+        self.assertIn('say DONE only then, otherwise say NOT DONE', said['reason'])
+        self.assertEqual(self.odd('check', '--stop-hook', stdin='{"stop_hook_active": true}'), (0, ''))
+        self.write('tests/test_calc.py', TEST)
+        self.assertEqual(self.odd('check', '--stop-hook', stdin='{}'), (0, ''), 'a shown change ends the turn')
+        self.assertEqual(self.odd('check', '--stop-hook', '--base', 'no-such-branch', stdin='not json'), (0, ''))
+
+    def test_a_test_data_file_is_not_handed_to_the_runner(self):
+        self.solve()
+        self.write('tests/data.json', '{}\n')
+        self.assertIn('proof: python3 -m unittest -q tests/test_calc.py\n', self.ok('check'))
+
+    def test_one_run_takes_every_test_file_so_a_support_module_fails_nothing(self):
+        self.solve()
+        self.write('tests/support.py', 'import unittest\n\nVALUE = 5\n')
+        out = self.ok('check')
+        self.assertIn('proof: python3 -m unittest -q tests/support.py tests/test_calc.py\n', out)
+        self.assertIn('CHECK: SHOWN', out)
 
 
 if __name__ == '__main__':
