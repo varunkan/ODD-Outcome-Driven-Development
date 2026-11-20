@@ -1,7 +1,11 @@
-# odd 0.5.0
+# odd 0.5.1
 
-The first public release of Outcome-Driven Development (ODD) for coding agents: an outcome counts as delivered only
-when its proof fails without the change.
+Outcome-Driven Development (ODD) for coding agents: an outcome counts as delivered only when its proof fails without
+the change. 0.5.0 was the first public release; 0.5.1 changes no behaviour and brings the README up to date (the
+problem in its measured forms, where to use odd, and setup in Claude Code, Cursor and GitHub Copilot).
+
+**The quickest way in, with no setup:** `pipx install odd-tool`, then `odd check` in any git repository after a
+change with tests: it runs the tests the change brings, takes the change out, and runs them again.
 
 **Work is done when a proof says so, not when the agent says so.** Before writing code the agent states one outcome
 sentence, a proof command and the files it may touch. `odd done` passes only when the proof passes, fails with the
@@ -18,7 +22,7 @@ cd your-project && odd init     # writes .odd/ and the method into AGENTS.md
 GitHub Actions, one step at the end of your test job, made a required check:
 
 ```yaml
-- uses: varunkan/ODD-Outcome-Driven-Development@v0.5.0
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.5.1
 ```
 
 ## What is in this release
