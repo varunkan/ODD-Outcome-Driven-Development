@@ -1,0 +1,342 @@
+[
+ {
+  "arm": "control",
+  "task": "sphinx-doc__sphinx-8265",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 0.5,
+  "claim": "none",
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.5000876000000001,
+  "num_turns": 50,
+  "stopped_at": "max_budget",
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": null,
+  "check": "fails without the change",
+  "changed_lines": 28
+ },
+ {
+  "arm": "control",
+  "task": "sphinx-doc__sphinx-8638",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 0.5,
+  "claim": "none",
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.5076339000000001,
+  "num_turns": 67,
+  "stopped_at": "max_budget",
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": null,
+  "check": "fails without the change",
+  "changed_lines": 158
+ },
+ {
+  "arm": "control",
+  "task": "sympy__sympy-12489",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 0.5,
+  "claim": "none",
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.506515,
+  "num_turns": 63,
+  "stopped_at": "max_budget",
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": null,
+  "check": "fails without the change",
+  "changed_lines": 129
+ },
+ {
+  "arm": "control",
+  "task": "sympy__sympy-13615",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 0.5,
+  "claim": "none",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.5024989,
+  "num_turns": 42,
+  "stopped_at": "max_budget",
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": null,
+  "check": "fails without the change",
+  "changed_lines": 172
+ },
+ {
+  "arm": "control",
+  "task": "sympy__sympy-18698",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 0.5,
+  "claim": "none",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.5075734999999999,
+  "num_turns": 57,
+  "stopped_at": "max_budget",
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": false,
+  "verdict_line": null,
+  "check": "fails without the change",
+  "changed_lines": 79
+ },
+ {
+  "arm": "control",
+  "task": "sympy__sympy-19040",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 0.5,
+  "claim": "none",
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.5024193,
+  "num_turns": 60,
+  "stopped_at": "max_budget",
+  "gate": null,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": null,
+  "check": "could not run",
+  "changed_lines": 47
+ },
+ {
+  "arm": "money",
+  "task": "sphinx-doc__sphinx-8265",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "DONE",
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.4673339000000001,
+  "num_turns": 59,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": "VERDICT: DONE",
+  "check": "fails without the change",
+  "changed_lines": 70
+ },
+ {
+  "arm": "money",
+  "task": "sympy__sympy-12489",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "DONE",
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.8591230000000003,
+  "num_turns": 91,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": "VERDICT: DONE, WITH 2 POINTS NOT PROVEN (listed above)",
+  "check": "fails without the change",
+  "changed_lines": 161
+ },
+ {
+  "arm": "money",
+  "task": "sympy__sympy-13615",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "DONE",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.25062219999999996,
+  "num_turns": 33,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": "VERDICT: DONE, WITH 2 POINTS NOT PROVEN (listed above)",
+  "check": "fails without the change",
+  "changed_lines": 70
+ },
+ {
+  "arm": "money",
+  "task": "sympy__sympy-18698",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "none",
+  "passed": false,
+  "regraded": false,
+  "cost_usd": 0.8526037000000002,
+  "num_turns": 77,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": "VERDICT: DONE, WITH 2 POINTS NOT PROVEN (listed above)",
+  "check": "fails without the change",
+  "changed_lines": 125
+ },
+ {
+  "arm": "money",
+  "task": "sympy__sympy-19040",
+  "model": [
+   "claude-haiku-4-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "none",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.9302127000000001,
+  "num_turns": 82,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": "VERDICT: DONE, WITH 1 POINT NOT PROVEN (listed above)",
+  "check": "fails without the change",
+  "changed_lines": 23
+ },
+ {
+  "arm": "stronger model",
+  "task": "sphinx-doc__sphinx-8265",
+  "model": [
+   "claude-sonnet-5-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "NOT DONE",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.1059888,
+  "num_turns": 9,
+  "stopped_at": null,
+  "gate": 1,
+  "contaminated": false,
+  "odd_outcomes_made": false,
+  "verdict_line": "VERDICT: NOT DONE (the gate did not pass; the reasons are above)",
+  "check": "fails without the change",
+  "changed_lines": 18
+ },
+ {
+  "arm": "stronger model",
+  "task": "sphinx-doc__sphinx-8638",
+  "model": [
+   "claude-sonnet-5-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "DONE",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.12499130000000001,
+  "num_turns": 10,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": false,
+  "verdict_line": null,
+  "check": "no test of its own",
+  "changed_lines": 2
+ },
+ {
+  "arm": "stronger model",
+  "task": "sympy__sympy-12489",
+  "model": [
+   "claude-sonnet-5-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "DONE",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.1080041,
+  "num_turns": 7,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": "VERDICT: DONE, WITH 2 POINTS NOT PROVEN (listed above)",
+  "check": "fails without the change",
+  "changed_lines": 78
+ },
+ {
+  "arm": "stronger model",
+  "task": "sympy__sympy-13615",
+  "model": [
+   "claude-sonnet-5-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "DONE",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.07741060000000001,
+  "num_turns": 7,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": false,
+  "verdict_line": null,
+  "check": "no test of its own",
+  "changed_lines": 3
+ },
+ {
+  "arm": "stronger model",
+  "task": "sympy__sympy-18698",
+  "model": [
+   "claude-sonnet-5-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "DONE",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.1484074,
+  "num_turns": 16,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": true,
+  "verdict_line": "VERDICT: DONE",
+  "check": "fails without the change",
+  "changed_lines": 24
+ },
+ {
+  "arm": "stronger model",
+  "task": "sympy__sympy-19040",
+  "model": [
+   "claude-sonnet-5-5"
+  ],
+  "cap_usd": 1.0,
+  "claim": "DONE",
+  "passed": true,
+  "regraded": true,
+  "cost_usd": 0.22650309999999999,
+  "num_turns": 19,
+  "stopped_at": null,
+  "gate": 0,
+  "contaminated": false,
+  "odd_outcomes_made": false,
+  "verdict_line": "VERDICT: DONE",
+  "check": "fails without the change",
+  "changed_lines": 13
+ }
+]
