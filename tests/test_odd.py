@@ -5328,8 +5328,17 @@ class Check(Repo):
     def test_a_change_to_no_product_file_has_nothing_to_check(self):
         self.write('README.md', 'calc, explained\n')
         self.assertIn('CHECK: NOTHING TO CHECK (no product file differs from', self.ok('check'))
-        self.write('tests/test_calc.py', TEST.replace('5)', '0)'))
-        self.assertIn('CHECK: NOTHING TO CHECK (only test files differ from', self.ok('check'))
+
+    def test_a_change_of_tests_only_is_named_and_fails_when_a_change_was_required(self):
+        """Measured on 48 kept runs: the 8 that changed only test files all fail the hidden tests (3 said DONE)."""
+        self.write('tests/test_calc.py', TEST.replace('5)', '0)  # true of the product as it is'))  # (another size: no stale .pyc)
+        out = self.ok('check')
+        self.assertIn('no product file changed, so these tests pass on the product as it was', out)
+        self.assertIn('CHECK: NO CHANGE (the tests in this change pass, and no product file differs from', out)
+        self.assertIn('CHECK: NO CHANGE', self.no('check', '--require-change'))
+        self.assertIn('CHECK: NO CHANGE', json.loads(self.odd('check', '--stop-hook', stdin='{}')[1])['reason'])
+        self.write('tests/test_calc.py', TEST)
+        self.assertIn('CHECK: NOT SHOWN (the tests in this change do not pass)', self.no('check'))
 
     def test_a_proof_can_be_given_and_committed_work_is_measured_from_the_base(self):
         self.solve()

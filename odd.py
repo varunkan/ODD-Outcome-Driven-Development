@@ -4344,7 +4344,8 @@ CHECKED = {  # verdict: (exit code, the last line)
     'not passing again': (1, 'NOT SHOWN (the tests passed, failed without the change, and did not pass again: they '
                              'do not give the same answer each time)'),
     'no test of its own': (0, 'NOT CHECKED (this change has no test of its own)'),
-    'only tests changed': (0, 'NOTHING TO CHECK (only test files differ from %s: no product file changed)'),
+    'only tests changed': (0, 'NO CHANGE (the tests in this change pass, and no product file differs from %s: if '
+                              'something was to be changed or fixed, it has not been)'),
     'nothing to check': (0, 'NOTHING TO CHECK (no product file differs from %s)')}
 
 
@@ -4354,8 +4355,8 @@ def check(root, cfg, base, proof=None):
     again. Returns the facts with a verdict from CHECKED. Nothing is recorded and no file is written."""
     _, _, tests, product = classify(changed_files(root, base), cfg)
     res = {'base': base, 'tests': tests, 'product': product, 'proof': proof}
-    if not product:
-        return dict(res, verdict='only tests changed' if tests else 'nothing to check')
+    if not product and not tests:
+        return dict(res, verdict='nothing to check')
     if not proof:
         found = runners(root)
         ext = TEST_EXT.get(found[0][0], ('.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs')) if found else ()
@@ -4383,6 +4384,8 @@ def check(root, cfg, base, proof=None):
     empty = hollow(proof, tail, s1, root, product) if rc == 0 else ''
     if rc != 0 or empty:
         return dict(res, verdict='not passing as left', said=empty or says(tail), tail=tail)
+    if not product:  # the tests pass and the product is as it was at the base: there is no change for them to show
+        return dict(res, verdict='only tests changed', seconds=[s1])
     crc, ctail, s2 = without_change(root, cfg, o, base, product)
     if crc == 0:
         return dict(res, verdict='passes without the change', seconds=[s1, s2])
@@ -4412,6 +4415,7 @@ def cmd_check(a, root):
     res = check(root, cfg, base, a.proof)
     code, last = CHECKED[res['verdict']]
     code = 1 if a.require_tests and res['verdict'] == 'no test of its own' else code
+    code = 1 if (a.require_change or a.stop_hook) and res['verdict'] == 'only tests changed' else code
     if '%s' in last:
         last = last % ((base or 'the first commit')[:10] + ('; for work already committed here pass --base <revision>'
                                                              if base and base == rev(root, 'HEAD') else ''))
@@ -4426,6 +4430,8 @@ def cmd_check(a, root):
         say('  proof: ' + res['proof'])
     if res['verdict'] == 'fails without the change':
         say('  passes as left; fails with the change taken out (%s); passes again' % res['said'])
+    elif res['verdict'] == 'only tests changed':
+        say('  passes as left; no product file changed, so these tests pass on the product as it was')
     elif res['verdict'] == 'passes without the change':
         say('  passes as left, and passes with the change taken out\n  taken out: %s' % ', '.join(res['product'][:8]))
     elif res.get('tail') is not None:
@@ -5152,6 +5158,8 @@ def main(argv=None):
     s.add_argument('--tests', metavar='GLOBS', action='append', help='more paths that hold tests, comma-separated')
     s.add_argument('--exempt', metavar='GLOBS', action='append', help='more paths that are neither test nor product')
     s.add_argument('--require-tests', action='store_true', help='exit 1 when the change has no test of its own')
+    s.add_argument('--require-change', action='store_true', help='exit 1 when only test files changed and they '
+                   'pass: nothing was changed or fixed (a Stop hook always does)')
     s.add_argument('--json', action='store_true', help='print the facts as one JSON object instead')
     s.add_argument('--stop-hook', action='store_true', help='run as a Claude Code Stop hook: block the end of a '
                    'turn once, with the result, when the check exits 1')
