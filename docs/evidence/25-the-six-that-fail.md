@@ -47,4 +47,55 @@ So at most 2 of the 6 are a money problem, before any money is spent. The plain 
 
 ## Results
 
-Not run yet.
+*Run 2026-11-20. All 17 runs, $7.18 of the $14.51 cap. No run errored or was contaminated; every run was graded
+twice and the grades agree on all 17. Records: [runs-5.json](data/real/runs-5.json).*
+
+| task | C: unchanged, $0.50 | M: twice the money | S: stronger model |
+|---|---|---|---|
+| sympy-12489 | fails, cut off | **says DONE, fails** | passes, DONE |
+| sphinx-8265 | fails, cut off | **says DONE, fails** | passes, says NOT DONE |
+| sympy-13615 | passes, cut off | passes, DONE | passes, DONE |
+| sympy-18698 | passes, cut off | fails, no claim | passes, DONE |
+| sympy-19040 | fails, cut off | passes, no claim | passes, DONE |
+| sphinx-8638 | fails, cut off | not run | passes, DONE |
+| **hidden tests pass** | **2 of 6** | **2 of 5** | **6 of 6** |
+| right DONE / wrong DONE / unfinished (of which pass) | 0 / 0 / 6 (2) | 1 / 2 / 2 (1) | 5 / 0 / 0, and 1 NOT DONE that passes |
+| cost | $3.03 | $3.36 | $0.79 |
+
+**The unchanged arm, rerun, passed 2 of the 6 it had failed.** Run-to-run chance alone moves 2 of 6: the old 18 of
+24 is 18 give or take, and one run a task was too thin. Every sentence below is read against that.
+
+**Money: NO SIGN.** Twice the money passed 2 of 5; the rerun alone passed 2 of the same 5 (one task each way: b = 1,
+c = 1). And it bought 2 wrong DONE where there had been none: runs that had been cut off now finish, and two of
+them finish wrong, with odd's gate passing on the agent's own tests.
+
+**A stronger model: 6 of 6 against 2 of 6, and by the rule fixed beforehand that is still NO SIGN.** It passed 4
+tasks the rerun did not and lost none (b = 4, c = 0); the test needed 5, and the weaker band needed the control to
+pass at most one, and it passed two. Against the money arm at equal money: 3 tasks ahead, none behind. It made no
+wrong DONE, and it cost a quarter of the cheap model's runs: 7 to 19 turns a task against 33 to 91.
+
+**What the stronger model's result is and is not.**
+- **It is about the model, not about odd.** In 4 of its 6 runs the change was small enough to fit odd's small-edit
+  budget, so no outcome was ever written and the take-out check never ran. Two of its fixes brought no test at all.
+- **odd got in its way once.** On sphinx-8265 the fix was right and the model said NOT DONE: the gate refused an
+  edit to an existing test for lack of a `test-change:` line. An honest report, and a correct fix reported as not
+  done.
+- **It may have recalled the fixes.** These are public issues with public fixes; nothing here rules that out.
+
+**The reading of the six was mostly wrong as a forecast: 2 of its 7 predictions held.** It said 13615 and 18698
+would finish wrong with more money; 13615 passed, and both passed in the plain rerun. It said all six would fail
+again; two passed. Classifying one run of a task says little about the next run of it.
+
+**About "100% accurate":** not reached and not promised. On these six tasks: the cheap model unchanged, 0 right
+DONE, 0 wrong, 6 unfinished; with twice the money, 1 right, 2 wrong, 2 unfinished; the stronger model, 5 right, 0
+wrong, and one correct fix it reported as not done.
+
+**What stands.**
+- On these six, more money for the cheap model did not help and made its reports worse.
+- A stronger model passed all six for less. Whether odd adds anything to that model is not measured: no plain arm
+  ran beside it, and it mostly did not need odd's check.
+- One run a task is not enough to say which tasks an arm fails. The 24-task comparisons of evidence 22 and 23
+  carry the same weakness.
+
+Limits, as fixed beforehand: six tasks chosen because they failed, one run a cell, two tests, and a stronger model
+that changes more than one thing at once.
