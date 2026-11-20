@@ -1,9 +1,16 @@
 name: release
 # Push a tag vX.Y.Z equal to odd.VERSION: the package goes to PyPI (trusted publishing, no stored token) and the
 # tag becomes the version people pin in `uses: varunkan/ODD-Outcome-Driven-Development@vX.Y.Z`.
+# Or run it by hand from the default branch (Actions, release, Run workflow) with the version typed in: the package
+# is published the same way; the tag for the Action is then made with the GitHub release.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to publish, without the v. It must equal odd.VERSION on this branch.
+        required: true
 permissions:
   contents: read
 jobs:
@@ -28,7 +35,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: The tag must match the version in odd.py
-        run: test "${GITHUB_REF_NAME#v}" = "$(python -c 'import odd; print(odd.VERSION)')"
+      - name: The tag, or the version typed in, must match the version in odd.py
+        env:
+          WANTED: ${{ inputs.version || github.ref_name }}
+        run: test "${WANTED#v}" = "$(python -c 'import odd; print(odd.VERSION)')"
       - run: python -m pip install build && python -m build
       - uses: pypa/gh-action-pypi-publish@release/v1
