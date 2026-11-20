@@ -1797,7 +1797,7 @@ class Adoption(Repo):
                      tool='.odd/odd_mcp.py')
         self.assertEqual(r[1]['result']['protocolVersion'], '2025-06-18')
         self.assertEqual(r[1]['result']['serverInfo']['name'], 'odd')
-        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'chain', 'check', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'seal', 'spec', 'stats'])
+        self.assertEqual(sorted(t['name'] for t in r[2]['result']['tools']), ['ask', 'cascade', 'chain', 'check', 'done', 'escaped', 'gate', 'new', 'park', 'race', 'reread', 'seal', 'spec', 'stats'])
         self.assertEqual(r[3]['result']['structuredContent']['exit_code'], 0, r[3])
         done = r[4]['result']
         self.assertEqual([done['isError'], done['structuredContent']['exit_code']], [False, 0], done)
@@ -5419,6 +5419,60 @@ class Check(Repo):
         out = self.ok('check')
         self.assertIn('proof: python3 -m unittest -q tests/support.py tests/test_calc.py\n', out)
         self.assertIn('CHECK: SHOWN', out)
+
+
+class Reread(ProofAuthors, Agents):
+    """Backlog item 54, advisory: `odd reread` has another agent write a proof from the request alone, at the base,
+    where it cannot see the change; the proof must fail there, and is then run on the change. Measured with no model
+    on 65 kept attempts at 24 real bug fixes (evidence 26): tests of another attempt fail on 22 of 24 wrong fixes
+    and on 11 of 33 right ones, and of 56 disagreements 52 had a wrong side. So it reports and decides nothing."""
+    STRICT = TEST + '\n    def test_other_numbers(self):\n        self.assertEqual(add(10, 1), 11)\n'
+
+    def reread(self, mine, *tries, more=()):
+        self.write('calc.py', mine)
+        return self.odd('reread', 'add', '--by', self.author('reader', *tries), *more)
+
+    def test_a_second_reading_that_fails_on_the_change_is_reported_and_nothing_is_applied(self):
+        rc, out = self.reread(SPECIAL, self.STRICT)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('a proof written apart from your change fails on it', out)
+        self.assertIn('AssertionError: 0 != 11', out)
+        self.assertIn('one of the two readings is wrong', out)
+        self.assertEqual((self.read('tests/test_calc.py'), self.read('calc.py')), (TEST, SPECIAL), 'nothing is applied')
+        self.assertIn('test_other_numbers', self.read('.git/odd/reread/add/second-proof.patch'))
+        self.no_worktrees_left()
+
+    def test_a_second_reading_that_passes_on_the_change_agrees(self):
+        rc, out = self.reread(FIXED, self.STRICT)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('fails before your change and passes with it: two readings agree', out)
+        self.assertIn('agreement is not proof', out)
+
+    def test_the_reader_works_at_the_base_from_the_request_and_never_sees_the_change(self):
+        self.write('ticket.txt', 'Adding any two numbers must give their sum.\n')
+        peek = os.path.join(self.bin, 'peek')
+        self.write('calc.py', FIXED)
+        by = self.agent('nosy', 'cat calc.py > %s; cp "$1" %s.prompt; mkdir -p tests; printf %%s %s > tests/test_calc.py'
+                        % (peek, peek, shlex.quote(self.STRICT)))
+        self.ok('reread', 'add', '--by', by, '--ticket', 'ticket.txt')
+        with open(peek) as f:
+            self.assertEqual(f.read(), BROKEN, 'the reader saw the change')
+        with open(peek + '.prompt') as f:
+            prompt = f.read()
+        self.assertIn('Adding any two numbers must give their sum.', prompt)
+        self.assertIn(SENTENCE, prompt)
+
+    def test_a_reading_that_passes_before_the_change_is_retried_and_then_not_compared(self):
+        rc, out = self.reread(FIXED, Spec.PASSING, more=('--tries', '2'))
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.runs('reader'), 2)
+        self.assertIn('not compared: no proof that fails before the change', out)
+
+    def test_it_needs_a_change_whose_own_proof_passes(self):
+        self.assertIn('its own proof does not pass', self.reread(BROKEN + '# touched\n', self.STRICT)[1])
+        os.remove(self.path('tests/test_calc.py'))
+        self.git('checkout', '--', 'calc.py')
+        self.assertIn('no changed file inside', self.odd('reread', 'add', '--by', 'true')[1])
 
 
 if __name__ == '__main__':

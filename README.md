@@ -292,6 +292,12 @@ languages it says "not measured". A proof that only prints (`echo`, or a Python 
 and plain assignments, with no assert, raise, exit, subscript or division) is refused. All of this is reported by default and can fail the gate (`"strength":
 "enforce"` in `.odd/config.json`, or `"off"`).
 
+**A fix that is wrong the same way as its tests** passes all of the above: one author read the request and wrote
+both. `odd reread <slug> --by "<agent command>" --ticket <file>` has another agent write a proof from the request
+without seeing the change, and runs it on the change. A disagreement means one of the two readings is wrong (52 of
+56 times on kept runs) and a person decides which; agreement is not proof. Advisory:
+[evidence 26](docs/evidence/26-a-second-reading.md).
+
 It does not check that the outcome is worth having, or that the proof is thorough. For new code, a proof that only
 imports the new function already fails without it; the small breaks catch some of that, not all. The outcome sentence and the proof command are a few lines, and
 the gate prints what the proof said when it failed; a person should read both.

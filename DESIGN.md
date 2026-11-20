@@ -709,6 +709,37 @@ it, and nothing here says it makes work better. Limits: it knows the tests only 
 changed product file at once, so it cannot say which part the tests depend on; "shown" is not "correct" (6 of 30
 shown runs fail the hidden tests).
 
+### 3t. A second reading: `odd reread`
+
+Backlog item 54, advisory. The take-out check shows that a proof depends on the change. It cannot show that the
+proof and the change read the request rightly, since one author wrote both. `odd reread <slug> [--by CMD] [--ticket
+FILE] [--tries N]` gets a reading made apart:
+
+1. The change must pass its own proof, and have a changed file inside `in:`.
+2. A second agent (`--by`, else `"reasoner"`, else the first of `"agents"`) works in a clone of the **base**, where
+   the change does not exist. It gets the outcome, the proof command, the boundary, and with `--ticket` the request
+   as the person wrote it. It writes test files only, at the paths the proof command runs.
+3. Its proof must fail at the base (`_proof_check`, the check `odd spec` uses), or the try is refused and repeated.
+4. odd copies the tree as it is into a second clone, puts the reader's test files over the change's own, and runs
+   the proof command there.
+
+| it says | when | exit |
+|---|---|---|
+| two readings agree | the second proof fails before the change and passes with it | 0 |
+| one of the two readings is wrong | the second proof fails on the change | 1 |
+| not compared | no proof that fails before the change in the tries allowed, or it did not run | 0 |
+
+Nothing is applied to the tree, recorded as an attempt or read by the gate; the second proof is kept as a patch
+under the git directory. Without `--ticket` the reader has only the outcome sentence, which is the first author's
+reading, and the command says so.
+
+**Why advisory.** Replayed with no model on kept attempts at real bug fixes, another attempt's tests fail on 22 of
+24 wrong fixes and on 11 of 33 right ones ([evidence 26](docs/evidence/26-a-second-reading.md)): a disagreement
+means a wrong side 52 times in 56, and never says which. Agreement proves nothing: 18 of 57 agreeing pairs were two
+wrong attempts. No model round has run with the command (3r rule 4). It differs from `odd second` (3p), which
+compares two programs through an entry point on inputs odd makes, and from `odd spec` (3c), where the other author
+writes the proof before any code.
+
 ### 3q. The report carries the claim: `"report": "claim"`
 
 Backlog item 47. `odd claim` (3m) prints what the checks did and did not show, and

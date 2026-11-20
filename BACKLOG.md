@@ -877,3 +877,15 @@ cost to build.
   turn in 4 of 12 runs (evidence 23).
 - **Not done:** the model round the admission rule asks for (arms `plain-check` and `plain-persist` exist and have
   not been run). The judge's count for a fair test of "fewer false DONE with the hook": about 150 new tasks.
+
+### 54. A second reading of the request: `odd reread`
+- **Outcome:** for a change that passes its own proof, another agent writes a proof from the request at the base,
+  without seeing the change; odd runs it on the change and says whether the two readings agree.
+- **Evidence:** a fix that is wrong the same way as its tests passes every check on those tests. Replayed with no
+  model on 65 kept attempts at 24 real bug fixes ([evidence 26](docs/evidence/26-a-second-reading.md)): another
+  attempt's tests fail on 22 of 24 wrong fixes and on 11 of 33 right ones; of 56 disagreements, 52 have a wrong
+  side; 18 of 57 agreements are two wrong attempts.
+- **Done** (`cmd_reread`, with `odd spec`'s author and red-first check; tests in `Reread`; `bench/crosstest.py`).
+  Advisory: it fails no work, applies nothing and the gate does not read it.
+- **Not done:** a model round with the command; whether a reader that writes only tests reads as well as an
+  attempt that also wrote a fix.
