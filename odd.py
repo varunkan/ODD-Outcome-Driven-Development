@@ -4336,6 +4336,7 @@ def cmd_spec(a, root):
           'refused.' % (who, o.rel, ODD, o.slug, ODD, o.slug))
 
 
+HAS_TEST = re.compile(r'(?m)^\s*(?:async\s+)?def test|^\s*class Test|unittest')
 TEST_EXT = {'pytest': ('.py',), 'unittest': ('.py',), 'go': ('.go',), 'cargo': ('.rs',), 'make': ('',)}
 CHECKED = {  # verdict: (exit code, the last line)
     'fails without the change': (0, 'SHOWN (the tests in this change fail without it)'),
@@ -4361,6 +4362,9 @@ def check(root, cfg, base, proof=None):
         found = runners(root)
         ext = TEST_EXT.get(found[0][0], ('.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs')) if found else ()
         runs = [t for t in tests if not COLLECT.search(t) and t.endswith(ext) and os.path.isfile(os.path.join(root, t))]
+        # a Python file under a test path that holds no test (an empty __init__.py, a fixture module) is not run on
+        # its own: pytest exits 5 on it. Measured: that failed 7 correct programs of the kept small-task runs.
+        runs = [t for t in runs if not t.endswith('.py') or HAS_TEST.search(read_text(os.path.join(root, t)))]
         if not runs:
             return dict(res, verdict='no test of its own')
         # unittest finds only unittest.TestCase classes: a Python test file that names no unittest is pytest's. One
@@ -4408,7 +4412,10 @@ def cmd_check(a, root):
             ev = {}
         if ev.get('stop_hook_active'):
             return 0
-    cfg = load_config(root)
+    try:
+        cfg, unread = load_config(root), ''
+    except CouldNotRun as e:  # the check needs no setup, so settings it cannot read do not stop it: it says so
+        cfg, unread = load_config(root, at=EMPTY_TREE), 'settings not read, the defaults are used: %s' % str(e).split('\n')[0][:200]
     for key, args in (('test_globs', a.tests), ('exempt', a.exempt)):
         cfg[key] = cfg[key] + [g.strip() for arg in args or [] for g in arg.split(',') if g.strip()]
     base, _ = find_base(root, cfg, a.base)
@@ -4419,6 +4426,8 @@ def cmd_check(a, root):
     if '%s' in last:
         last = last % ((base or 'the first commit')[:10] + ('; for work already committed here pass --base <revision>'
                                                              if base and base == rev(root, 'HEAD') else ''))
+    if unread:
+        res['settings'] = unread
     if a.json:
         print(json.dumps(dict({k: v for k, v in res.items() if k != 'tail'}, exit=code)))
         return code
@@ -4426,6 +4435,8 @@ def cmd_check(a, root):
     say = said.append if a.stop_hook else print
     say('%s check: base %s, %d product file(s) and %d test file(s) in this change'
           % (ODD, (base or 'the first commit')[:10], len(res['product']), len(res['tests'])))
+    if unread:
+        say('  ' + unread)
     if res['proof']:
         say('  proof: ' + res['proof'])
     if res['verdict'] == 'fails without the change':

@@ -5390,6 +5390,22 @@ class Check(Repo):
         self.write('tests/data.json', '{}\n')
         self.assertIn('proof: python3 -m unittest -q tests/test_calc.py\n', self.ok('check'))
 
+    def test_a_python_file_with_no_test_in_it_is_not_run_on_its_own(self):
+        """Replayed on kept runs: an empty tests/__init__.py went to pytest alone, which exits 5 when it collects nothing."""
+        self.solve()
+        self.write('tests/__init__.py', '')
+        self.write('tests/helpers.py', 'VALUE = 5\n')
+        out = self.ok('check')
+        self.assertIn('proof: python3 -m unittest -q tests/test_calc.py\n', out)
+        self.assertIn('CHECK: SHOWN', out)
+
+    def test_settings_it_cannot_read_do_not_stop_it_and_are_named(self):
+        self.solve()
+        self.write('.odd/config.json', '{"reach": "require"}')
+        out = self.ok('check')
+        self.assertIn('settings not read, the defaults are used: .odd/config.json: "reach" is not a setting', out)
+        self.assertIn('CHECK: SHOWN', out)
+
     def test_one_run_takes_every_test_file_so_a_support_module_fails_nothing(self):
         self.solve()
         self.write('tests/support.py', 'import unittest\n\nVALUE = 5\n')
