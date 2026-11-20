@@ -67,7 +67,7 @@ write one: odd then has nothing to run. And as a replacement for a better model 
 It is not a planning framework, a prompt library or an agent orchestrator. It is the one check the others leave to
 the model. Questions and objections: [FAQ](FAQ.md).
 
-> **Status: early (0.5.0).** The tool passes its own tests (418), including the ways an agent could fake "done". It
+> **Status: early (0.5.1).** The tool passes its own tests (425), including the ways an agent could fake "done". It
 > has been through a design review (23 changes, all applied) and a red team (48 confirmed defects, each now a test).
 >
 > **Does it work better? Measured, and mostly no difference.** In a same-task comparison (16 tasks with hidden
@@ -439,7 +439,7 @@ On GitHub Actions the gate is one step at the end of your test job:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: varunkan/ODD-Outcome-Driven-Development@v0.5.0
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.5.1
 ```
 
 With `with: mode: check` the step runs `odd check` instead: no outcome files and no `.odd` folder are needed, and

@@ -50,7 +50,7 @@ try:
 except ImportError:  # not a POSIX system
     fcntl = None
 
-VERSION = '0.5.0'
+VERSION = '0.5.1'
 DEFAULTS = {
     'trivial_lines': 25,   # product lines that may change outside any outcome (a per-change budget)
     'exempt': ['.odd/outcomes/**', '**/*.md', 'LICENSE*', '.gitignore', '.gitattributes', '**/*.lock',

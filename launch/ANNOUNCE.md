@@ -61,4 +61,4 @@ An agent told to write and run tests said DONE wrongly on 5 of 24 real bug fixes
 
 - awesome-claude-code and similar curated lists (one-line entry: "odd check: do the tests in this change fail without it?").
 - The AGENTS.md examples list (agents.md), as a project that ships its method in AGENTS.md.
-- GitHub Marketplace, from the v0.5.0 release page.
+- GitHub Marketplace, from the v0.5.1 release page.

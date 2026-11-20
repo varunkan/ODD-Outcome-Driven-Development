@@ -1086,7 +1086,7 @@ jobs:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
       - id: odd
-        uses: varunkan/ODD-Outcome-Driven-Development@v0.5.0
+        uses: varunkan/ODD-Outcome-Driven-Development@v0.5.1
       - if: steps.odd.outputs.odd_lane == 'auto'
         run: gh pr merge --auto --squash "${{ github.event.pull_request.number }}"
         env: {GH_TOKEN: "${{ github.token }}"}

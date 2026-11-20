@@ -160,7 +160,7 @@ It is one file with no account and no service. To remove it, delete `.odd/` and 
 **How do I make it count in CI?**
 On GitHub Actions, one step at the end of your test job, made a required check:
 ```yaml
-- uses: varunkan/ODD-Outcome-Driven-Development@v0.5.0
+- uses: varunkan/ODD-Outcome-Driven-Development@v0.5.1
 ```
 Other CI systems use the two lines `odd init` prints.
 

@@ -3,9 +3,16 @@
 Each entry names the backlog item that carries its reason and evidence ([BACKLOG.md](BACKLOG.md)); behaviour is
 specified in [DESIGN.md](DESIGN.md).
 
+## 0.5.1
+
+No change to what the tool does.
+- README: the problem in its three measured forms, where to use odd, and how to set it up in Claude Code, Cursor
+  and GitHub Copilot.
+- The release workflow can be run by hand, and makes the tag and the GitHub release itself.
+
 ## 0.5.0
 
-The first public release. See [launch/RELEASE-NOTES-v0.5.0.md](launch/RELEASE-NOTES-v0.5.0.md). 0.4.0 was the number
+The first public release. See [launch/RELEASE-NOTES-v0.5.1.md](launch/RELEASE-NOTES-v0.5.1.md). 0.4.0 was the number
 used during development and was never published.
 
 **The core**
